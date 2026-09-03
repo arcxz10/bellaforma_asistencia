@@ -1,0 +1,10 @@
+:{env.PORT} {
+    root * .
+    encode gzip
+
+    # Maneja los scripts de PHP enviando las peticiones a PHP-FPM
+    php_fastcgi 127.0.0.1:9000
+
+    # Sirve archivos estáticos (CSS, imágenes, JS)
+    file_server
+}
