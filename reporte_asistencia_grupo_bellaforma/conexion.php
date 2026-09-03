@@ -1,23 +1,16 @@
 <?php
+$host = getenv('MYSQLHOST') ?: 'localhost';
+$user = getenv('MYSQLUSER') ?: 'root';
+$pass = getenv('MYSQLPASSWORD') ?: '';
+$db   = getenv('MYSQLDATABASE') ?: 'railway';
+$port = getenv('MYSQLPORT') ?: 3306;
 
-$servidor   = $_ENV['MYSQLHOST']     ?? "localhost";
-$usuario    = $_ENV['MYSQLUSER']     ?? "root";
-$contrasena = $_ENV['MYSQLPASSWORD'] ?? "";
-$base_datos = $_ENV['MYSQLDATABASE'] ?? "bellaforma_asistencia";
-$puerto     = $_ENV['MYSQLPORT']     ?? 3306;
-
-$conexion = new mysqli(
-    $servidor,
-    $usuario,
-    $contrasena,
-    $base_datos,
-    $puerto
-);
+// Es importante pasar el puerto y usar la IP 127.0.0.1 si fuera local, pero con getenv se conecta por red a Railway
+$conexion = new mysqli($host, $user, $pass, $db, (int)$port);
 
 if ($conexion->connect_error) {
-    die("Error de conexión con la base de datos: " . $conexion->connect_error);
+    die("Error de conexión: " . $conexion->connect_error);
 }
 
-$conexion->set_charset("utf8mb4");
-
+$conexion->set_charset("utf8");
 ?>
