@@ -1,0 +1,172 @@
+let registros = [];
+
+// Hora límite: 8:30 AM
+const HORA_LIMITE = 8 * 60 + 30;
+
+
+// Registrar llegada
+function registrarLlegada() {
+function registrarLlegada() {
+    alert("El botón funciona correctamente");
+}
+    const nombre = document.getElementById("nombreEmpleado").value.trim();
+
+    if (nombre === "") {
+        alert("Por favor, ingrese el nombre del empleado.");
+        return;
+    }
+
+
+    // Obtener la hora actual del dispositivo
+    const ahora = new Date();
+
+    const horas = ahora.getHours();
+    const minutos = ahora.getMinutes();
+
+    // Convertir la hora actual a minutos
+    const minutosActuales = horas * 60 + minutos;
+
+
+    let estado;
+    let retraso = 0;
+
+
+    // Determinar si llegó tarde
+    if (minutosActuales > HORA_LIMITE) {
+
+        estado = "Tarde";
+
+        retraso = minutosActuales - HORA_LIMITE;
+
+    } else {
+
+        estado = "Puntual";
+
+    }
+
+
+    // Formatear hora
+    const horaFormateada = ahora.toLocaleTimeString("es-CO", {
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+
+
+    // Crear registro
+    const registro = {
+
+        nombre: nombre,
+
+        hora: horaFormateada,
+
+        estado: estado,
+
+        retraso: retraso
+
+    };
+
+
+    registros.push(registro);
+
+
+    // Mostrar registros
+    mostrarRegistros();
+
+
+    // Limpiar campo
+    document.getElementById("nombreEmpleado").value = "";
+}
+
+
+
+// Mostrar registros
+function mostrarRegistros() {
+
+    const tabla = document.getElementById("tablaRegistros");
+
+    const filtro = document.getElementById("filtro").value;
+
+
+    tabla.innerHTML = "";
+
+
+    let registrosFiltrados = [...registros];
+
+
+    // Filtro de empleados tarde
+    if (filtro === "tarde") {
+
+        registrosFiltrados = registrosFiltrados.filter(
+            registro => registro.estado === "Tarde"
+        );
+
+    }
+
+
+    // Filtro de empleados puntuales
+    if (filtro === "puntual") {
+
+        registrosFiltrados = registrosFiltrados.filter(
+            registro => registro.estado === "Puntual"
+        );
+
+    }
+
+
+    // Ordenar los que más minutos de retraso tienen primero
+    registrosFiltrados.sort(
+        (a, b) => b.retraso - a.retraso
+    );
+
+
+    // Crear filas
+    registrosFiltrados.forEach(registro => {
+
+        const fila = document.createElement("tr");
+
+
+        if (registro.estado === "Tarde") {
+
+            fila.classList.add("fila-tarde");
+
+        } else {
+
+            fila.classList.add("fila-puntual");
+
+        }
+
+
+        fila.innerHTML = `
+
+            <td>${registro.nombre}</td>
+
+            <td>${registro.hora}</td>
+
+            <td class="${
+                registro.estado === "Tarde"
+                    ? "estado-tarde"
+                    : "estado-puntual"
+            }">
+
+                ${registro.estado}
+
+            </td>
+
+            <td>
+
+                ${
+                    registro.retraso > 0
+                        ? registro.retraso + " minutos"
+                        : "-"
+                }
+
+            </td>
+
+        `;
+
+
+        tabla.appendChild(fila);
+
+    });
+
+}

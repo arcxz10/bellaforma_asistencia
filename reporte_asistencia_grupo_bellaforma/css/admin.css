@@ -1,0 +1,934 @@
+/* ============================================
+   LAYOUT PRINCIPAL (SIDEBAR + CONTENIDO)
+   ============================================ */
+
+.container-admin {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* ===== SIDEBAR ===== */
+
+.sidebar {
+    width: 250px;
+    flex-shrink: 0;
+    background: #222;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+}
+
+.sidebar-header {
+    padding: 25px 20px;
+    border-bottom: 1px solid #383838;
+}
+
+.sidebar-header h2 {
+    margin: 0 0 4px;
+    font-size: 19px;
+}
+
+.sidebar-header p {
+    margin: 0;
+    color: #aaa;
+    font-size: 13px;
+}
+
+.sidebar-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 15px 0;
+    overflow-y: auto;
+}
+
+.nav-item {
+    display: block;
+    padding: 13px 20px;
+    color: #ccc;
+    text-decoration: none;
+    font-size: 14px;
+    border-left: 3px solid transparent;
+    transition: background 0.2s, color 0.2s;
+}
+
+.nav-item:hover {
+    background: #2c2c2c;
+    color: white;
+}
+
+.nav-item.active {
+    background: #2c2c2c;
+    color: white;
+    border-left-color: #ffa500;
+    font-weight: bold;
+}
+
+.sidebar-footer {
+    padding: 18px 20px;
+    border-top: 1px solid #383838;
+}
+
+.sidebar-footer p {
+    margin: 0 0 10px;
+    color: #ccc;
+    font-size: 13px;
+}
+
+.btn-logout-admin {
+    display: block;
+    text-align: center;
+    color: white;
+    text-decoration: none;
+    border: 1px solid #555;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+
+.btn-logout-admin:hover {
+    background: #383838;
+}
+
+/* ===== CONTENIDO PRINCIPAL ===== */
+
+.main-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.top-header {
+    background: #F6FBF2;
+    padding: 20px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .05);
+}
+
+.top-header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.header-info {
+    display: flex;
+    gap: 18px;
+    color: #666;
+    font-size: 13px;
+    flex-wrap: wrap;
+}
+
+.content {
+    flex: 1;
+    padding: 25px 30px;
+    max-width: 1250px;
+    width: 100%;
+}
+
+/* ===== SECCIONES (mostrar/ocultar por JS) ===== */
+
+.section {
+    display: none;
+}
+
+.section.active {
+    display: block;
+}
+
+.section > h2 {
+    margin: 0 0 20px;
+    font-size: 22px;
+}
+
+/* ===== TARJETAS DEL DASHBOARD ===== */
+
+.cards-dashboard {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-bottom: 25px;
+}
+
+.card-stat {
+    background: #F6FBF2;
+    padding: 22px;
+    border-radius: 10px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, .06);
+    border-left: 5px solid #222;
+}
+
+.card-stat h3 {
+    margin: 0 0 10px;
+    color: #666;
+    font-size: 14px;
+    font-weight: normal;
+}
+
+.card-stat p {
+    margin: 0;
+    font-size: 30px;
+    font-weight: bold;
+}
+
+/* ===== CABECERA DE SECCIÓN CON BOTÓN ===== */
+
+.cabecera-seccion {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.cabecera-seccion h2 {
+    margin: 0 0 6px;
+    font-size: 22px;
+}
+
+.cabecera-seccion p {
+    margin: 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.btn-nuevo {
+    padding: 11px 18px;
+    background: #222;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.btn-nuevo:hover {
+    background: #444;
+}
+
+/* ===== FILTROS (campos sin envoltorio .campo) ===== */
+
+.filtros label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.filtros input,
+.filtros select {
+    width: 100%;
+    padding: 11px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: white;
+    font-size: 14px;
+}
+
+.btn-filtrar {
+    padding: 11px 18px;
+    background: #222;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-filtrar:hover {
+    background: #444;
+}
+
+/* ===== BOTONES DE ACCIÓN EN TABLAS DE EMPLEADOS ===== */
+
+.btn-editar {
+    padding: 7px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    background: #eee;
+    color: #333;
+    text-decoration: none;
+}
+
+.btn-editar:hover {
+    background: #ddd;
+}
+
+.btn-eliminar {
+    padding: 7px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    background: #ffe5e5;
+    color: #a00000;
+    text-decoration: none;
+}
+
+.btn-eliminar:hover {
+    background: #ffcccc;
+}
+
+.btn-activar {
+    padding: 7px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    background: #e5f6eb;
+    color: #18733a;
+    text-decoration: none;
+}
+
+.btn-activar:hover {
+    background: #cceee5;
+}
+
+/* ============================================
+   ESTILOS GENERALES
+   ============================================ */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #EAF6E1;
+    color: #222;
+}
+
+/* ============================================
+   BARRA DE NAVEGACIÓN
+   ============================================ */
+
+.barra {
+    background: #222;
+    color: white;
+    padding: 18px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.barra h1 {
+    margin: 0;
+    font-size: 21px;
+}
+
+.barra-derecha {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.administrador {
+    color: #ddd;
+    font-size: 14px;
+}
+
+.cerrar {
+    color: white;
+    text-decoration: none;
+    border: 1px solid #777;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.cerrar:hover {
+    background: #444;
+}
+
+/* ============================================
+   CONTENEDOR PRINCIPAL
+   ============================================ */
+
+.contenedor {
+    max-width: 1250px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+.titulo {
+    margin-bottom: 25px;
+}
+
+.titulo h2 {
+    margin: 0 0 6px;
+    font-size: 28px;
+}
+
+.titulo p {
+    margin: 0;
+    color: #666;
+}
+
+/* ============================================
+   MENSAJES (ÉXITO/ERROR)
+   ============================================ */
+
+.mensaje {
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.mensaje.exito {
+    background: #e8f7ed;
+    color: #176b36;
+}
+
+.mensaje.error {
+    background: #ffe8e8;
+    color: #a00000;
+}
+
+/* ============================================
+   TARJETAS DE RESUMEN
+   ============================================ */
+
+.resumen {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-bottom: 25px;
+}
+
+.tarjeta {
+    background: #F6FBF2;
+    padding: 22px;
+    border-radius: 10px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, .06);
+}
+
+.titulo-tarjeta {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.numero {
+    font-size: 30px;
+    font-weight: bold;
+}
+
+.borde-total {
+    border-left: 5px solid #222;
+}
+
+.borde-registrados {
+    border-left: 5px solid #2e8b57;
+}
+
+.borde-pendientes {
+    border-left: 5px solid #777;
+}
+
+.borde-tarde {
+    border-left: 5px solid #d32f2f;
+}
+
+/* ============================================
+   PANELES
+   ============================================ */
+
+.panel {
+    background: #F6FBF2;
+    border-radius: 10px;
+    padding: 25px;
+    margin-bottom: 25px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, .06);
+}
+
+.panel h3 {
+    margin: 0 0 20px;
+    font-size: 19px;
+}
+
+/* ============================================
+   FILTROS
+   ============================================ */
+
+.filtros {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1.4fr auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.campo label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.campo input,
+.campo select {
+    width: 100%;
+    padding: 11px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: white;
+    font-size: 14px;
+}
+
+/* ============================================
+   BOTONES
+   ============================================ */
+
+.boton {
+    padding: 11px 18px;
+    background: #222;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.boton:hover {
+    background: #444;
+}
+
+.boton-secundario {
+    background: #eee;
+    color: #333;
+}
+
+/* ============================================
+   TABLAS
+   ============================================ */
+
+.tabla-contenedor {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th {
+    background: #f1f1f1;
+    padding: 13px;
+    text-align: left;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+td {
+    padding: 13px;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+}
+
+/* ============================================
+   ESTADOS (BADGES)
+   ============================================ */
+
+.estado {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.estado-puntual,
+.estado-activo {
+    background: #e5f6eb;
+    color: #18733a;
+}
+
+.estado-tarde {
+    background: #ffe5e5;
+    color: #b00000;
+}
+
+.estado-extra {
+    background: #fff1d6;
+    color: #a56500;
+}
+
+.estado-pendiente {
+    background: #eeeeee;
+    color: #666;
+}
+
+.estado-inactivo {
+    background: #eeeeee;
+    color: #777;
+}
+
+.estado-sin {
+    background: #ffe5e5;
+    color: #b00000;
+}
+
+/* ============================================
+   TEXTO RESALTADO
+   ============================================ */
+
+.retraso {
+    color: #b00000;
+    font-weight: bold;
+}
+
+.extra {
+    color: #a56500;
+    font-weight: bold;
+}
+
+/* ============================================
+   SIN RESULTADOS
+   ============================================ */
+
+.sin-resultados {
+    text-align: center;
+    color: #777;
+    padding: 30px;
+}
+
+/* ============================================
+   CABECERA (SECCIÓN CON BOTÓN)
+   ============================================ */
+
+.cabecera {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.cabecera p {
+    margin: 5px 0 0;
+    color: #666;
+    font-size: 14px;
+}
+
+/* ============================================
+   ACUMULADOS
+   ============================================ */
+
+.acumulados {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+}
+
+.acumulado {
+    padding: 18px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+}
+
+.acumulado span {
+    display: block;
+    color: #666;
+    font-size: 13px;
+    margin-bottom: 7px;
+}
+
+.acumulado strong {
+    font-size: 22px;
+}
+
+/* ============================================
+   ACCIONES (BOTONES EN TABLA)
+   ============================================ */
+
+.acciones {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+
+.accion {
+    padding: 7px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.accion-editar {
+    background: #eee;
+    color: #333;
+}
+
+.accion-editar:hover {
+    background: #ddd;
+}
+
+.accion-desactivar {
+    background: #ffe5e5;
+    color: #a00000;
+}
+
+.accion-desactivar:hover {
+    background: #ffcccc;
+}
+
+.accion-activar {
+    background: #e5f6eb;
+    color: #18733a;
+}
+
+.accion-activar:hover {
+    background: #cceee5;
+}
+
+/* ============================================
+   MODAL
+   ============================================ */
+
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, .5);
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.modal-contenido {
+    width: 100%;
+    max-width: 500px;
+    background: #F6FBF2;
+    padding: 30px;
+    border-radius: 10px;
+}
+
+.modal-contenido h3 {
+    margin: 0 0 22px;
+}
+
+.formulario-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.formulario-modal label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.formulario-modal input,
+.formulario-modal select {
+    width: 100%;
+    padding: 11px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.horario {
+    padding: 11px;
+    border-radius: 6px;
+    background: #f4f4f4;
+    color: #555;
+}
+
+.botones-modal {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+/* ============================================
+   GESTIÓN DE FESTIVOS
+   ============================================ */
+
+.panel-festivos {
+    background: linear-gradient(135deg, #fff9e6 0%, #fffbf0 100%);
+    border-left: 5px solid #ffa500;
+}
+
+.festivos-contenido {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: center;
+}
+
+.festivos-info {
+    flex: 1;
+}
+
+.festivos-info h4 {
+    margin: 0 0 8px;
+    color: #333;
+    font-size: 16px;
+}
+
+.festivos-info p {
+    margin: 0 0 15px;
+    color: #666;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.festivos-botones {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.boton-festivo {
+    padding: 10px 16px;
+    background: #ffa500;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 13px;
+    text-decoration: none;
+    text-align: center;
+    transition: background 0.3s;
+    display: inline-block;
+}
+
+.boton-festivo:hover {
+    background: #ff8c00;
+}
+
+.boton-festivo-secundario {
+    background: #ffcc99;
+    color: #333;
+}
+
+.boton-festivo-secundario:hover {
+    background: #ffbb80;
+}
+
+/* ============================================
+   RESPONSIVE - TABLETAS
+   ============================================ */
+
+@media (max-width: 950px) {
+
+    .resumen,
+    .acumulados,
+    .cards-dashboard {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .filtros {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .festivos-contenido {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+/* ============================================
+   RESPONSIVE - MÓVIL
+   ============================================ */
+
+@media (max-width: 600px) {
+
+    .container-admin {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+    }
+
+    .sidebar-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 0;
+    }
+
+    .nav-item {
+        white-space: nowrap;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+    }
+
+    .nav-item.active {
+        border-left-color: transparent;
+        border-bottom-color: #ffa500;
+    }
+
+    .cards-dashboard {
+        grid-template-columns: 1fr;
+    }
+
+    .content {
+        padding: 15px;
+    }
+
+    .barra {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 15px;
+    }
+
+    .barra-derecha {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .resumen,
+    .acumulados {
+        grid-template-columns: 1fr;
+    }
+
+    .filtros {
+        grid-template-columns: 1fr;
+    }
+
+    .cabecera {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .contenedor {
+        margin-top: 20px;
+    }
+
+    .festivos-botones {
+        flex-direction: column;
+    }
+
+    .boton-festivo {
+        width: 100%;
+    }
+
+}
