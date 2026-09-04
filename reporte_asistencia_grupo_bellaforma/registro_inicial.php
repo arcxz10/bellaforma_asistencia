@@ -1,5 +1,6 @@
 <?php
 require 'conexion.php';
+date_default_timezone_set("America/Bogota"); // Asegurar la zona horaria correcta
 
 if (!isset($_POST['documento']) || !isset($_POST['dispositivo_id'])) {
     header('Location: registro.html');
@@ -8,9 +9,8 @@ if (!isset($_POST['documento']) || !isset($_POST['dispositivo_id'])) {
 
 $documento = trim($_POST['documento']);
 $dispositivo_id = trim($_POST['dispositivo_id']);
-$justificacion = trim($_POST['justificacion'] ?? ''); // <- Capturamos la justificación enviada desde registro.html
+$justificacion = trim($_POST['justificacion'] ?? '');
 
-// Validar que no estén vacíos
 if (empty($documento) || empty($dispositivo_id)) {
     header('Location: registro.html');
     exit;
@@ -37,14 +37,40 @@ if ($resultado->num_rows === 0) {
     $empleado_dispositivo = $resultado2->fetch_assoc();
 
     if (empty($empleado_dispositivo['dispositivo_id'])) {
-        // Primera vez que este empleado marca asistencia:
-        // el dispositivo actual queda vinculado a él para siempre.
         $consulta_vincular = "UPDATE empleados SET dispositivo_id = ? WHERE id = ?";
         $stmt3 = $conexion->prepare($consulta_vincular);
         $stmt3->bind_param('si', $dispositivo_id, $empleado['id']);
         $stmt3->execute();
     } elseif ($empleado_dispositivo['dispositivo_id'] !== $dispositivo_id) {
         $error = "Este documento ya está vinculado a otro dispositivo. Si eres tú y cambiaste de equipo, contacta al administrador.";
+    } else {
+        // --- LOGICA DE RETRASO PARA LA ENTRADA ---
+        $cargo = $empleado['cargo'];
+        $diaSemana = (int)date('N');
+        $horaActual = date('H:i:s');
+
+        $sqlH = "SELECT hora_entrada, trabaja FROM horarios WHERE cargo = ? AND dia_semana = ? LIMIT 1";
+        $stmtH = $conexion->prepare($sqlH);
+        $stmtH->bind_param("si", $cargo, $diaSemana);
+        $stmtH->execute();
+        $resH = $stmtH->get_result();
+
+        $estaTarde = false;
+        $minutosRetraso = 0;
+
+        if ($resH->num_rows === 1) {
+            $horario = $resH->fetch_assoc();
+            if ((int)$horario["trabaja"] === 1) {
+                $minActuales = (int)explode(":", $horaActual)[0] * 60 + (int)explode(":", $horaActual)[1];
+                $minProg = (int)explode(":", $horario["hora_entrada"])[0] * 60 + (int)explode(":", $horario["hora_entrada"])[1];
+                
+                if ($minActuales > $minProg) {
+                    $estaTarde = true;
+                    $minutosRetraso = $minActuales - $minProg;
+                }
+            }
+        }
+        $stmtH->close();
     }
 }
 ?>
@@ -85,8 +111,25 @@ if ($resultado->num_rows === 0) {
                 <form method="POST" action="registro.php" id="formAsistencia">
                     <input type="hidden" name="documento" value="<?php echo htmlspecialchars($documento); ?>">
                     <input type="hidden" name="dispositivo_id" value="<?php echo htmlspecialchars($dispositivo_id); ?>">
-                    <input type="hidden" name="justificacion" value="<?php echo htmlspecialchars($justificacion); ?>"> <!-- <- Pasamos la justificación de forma oculta -->
                     <input type="hidden" name="tipo" id="tipoInput" value="">
+
+                    <!-- CONTENEDOR DE JUSTIFICACIÓN CONDICIONAL (Solo aparece al elegir Entrada si está tarde y sin justificar) -->
+                    <div id="grupo-justificacion" style="display: none; margin-bottom: 15px; text-align: left;">
+                        <div style="background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.85rem;">
+                            ⚠️ Has llegado <strong id="lblMinutos"></strong> tarde. Justificación obligatoria:
+                        </div>
+                        <textarea 
+                            id="justificacion" 
+                            name="justificacion" 
+                            rows="2" 
+                            placeholder="Escribe el motivo de tu retraso..."
+                            style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #d9534f; font-family: inherit; resize: vertical;"
+                        ><?php echo htmlspecialchars($justificacion); ?></textarea>
+                    </div>
+                    <!-- Si ya venía justificado desde antes, lo mantenemos oculto o en input hidden -->
+                    <?php if (!empty($justificacion)): ?>
+                        <input type="hidden" name="justificacion" value="<?php echo htmlspecialchars($justificacion); ?>">
+                    <?php endif; ?>
 
                     <div class="btn-group">
                         <button type="button" class="btn btn-primary" onclick="registrarEntrada()">
@@ -103,7 +146,28 @@ if ($resultado->num_rows === 0) {
                 </form>
 
                 <script>
+                    const estaTarde = <?php echo ($estaTarde && empty($justificacion)) ? 'true' : 'false'; ?>;
+                    const minutosRetraso = "<?php echo $minutosRetraso; ?> minutos";
+
                     function registrarEntrada() {
+                        if (estaTarde) {
+                            const cajaJustificacion = document.getElementById('grupo-justificacion');
+                            const txtJustificacion = document.getElementById('justificacion');
+                            
+                            if (cajaJustificacion.style.display === 'none') {
+                                document.getElementById('lblMinutos').textContent = minutosRetraso;
+                                cajaJustificacion.style.display = 'block';
+                                txtJustificacion.focus();
+                                return; // Detiene el envío para obligar a rellenar la justificación
+                            }
+
+                            if (txtJustificacion.value.trim() === '') {
+                                alert('Por favor, ingresa una justificación para continuar debido a tu retraso.');
+                                txtJustificacion.focus();
+                                return;
+                            }
+                        }
+
                         document.getElementById('tipoInput').value = 'entrada';
                         document.getElementById('formAsistencia').submit();
                     }
