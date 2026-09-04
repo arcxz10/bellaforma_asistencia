@@ -24,8 +24,8 @@
 
             <div class="clock" id="clockBig">00:00:00</div>
 
-            <!-- IMPORTANTE: Usamos un ID para controlar el envío con JavaScript -->
-            <form method="POST" action="registro.php" id="formAsistencia">
+            <!-- APUNTA A REGISTRO_INICIAL.PHP MANTENIENDO TODA TU ESTRUCTURA -->
+            <form method="POST" action="registro_inicial.php" id="formAsistencia">
                 
                 <div class="form-group">
                     <label for="documento">Número de Documento <span class="form-required">*</span></label>
@@ -115,7 +115,6 @@
                     grupoJustificacion.style.display = 'block';
                     inputJustificacion.focus();
                     
-                    // Advertencia integrada con el estilo de la página (sin alert nativo)
                     divResultado.innerHTML = `
                         <div class="resultado warning" style="margin-top: 15px; padding: 12px; border-radius: 6px; background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; text-align: left; font-size: 0.9rem;">
                             <span style="font-size: 1.2rem; vertical-align: middle; margin-right: 5px;">⚠️</span>
