@@ -10,8 +10,9 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 }
 
 $documento = trim($_POST["documento"] ?? "");
-$tipo = $_POST["tipo"] ?? "";
+$tipo = $_POST["tipo"] ?? "entrada"; // Por defecto se asume entrada si no viene especificado
 $dispositivoId = trim($_POST["dispositivo_id"] ?? "");
+$justificacion = trim($_POST["justificacion"] ?? ""); // Capturamos la justificación ingresada
 
 if ($documento === "") {
     mostrarResultado(
@@ -285,9 +286,10 @@ if ($tipo === "entrada") {
         $estadoEntrada = "puntual";
 
         $minutosRetraso = 0;
+        $justificacion = null; // Si llegó puntual, no guardamos justificación innecesaria
     }
 
-    // ✅ CORREGIDO: Sin minutos_extra en INSERT
+    // ✅ ACTUALIZADO: Incluye la columna justificacion en el INSERT
     $sql = "
         INSERT INTO asistencias
         (
@@ -295,9 +297,10 @@ if ($tipo === "entrada") {
             fecha,
             hora_entrada,
             estado_entrada,
-            minutos_retraso
+            minutos_retraso,
+            justificacion
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
     ";
 
     $stmt = $conexion->prepare($sql);
@@ -311,12 +314,13 @@ if ($tipo === "entrada") {
     }
 
     $stmt->bind_param(
-        "isssi",
+        "isssis",
         $empleadoId,
         $fecha,
         $horaActual,
         $estadoEntrada,
-        $minutosRetraso
+        $minutosRetraso,
+        $justificacion
     );
 
     if (!$stmt->execute()) {
@@ -336,16 +340,22 @@ if ($tipo === "entrada") {
 
     if ($estadoEntrada === "tarde") {
 
-        mostrarResultado(
-            "tarde",
-            "Entrada registrada",
-            "Hola, " .
+        $mensajeTarde = "Hola, " .
             htmlspecialchars($nombre) .
             ". Tu entrada fue registrada a las " .
             formatoHora($horaActual) .
             ".<br><strong>Retraso: " .
             $minutosRetraso .
-            " minutos.</strong>"
+            " minutos.</strong>";
+
+        if (!empty($justificacion)) {
+            $mensajeTarde .= "<br><small>Justificación: " . htmlspecialchars($justificacion) . "</small>";
+        }
+
+        mostrarResultado(
+            "tarde",
+            "Entrada registrada",
+            $mensajeTarde
         );
 
     } else {
@@ -429,7 +439,6 @@ if ($tipo === "salida") {
     $minutosSalida =
         convertirMinutos($horaSalidaProgramada);
 
-    // ✅ CORREGIDO: Solo cuenta extras si salió DESPUÉS de la hora
     if ($minutosActuales > $minutosSalida) {
 
         $minutosExtra =
