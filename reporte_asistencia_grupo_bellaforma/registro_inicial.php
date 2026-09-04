@@ -108,6 +108,12 @@ if ($resultado->num_rows === 0) {
                     </div>
                 </div>
 
+                <!-- ALERTA INTEGRADA VISUAL (Reemplaza al alert nativo) -->
+                <div id="alerta-justificacion" style="display: none; margin-bottom: 15px; padding: 12px; border-radius: 6px; background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; text-align: left; font-size: 0.85rem;">
+                    <span style="font-size: 1.1rem; vertical-align: middle; margin-right: 5px;">⚠️</span>
+                    <span id="texto-alerta-justificacion">Por favor, ingresa una justificación para continuar debido a tu retraso.</span>
+                </div>
+
                 <form method="POST" action="registro.php" id="formAsistencia">
                     <input type="hidden" name="documento" value="<?php echo htmlspecialchars($documento); ?>">
                     <input type="hidden" name="dispositivo_id" value="<?php echo htmlspecialchars($dispositivo_id); ?>">
@@ -146,10 +152,11 @@ if ($resultado->num_rows === 0) {
                     const minutosRetraso = "<?php echo $minutosRetraso; ?> minutos";
 
                     function registrarEntrada() {
+                        const cajaJustificacion = document.getElementById('grupo-justificacion');
+                        const txtJustificacion = document.getElementById('justificacion');
+                        const alertaVisual = document.getElementById('alerta-justificacion');
+
                         if (estaTarde) {
-                            const cajaJustificacion = document.getElementById('grupo-justificacion');
-                            const txtJustificacion = document.getElementById('justificacion');
-                            
                             if (cajaJustificacion.style.display === 'none') {
                                 document.getElementById('lblMinutos').textContent = minutosRetraso;
                                 cajaJustificacion.style.display = 'block';
@@ -158,7 +165,9 @@ if ($resultado->num_rows === 0) {
                             }
 
                             if (txtJustificacion.value.trim() === '') {
-                                alert('Por favor, ingresa una justificación para continuar debido a tu retraso.');
+                                // Muestra alerta bonita integrada en vez del alert feo del navegador
+                                alertaVisual.style.display = 'block';
+                                txtJustificacion.style.borderColor = '#d9534f';
                                 txtJustificacion.focus();
                                 return;
                             }
