@@ -1,6 +1,6 @@
 <?php
 require 'conexion.php';
-date_default_timezone_set("America/Bogota"); // Asegurar la zona horaria correcta
+date_default_timezone_set("America/Bogota");
 
 if (!isset($_POST['documento']) || !isset($_POST['dispositivo_id'])) {
     header('Location: registro.html');
@@ -42,9 +42,9 @@ if ($resultado->num_rows === 0) {
         $stmt3->bind_param('si', $dispositivo_id, $empleado['id']);
         $stmt3->execute();
     } elseif ($empleado_dispositivo['dispositivo_id'] !== $dispositivo_id) {
-        $error = "Este documento ya está vinculado a otro dispositivo. Si eres tú y cambiaste de equipo, contacta al administrador.";
+        $error = "Este documento ya está vinculado a otro dispositivo.";
     } else {
-        // --- LOGICA DE RETRASO PARA LA ENTRADA ---
+        // --- VALIDAR RETRASO ---
         $cargo = $empleado['cargo'];
         $diaSemana = (int)date('N');
         $horaActual = date('H:i:s');
@@ -113,7 +113,7 @@ if ($resultado->num_rows === 0) {
                     <input type="hidden" name="dispositivo_id" value="<?php echo htmlspecialchars($dispositivo_id); ?>">
                     <input type="hidden" name="tipo" id="tipoInput" value="">
 
-                    <!-- CONTENEDOR DE JUSTIFICACIÓN CONDICIONAL (Solo aparece al elegir Entrada si está tarde y sin justificar) -->
+                    <!-- CAJA DE JUSTIFICACIÓN (Oculta hasta hacer clic en Registrar Entrada estando tarde) -->
                     <div id="grupo-justificacion" style="display: none; margin-bottom: 15px; text-align: left;">
                         <div style="background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.85rem;">
                             ⚠️ Has llegado <strong id="lblMinutos"></strong> tarde. Justificación obligatoria:
@@ -126,10 +126,6 @@ if ($resultado->num_rows === 0) {
                             style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #d9534f; font-family: inherit; resize: vertical;"
                         ><?php echo htmlspecialchars($justificacion); ?></textarea>
                     </div>
-                    <!-- Si ya venía justificado desde antes, lo mantenemos oculto o en input hidden -->
-                    <?php if (!empty($justificacion)): ?>
-                        <input type="hidden" name="justificacion" value="<?php echo htmlspecialchars($justificacion); ?>">
-                    <?php endif; ?>
 
                     <div class="btn-group">
                         <button type="button" class="btn btn-primary" onclick="registrarEntrada()">
