@@ -24,6 +24,7 @@
 
             <div class="clock" id="clockBig">00:00:00</div>
 
+            <!-- IMPORTANTE: Usamos un ID para controlar el envío con JavaScript -->
             <form method="POST" action="registro.php" id="formAsistencia">
                 
                 <div class="form-group">
@@ -39,7 +40,7 @@
                     >
                 </div>
 
-                <!-- CAMPO DE JUSTIFICACIÓN (Oculto por defecto, aparece solo si llega tarde) -->
+                <!-- CAMPO DE JUSTIFICACIÓN (Oculto por defecto, aparece si llega tarde a la entrada) -->
                 <div class="form-group" id="grupo-justificacion" style="display: none; margin-bottom: 15px;">
                     <label for="justificacion" style="color: #d9534f; font-weight: bold; font-size: 0.9rem;">
                         ⚠️ Has llegado tarde. Justificación obligatoria:
@@ -57,7 +58,7 @@
                     <input type="hidden" id="dispositivo_id" name="dispositivo_id" value="">
                 </div>
 
-                <button type="submit" class="btn btn-primary">Continuar</button>
+                <button type="submit" class="btn btn-primary" id="btnContinuar">Continuar</button>
                 <a href="login.html" class="btn btn-back">← Volver al Inicio</a>
                 <a href="registro_empleado.php" class="btn btn-secondary">📝 Registrar por primera vez</a>
             </form>
@@ -93,60 +94,42 @@
         const inputJustificacion = document.getElementById('justificacion');
         const formAsistencia = document.getElementById('formAsistencia');
 
-        // Verificar al salir del campo del documento
-        async function verificarRetraso() {
-            const documento = inputDocumento.value.trim();
-            if (documento.length >= 5) {
-                try {
-                    const respuesta = await fetch(`verificar_estado.php?documento=${documento}`);
-                    const datos = await respuesta.json();
+        // Variable para controlar si ya validamos o si el usuario abrió la caja
+        let validacionSuperada = false;
 
-                    if (datos.tarde) {
-                        grupoJustificacion.style.display = 'block';
-                        inputJustificacion.setAttribute('required', 'true');
-                    } else {
-                        grupoJustificacion.style.display = 'none';
-                        inputJustificacion.removeAttribute('required');
-                    }
-                } catch (e) {
-                    console.error("Error al verificar estado", e);
-                }
-            } else {
-                grupoJustificacion.style.display = 'none';
-                inputJustificacion.removeAttribute('required');
-            }
-        }
-
-        inputDocumento.addEventListener('blur', verificarRetraso);
-
-        // Interceptar el envío del formulario para asegurar que si llega tarde y no ha justificado, se detenga y lo obligue a escribir
         formAsistencia.addEventListener('submit', async function(e) {
-            const documento = inputDocumento.value.trim();
-            
-            // Si la caja de justificación ya está visible y está vacía, evitamos que se envíe de una
-            if (grupoJustificacion.style.display === 'block' && inputJustificacion.value.trim() === '') {
-                e.preventDefault(); // Detiene el envío
-                inputJustificacion.focus(); // Manda el cursor a la caja de justificación para que escriba
-                alert('⚠️ Has llegado tarde. Por favor escribe una justificación antes de continuar.');
-                return;
+            // Si el usuario ya vio la caja de justificación y escribió algo (o no la necesita), permitimos el envío
+            if (validacionSuperada) {
+                return; 
             }
 
-            // Opcional: una última comprobación rápida por AJAX antes de enviar por si no hizo blur
-            if (documento.length >= 5 && grupoJustificacion.style.display === 'none') {
-                try {
-                    const respuesta = await fetch(`verificar_estado.php?documento=${documento}`);
-                    const datos = await respuesta.json();
+            const documento = inputDocumento.value.trim();
+            if (documento.length < 3) return;
 
-                    if (datos.tarde && inputJustificacion.value.trim() === '') {
-                        e.preventDefault(); // Detiene el envío
-                        grupoJustificacion.style.display = 'block';
-                        inputJustificacion.setAttribute('required', 'true');
-                        inputJustificacion.focus(); // Pone el cursor en la justificación
-                        alert('⚠️ Has llegado tarde. Por favor escribe una justificación para continuar.');
-                    }
-                } catch (err) {
-                    // Si falla la red, dejamos que PHP en el backend haga la validación final
+            // Detenemos el envío inicialmente para consultar por detrás si va tarde o es salida
+            e.preventDefault();
+
+            try {
+                const respuesta = await fetch(`verificar_estado.php?documento=${documento}`);
+                const datos = await respuesta.json();
+
+                // Si el backend dice que es ENTRADA y está TARDE, y aún no ha escrito justificación
+                if (datos.tipo === 'entrada' && datos.tarde && inputJustificacion.value.trim() === '') {
+                    grupoJustificacion.style.display = 'block';
+                    inputJustificacion.focus(); // Ponemos el cursor aquí para que escriba con calma
+                    alert('⚠️ Has llegado tarde. Por favor ingresa una justificación y vuelve a hacer clic en Continuar.');
+                    return; // Detenemos totalmente el envío para que pueda escribir
                 }
+
+                // Si ya justificó, o es salida, o llegó puntual, marcamos como superado y reenviamos el formulario
+                validacionSuperada = true;
+                formAsistencia.submit();
+
+            } catch (err) {
+                console.error("Error de red", err);
+                // Si hay error de red, dejamos que PHP maneje el envío por seguridad
+                validacionSuperada = true;
+                formAsistencia.submit();
             }
         });
     </script>
