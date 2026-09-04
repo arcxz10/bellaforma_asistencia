@@ -619,8 +619,7 @@ if ($estado !== "sin") {
             a.hora_entrada,
             a.minutos_retraso,
             a.hora_salida,
-            a.minutos_extra,
-            a.justificacion
+            a.minutos_extra
         FROM asistencias a
 
         INNER JOIN empleados e
@@ -1507,10 +1506,6 @@ $resultadoEmpleados =
                                         Extra
                                     </th>
 
-                                    <th>
-                                        Justificación
-                                    </th>
-
                                 </tr>
 
                             </thead>
@@ -1525,7 +1520,7 @@ $resultadoEmpleados =
                                 <tr>
 
                                     <td
-                                        colspan="9"
+                                        colspan="8"
                                         class="sin-resultados"
                                     >
                                         No hay registros para el período seleccionado.
@@ -1656,10 +1651,6 @@ $resultadoEmpleados =
 
                                             <?php endif; ?>
 
-                                        </td>
-
-                                        <td>
-                                            <?= !empty($fila["justificacion"]) ? escapar($fila["justificacion"]) : "—" ?>
                                         </td>
 
                                     </tr>
@@ -2488,7 +2479,7 @@ $resultadoEmpleados =
                     "modalConfirmar"
                 );
 
-            if (event.target === modalConfirmar) {
+            if (event.target === modalConfirmar) 
                 cerrarConfirmar();
             }
         }
