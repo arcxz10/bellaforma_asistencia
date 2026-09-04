@@ -88,11 +88,12 @@
         setInterval(actualizarReloj, 1000);
         actualizarReloj();
 
-        // Mostrar caja de justificación automáticamente si el empleado llega tarde
         const inputDocumento = document.getElementById('documento');
         const grupoJustificacion = document.getElementById('grupo-justificacion');
         const inputJustificacion = document.getElementById('justificacion');
+        const formAsistencia = document.getElementById('formAsistencia');
 
+        // Verificar al salir del campo del documento
         async function verificarRetraso() {
             const documento = inputDocumento.value.trim();
             if (documento.length >= 5) {
@@ -106,7 +107,6 @@
                     } else {
                         grupoJustificacion.style.display = 'none';
                         inputJustificacion.removeAttribute('required');
-                        inputJustificacion.value = '';
                     }
                 } catch (e) {
                     console.error("Error al verificar estado", e);
@@ -118,10 +118,35 @@
         }
 
         inputDocumento.addEventListener('blur', verificarRetraso);
-        inputDocumento.addEventListener('input', () => {
-            if (inputDocumento.value.trim().length < 5) {
-                grupoJustificacion.style.display = 'none';
-                inputJustificacion.removeAttribute('required');
+
+        // Interceptar el envío del formulario para asegurar que si llega tarde y no ha justificado, se detenga y lo obligue a escribir
+        formAsistencia.addEventListener('submit', async function(e) {
+            const documento = inputDocumento.value.trim();
+            
+            // Si la caja de justificación ya está visible y está vacía, evitamos que se envíe de una
+            if (grupoJustificacion.style.display === 'block' && inputJustificacion.value.trim() === '') {
+                e.preventDefault(); // Detiene el envío
+                inputJustificacion.focus(); // Manda el cursor a la caja de justificación para que escriba
+                alert('⚠️ Has llegado tarde. Por favor escribe una justificación antes de continuar.');
+                return;
+            }
+
+            // Opcional: una última comprobación rápida por AJAX antes de enviar por si no hizo blur
+            if (documento.length >= 5 && grupoJustificacion.style.display === 'none') {
+                try {
+                    const respuesta = await fetch(`verificar_estado.php?documento=${documento}`);
+                    const datos = await respuesta.json();
+
+                    if (datos.tarde && inputJustificacion.value.trim() === '') {
+                        e.preventDefault(); // Detiene el envío
+                        grupoJustificacion.style.display = 'block';
+                        inputJustificacion.setAttribute('required', 'true');
+                        inputJustificacion.focus(); // Pone el cursor en la justificación
+                        alert('⚠️ Has llegado tarde. Por favor escribe una justificación para continuar.');
+                    }
+                } catch (err) {
+                    // Si falla la red, dejamos que PHP en el backend haga la validación final
+                }
             }
         });
     </script>
