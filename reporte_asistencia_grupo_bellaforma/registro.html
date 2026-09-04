@@ -67,7 +67,7 @@
         </div>
     </div>
 
-  <script>
+    <script>
         function obtenerIdDispositivo() {
             let id = localStorage.getItem('bellaforma_dispositivo_id');
             if (!id) {
@@ -115,7 +115,7 @@
                     grupoJustificacion.style.display = 'block';
                     inputJustificacion.focus();
                     
-                    // Mensaje estilizado dentro de la misma tarjeta en lugar del alert feo
+                    // Advertencia integrada con el estilo de la página (sin alert nativo)
                     divResultado.innerHTML = `
                         <div class="resultado warning" style="margin-top: 15px; padding: 12px; border-radius: 6px; background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; text-align: left; font-size: 0.9rem;">
                             <span style="font-size: 1.2rem; vertical-align: middle; margin-right: 5px;">⚠️</span>
