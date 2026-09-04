@@ -27,14 +27,6 @@
             <form method="POST" action="registro.php" id="formAsistencia">
                 
                 <div class="form-group">
-                    <label for="tipo">Tipo de Registro <span class="form-required">*</span></label>
-                    <select id="tipo" name="tipo" class="form-control" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ccc; margin-bottom: 15px;">
-                        <option value="entrada">Registrar Entrada</option>
-                        <option value="salida">Registrar Salida</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
                     <label for="documento">Número de Documento <span class="form-required">*</span></label>
                     <input 
                         type="text" 
@@ -47,9 +39,9 @@
                     >
                 </div>
 
-                <!-- CAMPO DE JUSTIFICACIÓN (Oculto por defecto, aparece solo si hay retraso) -->
-                <div class="form-group" id="grupo-justificacion" style="display: none;">
-                    <label for="justificacion" style="color: #d9534f; font-weight: bold;">
+                <!-- CAMPO DE JUSTIFICACIÓN (Oculto por defecto, aparece solo si llega tarde) -->
+                <div class="form-group" id="grupo-justificacion" style="display: none; margin-bottom: 15px;">
+                    <label for="justificacion" style="color: #d9534f; font-weight: bold; font-size: 0.9rem;">
                         ⚠️ Has llegado tarde. Justificación obligatoria:
                     </label>
                     <textarea 
@@ -96,17 +88,14 @@
         setInterval(actualizarReloj, 1000);
         actualizarReloj();
 
-        // VALIDACIÓN DINÁMICA: Consultar si el empleado llega tarde al escribir su documento
+        // Mostrar caja de justificación automáticamente si el empleado llega tarde
         const inputDocumento = document.getElementById('documento');
-        const selectTipo = document.getElementById('tipo');
         const grupoJustificacion = document.getElementById('grupo-justificacion');
         const inputJustificacion = document.getElementById('justificacion');
 
         async function verificarRetraso() {
             const documento = inputDocumento.value.trim();
-            const tipo = selectTipo.value;
-
-            if (documento.length >= 5 && tipo === 'entrada') {
+            if (documento.length >= 5) {
                 try {
                     const respuesta = await fetch(`verificar_estado.php?documento=${documento}`);
                     const datos = await respuesta.json();
@@ -129,7 +118,12 @@
         }
 
         inputDocumento.addEventListener('blur', verificarRetraso);
-        selectTipo.addEventListener('change', verificarRetraso);
+        inputDocumento.addEventListener('input', () => {
+            if (inputDocumento.value.trim().length < 5) {
+                grupoJustificacion.style.display = 'none';
+                inputJustificacion.removeAttribute('required');
+            }
+        });
     </script>
 </body>
 </html>
