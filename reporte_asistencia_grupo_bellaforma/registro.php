@@ -12,7 +12,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 $documento = trim($_POST["documento"] ?? "");
 $tipo = $_POST["tipo"] ?? "";
 $dispositivoId = trim($_POST["dispositivo_id"] ?? "");
-$justificacion = trim($_POST["justificacion"] ?? ""); // <- Recibimos la justificación enviada
+$justificacion = trim($_POST["justificacion"] ?? "");
 
 if ($documento === "") {
     mostrarResultado(
@@ -60,17 +60,11 @@ if (!$stmt) {
     );
 }
 
-$stmt->bind_param(
-    "s",
-    $documento
-);
-
+$stmt->bind_param("s", $documento);
 $stmt->execute();
-
 $resultado = $stmt->get_result();
 
 if ($resultado->num_rows !== 1) {
-
     $stmt->close();
     $conexion->close();
 
@@ -82,15 +76,12 @@ if ($resultado->num_rows !== 1) {
 }
 
 $empleado = $resultado->fetch_assoc();
-
 $stmt->close();
 
-// ✅ VALIDACIÓN DE DISPOSITIVO MEJORADA
 if (
     !empty($empleado["dispositivo_id"]) &&
     $empleado["dispositivo_id"] !== $dispositivoId
 ) {
-
     $conexion->close();
 
     mostrarResultado(
@@ -125,19 +116,12 @@ if (!$stmtFestivo) {
     );
 }
 
-$stmtFestivo->bind_param(
-    "s",
-    $fecha
-);
-
+$stmtFestivo->bind_param("s", $fecha);
 $stmtFestivo->execute();
-
 $resultadoFestivo = $stmtFestivo->get_result();
 
 if ($resultadoFestivo->num_rows > 0) {
-
     $festivo = $resultadoFestivo->fetch_assoc();
-
     $descripcion = $festivo["descripcion"];
 
     $stmtFestivo->close();
@@ -175,18 +159,11 @@ if (!$stmtHorario) {
     );
 }
 
-$stmtHorario->bind_param(
-    "si",
-    $cargo,
-    $diaSemana
-);
-
+$stmtHorario->bind_param("si", $cargo, $diaSemana);
 $stmtHorario->execute();
-
 $resultadoHorario = $stmtHorario->get_result();
 
 if ($resultadoHorario->num_rows !== 1) {
-
     $stmtHorario->close();
     $conexion->close();
 
@@ -198,11 +175,9 @@ if ($resultadoHorario->num_rows !== 1) {
 }
 
 $horario = $resultadoHorario->fetch_assoc();
-
 $stmtHorario->close();
 
 if ((int) $horario["trabaja"] !== 1) {
-
     $conexion->close();
 
     mostrarResultado(
@@ -239,18 +214,11 @@ if ($tipo === "entrada") {
         );
     }
 
-    $stmt->bind_param(
-        "is",
-        $empleadoId,
-        $fecha
-    );
-
+    $stmt->bind_param("is", $empleadoId, $fecha);
     $stmt->execute();
-
     $resultado = $stmt->get_result();
 
     if ($resultado->num_rows > 0) {
-
         $registro = $resultado->fetch_assoc();
 
         $stmt->close();
@@ -267,29 +235,29 @@ if ($tipo === "entrada") {
 
     $stmt->close();
 
-    $minutosActuales =
-        convertirMinutos($horaActual);
-
-    $minutosEntrada =
-        convertirMinutos($horaEntradaProgramada);
+    $minutosActuales = convertirMinutos($horaActual);
+    $minutosEntrada = convertirMinutos($horaEntradaProgramada);
 
     if ($minutosActuales > $minutosEntrada) {
-
         $estadoEntrada = "tarde";
+        $minutosRetraso = $minutosActuales - $minutosEntrada;
 
-        $minutosRetraso =
-            $minutosActuales -
-            $minutosEntrada;
+        // 🛑 VALIDACIÓN OBLIGATORIA: Si llega tarde, la justificación no puede estar vacía
+        if ($justificacion === "") {
+            $conexion->close();
+            mostrarResultado(
+                "error",
+                "Justificación requerida",
+                "Has llegado " . $minutosRetraso . " minutos tarde. Es obligatorio ingresar una justificación para poder registrar la entrada."
+            );
+        }
 
     } else {
-
         $estadoEntrada = "puntual";
-
         $minutosRetraso = 0;
-        $justificacion = null; // Si llegó puntual, limpiamos la justificación
+        $justificacion = null; // Si llegó puntual, se ignora o limpia la justificación
     }
 
-    // ✅ ACTUALIZADO: Incluye la columna justificacion en el INSERT
     $sql = "
         INSERT INTO asistencias
         (
@@ -324,7 +292,6 @@ if ($tipo === "entrada") {
     );
 
     if (!$stmt->execute()) {
-
         $stmt->close();
         $conexion->close();
 
@@ -339,7 +306,6 @@ if ($tipo === "entrada") {
     $conexion->close();
 
     if ($estadoEntrada === "tarde") {
-
         $mensajeTarde = "Hola, " .
             htmlspecialchars($nombre) .
             ". Tu entrada fue registrada a las " .
@@ -359,7 +325,6 @@ if ($tipo === "entrada") {
         );
 
     } else {
-
         mostrarResultado(
             "exito",
             "Entrada registrada",
@@ -394,18 +359,11 @@ if ($tipo === "salida") {
         );
     }
 
-    $stmt->bind_param(
-        "is",
-        $empleadoId,
-        $fecha
-    );
-
+    $stmt->bind_param("is", $empleadoId, $fecha);
     $stmt->execute();
-
     $resultado = $stmt->get_result();
 
     if ($resultado->num_rows !== 1) {
-
         $stmt->close();
         $conexion->close();
 
@@ -417,11 +375,9 @@ if ($tipo === "salida") {
     }
 
     $asistencia = $resultado->fetch_assoc();
-
     $stmt->close();
 
     if (!empty($asistencia["hora_salida"])) {
-
         $conexion->close();
 
         mostrarResultado(
@@ -433,21 +389,12 @@ if ($tipo === "salida") {
         );
     }
 
-    $minutosActuales =
-        convertirMinutos($horaActual);
+    $minutosActuales = convertirMinutos($horaActual);
+    $minutosSalida = convertirMinutos($horaSalidaProgramada);
 
-    $minutosSalida =
-        convertirMinutos($horaSalidaProgramada);
-
-    // ✅ CORREGIDO: Solo cuenta extras si salió DESPUÉS de la hora
     if ($minutosActuales > $minutosSalida) {
-
-        $minutosExtra =
-            $minutosActuales -
-            $minutosSalida;
-
+        $minutosExtra = $minutosActuales - $minutosSalida;
     } else {
-
         $minutosExtra = 0;
     }
 
@@ -479,7 +426,6 @@ if ($tipo === "salida") {
     );
 
     if (!$stmt->execute()) {
-
         $stmt->close();
         $conexion->close();
 
@@ -494,7 +440,6 @@ if ($tipo === "salida") {
     $conexion->close();
 
     if ($minutosExtra > 0) {
-
         mostrarResultado(
             "extra",
             "Salida registrada",
@@ -506,9 +451,7 @@ if ($tipo === "salida") {
             convertirMinutosTexto($minutosExtra) .
             ".</strong>"
         );
-
     } else {
-
         mostrarResultado(
             "exito",
             "Salida registrada",
@@ -524,7 +467,6 @@ if ($tipo === "salida") {
 function convertirMinutos($hora)
 {
     $partes = explode(":", $hora);
-
     $horas = (int) ($partes[0] ?? 0);
     $minutos = (int) ($partes[1] ?? 0);
 
@@ -546,12 +488,10 @@ function convertirMinutosTexto($minutos)
 function formatoHora($hora)
 {
     $partes = explode(":", $hora);
-
     $horas = (int) ($partes[0] ?? 0);
     $minutos = (int) ($partes[1] ?? 0);
 
     $periodo = $horas >= 12 ? "PM" : "AM";
-
     $horas = $horas % 12;
 
     if ($horas === 0) {
@@ -571,7 +511,6 @@ function mostrarResultado(
     $titulo,
     $mensaje
 ) {
-
     $clase = "success";
     $icono = "🎉";
 
@@ -595,20 +534,10 @@ function mostrarResultado(
     <html lang="es">
 
     <head>
-
         <meta charset="UTF-8">
-
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0"
-        >
-
-        <title>
-            Registro | Grupo Bellaforma
-        </title>
-
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Registro | Grupo Bellaforma</title>
         <link rel="stylesheet" href="css/registro.css">
-
     </head>
 
     <body>
@@ -642,9 +571,7 @@ function mostrarResultado(
     </body>
 
     </html>
-
     <?php
-
     exit;
 }
 
