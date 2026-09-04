@@ -8,6 +8,7 @@ if (!isset($_POST['documento']) || !isset($_POST['dispositivo_id'])) {
 
 $documento = trim($_POST['documento']);
 $dispositivo_id = trim($_POST['dispositivo_id']);
+$justificacion = trim($_POST['justificacion'] ?? ''); // <- Capturamos la justificación enviada desde registro.html
 
 // Validar que no estén vacíos
 if (empty($documento) || empty($dispositivo_id)) {
@@ -84,6 +85,7 @@ if ($resultado->num_rows === 0) {
                 <form method="POST" action="registro.php" id="formAsistencia">
                     <input type="hidden" name="documento" value="<?php echo htmlspecialchars($documento); ?>">
                     <input type="hidden" name="dispositivo_id" value="<?php echo htmlspecialchars($dispositivo_id); ?>">
+                    <input type="hidden" name="justificacion" value="<?php echo htmlspecialchars($justificacion); ?>"> <!-- <- Pasamos la justificación de forma oculta -->
                     <input type="hidden" name="tipo" id="tipoInput" value="">
 
                     <div class="btn-group">
