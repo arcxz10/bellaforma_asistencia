@@ -24,9 +24,8 @@
 
             <div class="clock" id="clockBig">00:00:00</div>
 
-            <!-- IMPORTANTE: Usamos un ID para controlar el envío con JavaScript -->
+            <!-- Formulario completo original apuntando al archivo intermedio -->
             <form method="POST" action="registro_inicial.php" id="formAsistencia">
-                
                 <div class="form-group">
                     <label for="documento">Número de Documento <span class="form-required">*</span></label>
                     <input 
@@ -38,20 +37,6 @@
                         autocomplete="off"
                         autofocus
                     >
-                </div>
-
-                <!-- CAMPO DE JUSTIFICACIÓN (Oculto por defecto, aparece si llega tarde a la entrada) -->
-                <div class="form-group" id="grupo-justificacion" style="display: none; margin-bottom: 15px;">
-                    <label for="justificacion" style="color: #d9534f; font-weight: bold; font-size: 0.9rem;">
-                        ⚠️ Has llegado tarde. Justificación obligatoria:
-                    </label>
-                    <textarea 
-                        id="justificacion" 
-                        name="justificacion" 
-                        rows="2" 
-                        placeholder="Escribe el motivo de tu retraso..."
-                        style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #d9534f; font-family: inherit; resize: vertical;"
-                    ></textarea>
                 </div>
 
                 <div class="form-group">
@@ -76,6 +61,7 @@
             }
             return id;
         }
+        
         document.getElementById('dispositivo_id').value = obtenerIdDispositivo();
 
         function actualizarReloj() {
@@ -83,58 +69,23 @@
             const horas = String(ahora.getHours()).padStart(2, '0');
             const minutos = String(ahora.getMinutes()).padStart(2, '0');
             const segundos = String(ahora.getSeconds()).padStart(2, '0');
-            document.getElementById('reloj').textContent = `${horas}:${minutos}:${segundos}`;
-            document.getElementById('clockBig').textContent = `${horas}:${minutos}:${segundos}`;
+            
+            const horaActualStr = `${horas}:${minutos}:${segundos}`;
+            
+            const elementoReloj = document.getElementById('reloj');
+            if (elementoReloj) {
+                elementoReloj.textContent = horaActualStr;
+            }
+            
+            const elementoClockBig = document.getElementById('clockBig');
+            if (elementoClockBig) {
+                elementoClockBig.textContent = horaActualStr;
+            }
         }
+        
         setInterval(actualizarReloj, 1000);
         actualizarReloj();
-
-        const inputDocumento = document.getElementById('documento');
-        const grupoJustificacion = document.getElementById('grupo-justificacion');
-        const inputJustificacion = document.getElementById('justificacion');
-        const formAsistencia = document.getElementById('formAsistencia');
-        const divResultado = document.getElementById('resultado');
-
-        let validacionSuperada = false;
-
-        formAsistencia.addEventListener('submit', async function(e) {
-            if (validacionSuperada) {
-                return; 
-            }
-
-            const documento = inputDocumento.value.trim();
-            if (documento.length < 3) return;
-
-            e.preventDefault();
-
-            try {
-                const respuesta = await fetch(`verificar_estado.php?documento=${documento}`);
-                const datos = await respuesta.json();
-
-                if (datos.tipo === 'entrada' && datos.tarde && inputJustificacion.value.trim() === '') {
-                    grupoJustificacion.style.display = 'block';
-                    inputJustificacion.focus();
-                    
-                    divResultado.innerHTML = `
-                        <div class="resultado warning" style="margin-top: 15px; padding: 12px; border-radius: 6px; background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; text-align: left; font-size: 0.9rem;">
-                            <span style="font-size: 1.2rem; vertical-align: middle; margin-right: 5px;">⚠️</span>
-                            <div style="display:inline-block; vertical-align:middle;">
-                                <strong>Has llegado tarde.</strong> Por favor ingresa una justificación y vuelve a hacer clic en Continuar.
-                            </div>
-                        </div>
-                    `;
-                    return;
-                }
-
-                validacionSuperada = true;
-                formAsistencia.submit();
-
-            } catch (err) {
-                console.error("Error de red", err);
-                validacionSuperada = true;
-                formAsistencia.submit();
-            }
-        });
     </script>
 </body>
+
 </html>
