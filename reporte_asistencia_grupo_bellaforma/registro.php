@@ -10,7 +10,6 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 }
 
 $documento = trim($_POST["documento"] ?? "");
-$tipo = $_POST["tipo"] ?? "";
 $dispositivoId = trim($_POST["dispositivo_id"] ?? "");
 $justificacion = trim($_POST["justificacion"] ?? "");
 
@@ -19,14 +18,6 @@ if ($documento === "") {
         "error",
         "Documento requerido",
         "Ingrese su número de documento."
-    );
-}
-
-if (!in_array($tipo, ["entrada", "salida"], true)) {
-    mostrarResultado(
-        "error",
-        "Tipo de registro inválido",
-        "Seleccione Entrada o Salida."
     );
 }
 
@@ -192,48 +183,54 @@ if ((int) $horario["trabaja"] !== 1) {
 $horaEntradaProgramada = $horario["hora_entrada"];
 $horaSalidaProgramada = $horario["hora_salida"];
 
-if ($tipo === "entrada") {
+// ==========================================
+// AUTO-DETECCIÓN DE TIPO (ENTRADA O SALIDA)
+// ==========================================
+$sqlAsistenciaCheck = "
+    SELECT
+        id,
+        hora_entrada,
+        hora_salida
+    FROM asistencias
+    WHERE empleado_id = ?
+      AND fecha = ?
+    LIMIT 1
+";
 
-    $sqlAsistencia = "
-        SELECT
-            id,
-            hora_entrada
-        FROM asistencias
-        WHERE empleado_id = ?
-          AND fecha = ?
-        LIMIT 1
-    ";
+$stmtCheck = $conexion->prepare($sqlAsistenciaCheck);
+if (!$stmtCheck) {
+    mostrarResultado("error", "Error del sistema", "No se pudo consultar el estado de asistencia.");
+}
 
-    $stmt = $conexion->prepare($sqlAsistencia);
+$stmtCheck->bind_param("is", $empleadoId, $fecha);
+$stmtCheck->execute();
+$resultadoCheck = $stmtCheck->get_result();
 
-    if (!$stmt) {
-        mostrarResultado(
-            "error",
-            "Error del sistema",
-            "No se pudo consultar la asistencia."
-        );
-    }
+$tipo = "entrada"; // Por defecto asumimos entrada si no hay registros hoy
 
-    $stmt->bind_param("is", $empleadoId, $fecha);
-    $stmt->execute();
-    $resultado = $stmt->get_result();
-
-    if ($resultado->num_rows > 0) {
-        $registro = $resultado->fetch_assoc();
-
-        $stmt->close();
+if ($resultadoCheck->num_rows > 0) {
+    $regCheck = $resultadoCheck->fetch_assoc();
+    if (empty($regCheck["hora_salida"])) {
+        // Ya tiene entrada pero no salida -> le toca registrar SALIDA
+        $tipo = "salida";
+    } else {
+        // Ya tiene ambos registros hoy
+        $stmtCheck->close();
         $conexion->close();
-
         mostrarResultado(
             "error",
-            "Entrada ya registrada",
-            "Tu entrada ya fue registrada hoy a las " .
-            formatoHora($registro["hora_entrada"]) .
-            "."
+            "Registro completo",
+            "Ya registraste tu entrada y salida el día de hoy."
         );
     }
+}
+$stmtCheck->close();
 
-    $stmt->close();
+
+// ==========================================
+// PROCESAR ENTRADA
+// ==========================================
+if ($tipo === "entrada") {
 
     $minutosActuales = convertirMinutos($horaActual);
     $minutosEntrada = convertirMinutos($horaEntradaProgramada);
@@ -255,7 +252,7 @@ if ($tipo === "entrada") {
     } else {
         $estadoEntrada = "puntual";
         $minutosRetraso = 0;
-        $justificacion = null; // Si llegó puntual, se ignora o limpia la justificación
+        $justificacion = null; 
     }
 
     $sql = "
@@ -337,8 +334,13 @@ if ($tipo === "entrada") {
     }
 }
 
+
+// ==========================================
+// PROCESAR SALIDA
+// ==========================================
 if ($tipo === "salida") {
 
+    // Volvemos a consultar el ID del registro de asistencia de hoy para actualizarlo
     $sql = "
         SELECT
             id,
@@ -376,18 +378,6 @@ if ($tipo === "salida") {
 
     $asistencia = $resultado->fetch_assoc();
     $stmt->close();
-
-    if (!empty($asistencia["hora_salida"])) {
-        $conexion->close();
-
-        mostrarResultado(
-            "error",
-            "Salida ya registrada",
-            "Tu salida ya fue registrada hoy a las " .
-            formatoHora($asistencia["hora_salida"]) .
-            "."
-        );
-    }
 
     $minutosActuales = convertirMinutos($horaActual);
     $minutosSalida = convertirMinutos($horaSalidaProgramada);
