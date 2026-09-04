@@ -24,10 +24,8 @@
 
             <div class="clock" id="clockBig">00:00:00</div>
 
-            <!-- FORMULARIO APUNTANDO A registro.php -->
-            <form method="POST" action="registro.php">
+            <form method="POST" action="registro.php" id="formAsistencia">
                 
-                <!-- Selector de Tipo (Entrada / Salida) necesario para el backend -->
                 <div class="form-group">
                     <label for="tipo">Tipo de Registro <span class="form-required">*</span></label>
                     <select id="tipo" name="tipo" class="form-control" required style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ccc; margin-bottom: 15px;">
@@ -49,15 +47,17 @@
                     >
                 </div>
 
-                <!-- CAMPO DE JUSTIFICACIÓN (Obligatorio solo si llega tarde según el backend) -->
-                <div class="form-group">
-                    <label for="justificacion">Justificación de Retraso <span style="font-size: 0.85rem; color: #d9534f;">(Obligatorio solo si llega tarde)</span></label>
+                <!-- CAMPO DE JUSTIFICACIÓN (Oculto por defecto, aparece solo si hay retraso) -->
+                <div class="form-group" id="grupo-justificacion" style="display: none;">
+                    <label for="justificacion" style="color: #d9534f; font-weight: bold;">
+                        ⚠️ Has llegado tarde. Justificación obligatoria:
+                    </label>
                     <textarea 
                         id="justificacion" 
                         name="justificacion" 
                         rows="2" 
-                        placeholder="Escriba el motivo únicamente si llega tarde..."
-                        style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; resize: vertical;"
+                        placeholder="Escribe el motivo de tu retraso..."
+                        style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #d9534f; font-family: inherit; resize: vertical;"
                     ></textarea>
                 </div>
 
@@ -77,15 +77,12 @@
     <script>
         function obtenerIdDispositivo() {
             let id = localStorage.getItem('bellaforma_dispositivo_id');
-
             if (!id) {
                 id = 'DISP-' + crypto.randomUUID();
                 localStorage.setItem('bellaforma_dispositivo_id', id);
             }
-
             return id;
         }
-
         document.getElementById('dispositivo_id').value = obtenerIdDispositivo();
 
         function actualizarReloj() {
@@ -93,14 +90,46 @@
             const horas = String(ahora.getHours()).padStart(2, '0');
             const minutos = String(ahora.getMinutes()).padStart(2, '0');
             const segundos = String(ahora.getSeconds()).padStart(2, '0');
-            
-            const hora = `${horas}:${minutos}:${segundos}`;
-            document.getElementById('reloj').textContent = hora;
-            document.getElementById('clockBig').textContent = hora;
+            document.getElementById('reloj').textContent = `${horas}:${minutos}:${segundos}`;
+            document.getElementById('clockBig').textContent = `${horas}:${minutos}:${segundos}`;
         }
-
         setInterval(actualizarReloj, 1000);
         actualizarReloj();
+
+        // VALIDACIÓN DINÁMICA: Consultar si el empleado llega tarde al escribir su documento
+        const inputDocumento = document.getElementById('documento');
+        const selectTipo = document.getElementById('tipo');
+        const grupoJustificacion = document.getElementById('grupo-justificacion');
+        const inputJustificacion = document.getElementById('justificacion');
+
+        async function verificarRetraso() {
+            const documento = inputDocumento.value.trim();
+            const tipo = selectTipo.value;
+
+            if (documento.length >= 5 && tipo === 'entrada') {
+                try {
+                    const respuesta = await fetch(`verificar_estado.php?documento=${documento}`);
+                    const datos = await respuesta.json();
+
+                    if (datos.tarde) {
+                        grupoJustificacion.style.display = 'block';
+                        inputJustificacion.setAttribute('required', 'true');
+                    } else {
+                        grupoJustificacion.style.display = 'none';
+                        inputJustificacion.removeAttribute('required');
+                        inputJustificacion.value = '';
+                    }
+                } catch (e) {
+                    console.error("Error al verificar estado", e);
+                }
+            } else {
+                grupoJustificacion.style.display = 'none';
+                inputJustificacion.removeAttribute('required');
+            }
+        }
+
+        inputDocumento.addEventListener('blur', verificarRetraso);
+        selectTipo.addEventListener('change', verificarRetraso);
     </script>
 </body>
 </html>
