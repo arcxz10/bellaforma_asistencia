@@ -67,7 +67,7 @@
         </div>
     </div>
 
-    <script>
+  <script>
         function obtenerIdDispositivo() {
             let id = localStorage.getItem('bellaforma_dispositivo_id');
             if (!id) {
@@ -93,12 +93,11 @@
         const grupoJustificacion = document.getElementById('grupo-justificacion');
         const inputJustificacion = document.getElementById('justificacion');
         const formAsistencia = document.getElementById('formAsistencia');
+        const divResultado = document.getElementById('resultado');
 
-        // Variable para controlar si ya validamos o si el usuario abrió la caja
         let validacionSuperada = false;
 
         formAsistencia.addEventListener('submit', async function(e) {
-            // Si el usuario ya vio la caja de justificación y escribió algo (o no la necesita), permitimos el envío
             if (validacionSuperada) {
                 return; 
             }
@@ -106,28 +105,33 @@
             const documento = inputDocumento.value.trim();
             if (documento.length < 3) return;
 
-            // Detenemos el envío inicialmente para consultar por detrás si va tarde o es salida
             e.preventDefault();
 
             try {
                 const respuesta = await fetch(`verificar_estado.php?documento=${documento}`);
                 const datos = await respuesta.json();
 
-                // Si el backend dice que es ENTRADA y está TARDE, y aún no ha escrito justificación
                 if (datos.tipo === 'entrada' && datos.tarde && inputJustificacion.value.trim() === '') {
                     grupoJustificacion.style.display = 'block';
-                    inputJustificacion.focus(); // Ponemos el cursor aquí para que escriba con calma
-                    alert('⚠️ Has llegado tarde. Por favor ingresa una justificación y vuelve a hacer clic en Continuar.');
-                    return; // Detenemos totalmente el envío para que pueda escribir
+                    inputJustificacion.focus();
+                    
+                    // Mensaje estilizado dentro de la misma tarjeta en lugar del alert feo
+                    divResultado.innerHTML = `
+                        <div class="resultado warning" style="margin-top: 15px; padding: 12px; border-radius: 6px; background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; text-align: left; font-size: 0.9rem;">
+                            <span style="font-size: 1.2rem; vertical-align: middle; margin-right: 5px;">⚠️</span>
+                            <div style="display:inline-block; vertical-align:middle;">
+                                <strong>Has llegado tarde.</strong> Por favor ingresa una justificación y vuelve a hacer clic en Continuar.
+                            </div>
+                        </div>
+                    `;
+                    return;
                 }
 
-                // Si ya justificó, o es salida, o llegó puntual, marcamos como superado y reenviamos el formulario
                 validacionSuperada = true;
                 formAsistencia.submit();
 
             } catch (err) {
                 console.error("Error de red", err);
-                // Si hay error de red, dejamos que PHP maneje el envío por seguridad
                 validacionSuperada = true;
                 formAsistencia.submit();
             }
