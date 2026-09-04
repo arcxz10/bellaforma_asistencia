@@ -14,8 +14,8 @@ $fecha = date("Y-m-d");
 $diaSemana = (int) date("N");
 $horaActual = date("H:i:s");
 
-// Buscar cargo del empleado
-$sql = "SELECT cargo FROM empleados WHERE identificacion = ? AND activo = 1 LIMIT 1";
+// 1. Buscar empleado
+$sql = "SELECT id, cargo FROM empleados WHERE identificacion = ? AND activo = 1 LIMIT 1";
 $stmt = $conexion->prepare($sql);
 $stmt->bind_param("s", $documento);
 $stmt->execute();
@@ -26,10 +26,25 @@ if ($resultado->num_rows !== 1) {
     exit;
 }
 $empleado = $resultado->fetch_assoc();
+$empleadoId = (int)$empleado["id"];
 $cargo = $empleado["cargo"];
 $stmt->close();
 
-// Buscar horario de hoy
+// 2. Verificar si ya marcó entrada hoy (si ya la marcó, lo que sigue es salida, por lo tanto no aplica retraso de entrada)
+$sqlAsistencia = "SELECT id, hora_entrada FROM asistencias WHERE empleado_id = ? AND fecha = ? LIMIT 1";
+$stmtAsis = $conexion->prepare($sqlAsistencia);
+$stmtAsis->bind_param("is", $empleadoId, $fecha);
+$stmtAsis->execute();
+$resAsis = $stmtAsis->get_result();
+
+if ($resAsis->num_rows > 0) {
+    // Ya tiene entrada registrada, por ende no es entrada tarde
+    echo json_encode(["tarde" => false]);
+    exit;
+}
+$stmtAsis->close();
+
+// 3. Buscar horario de entrada
 $sqlHorario = "SELECT hora_entrada, trabaja FROM horarios WHERE cargo = ? AND dia_semana = ? LIMIT 1";
 $stmtHorario = $conexion->prepare($sqlHorario);
 $stmtHorario->bind_param("si", $cargo, $diaSemana);
@@ -49,7 +64,6 @@ if ((int)$horario["trabaja"] !== 1) {
     exit;
 }
 
-// Convertir horas a minutos para comparar
 function convertirMinutos($h) {
     $p = explode(":", $h);
     return ((int)($p[0] ?? 0) * 60) + (int)($p[1] ?? 0);
