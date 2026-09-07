@@ -104,11 +104,11 @@ if ($resultado->num_rows === 0) {
                     <div class="alert-icon">ℹ️</div>
                     <div class="alert-content">
                         <strong>¿Qué deseas hacer?</strong><br>
-                        Selecciona si estás llegando (entrada) o yéndote (salida)
+                        Selecciona la acción que deseas registrar hoy.
                     </div>
                 </div>
 
-                <!-- ALERTA INTEGRADA VISUAL (Reemplaza al alert nativo) -->
+                <!-- ALERTA INTEGRADA VISUAL -->
                 <div id="alerta-justificacion" style="display: none; margin-bottom: 15px; padding: 12px; border-radius: 6px; background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; text-align: left; font-size: 0.85rem;">
                     <span style="font-size: 1.1rem; vertical-align: middle; margin-right: 5px;">⚠️</span>
                     <span id="texto-alerta-justificacion">Por favor, ingresa una justificación para continuar debido a tu retraso.</span>
@@ -117,9 +117,9 @@ if ($resultado->num_rows === 0) {
                 <form method="POST" action="registro.php" id="formAsistencia">
                     <input type="hidden" name="documento" value="<?php echo htmlspecialchars($documento); ?>">
                     <input type="hidden" name="dispositivo_id" value="<?php echo htmlspecialchars($dispositivo_id); ?>">
-                    <input type="hidden" name="tipo" id="tipoInput" value="">
+                    <input type="hidden" name="accion" id="tipoInput" value="">
 
-                    <!-- CAJA DE JUSTIFICACIÓN (Oculta hasta hacer clic en Registrar Entrada estando tarde) -->
+                    <!-- CAJA DE JUSTIFICACIÓN -->
                     <div id="grupo-justificacion" style="display: none; margin-bottom: 15px; text-align: left;">
                         <div style="background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.85rem;">
                             ⚠️ Has llegado <strong id="lblMinutos"></strong> tarde. Justificación obligatoria:
@@ -133,16 +133,22 @@ if ($resultado->num_rows === 0) {
                         ><?php echo htmlspecialchars($justificacion); ?></textarea>
                     </div>
 
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-primary" onclick="registrarEntrada()">
+                    <div class="btn-group" style="display: flex; flex-direction: column; gap: 10px;">
+                        <button type="button" class="btn btn-primary" onclick="registrarAccion('entrada')" style="width: 100%;">
                             ⏱️ Registrar Entrada
                         </button>
-                        <button type="button" class="btn btn-secondary" onclick="registrarSalida()">
+                        <button type="button" class="btn btn-warning" onclick="registrarAccion('salida_almuerzo')" style="width: 100%; background-color: #f0ad4e; color: white;">
+                            🍽️ Salida a Almuerzo
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="registrarAccion('entrada_almuerzo')" style="width: 100%; background-color: #5bc0de; color: white;">
+                            🍛 Entrada de Almuerzo
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="registrarAccion('salida')" style="width: 100%;">
                             🚪 Registrar Salida
                         </button>
                     </div>
 
-                    <a href="registro.html" class="btn btn-back" style="display: block; margin-top: 10px;">
+                    <a href="registro.html" class="btn btn-back" style="display: block; margin-top: 15px;">
                         ← Volver a Registro
                     </a>
                 </form>
@@ -151,21 +157,21 @@ if ($resultado->num_rows === 0) {
                     const estaTarde = <?php echo ($estaTarde && empty($justificacion)) ? 'true' : 'false'; ?>;
                     const minutosRetraso = "<?php echo $minutosRetraso; ?> minutos";
 
-                    function registrarEntrada() {
+                    function registrarAccion(accion) {
                         const cajaJustificacion = document.getElementById('grupo-justificacion');
                         const txtJustificacion = document.getElementById('justificacion');
                         const alertaVisual = document.getElementById('alerta-justificacion');
 
-                        if (estaTarde) {
+                        // Si intenta marcar entrada y llegó tarde, exigimos la justificación primero
+                        if (accion === 'entrada' && estaTarde) {
                             if (cajaJustificacion.style.display === 'none') {
                                 document.getElementById('lblMinutos').textContent = minutosRetraso;
                                 cajaJustificacion.style.display = 'block';
                                 txtJustificacion.focus();
-                                return; // Detiene el envío para obligar a rellenar la justificación
+                                return; 
                             }
 
                             if (txtJustificacion.value.trim() === '') {
-                                // Muestra alerta bonita integrada en vez del alert feo del navegador
                                 alertaVisual.style.display = 'block';
                                 txtJustificacion.style.borderColor = '#d9534f';
                                 txtJustificacion.focus();
@@ -173,12 +179,7 @@ if ($resultado->num_rows === 0) {
                             }
                         }
 
-                        document.getElementById('tipoInput').value = 'entrada';
-                        document.getElementById('formAsistencia').submit();
-                    }
-
-                    function registrarSalida() {
-                        document.getElementById('tipoInput').value = 'salida';
+                        document.getElementById('tipoInput').value = accion;
                         document.getElementById('formAsistencia').submit();
                     }
                 </script>
