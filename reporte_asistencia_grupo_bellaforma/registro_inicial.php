@@ -10,6 +10,7 @@ if (!isset($_POST['documento']) || !isset($_POST['dispositivo_id'])) {
 $documento = trim($_POST['documento']);
 $dispositivo_id = trim($_POST['dispositivo_id']);
 $justificacion = trim($_POST['justificacion'] ?? '');
+$justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
 
 if (empty($documento) || empty($dispositivo_id)) {
     header('Location: registro.html');
@@ -44,12 +45,12 @@ if ($resultado->num_rows === 0) {
     } elseif ($empleado_dispositivo['dispositivo_id'] !== $dispositivo_id) {
         $error = "Este documento ya está vinculado a otro dispositivo.";
     } else {
-        // --- VALIDAR RETRASO ---
+        // --- VALIDAR HORARIOS (ENTRADA Y SALIDA) ---
         $cargo = $empleado['cargo'];
         $diaSemana = (int)date('N');
         $horaActual = date('H:i:s');
 
-        $sqlH = "SELECT hora_entrada, trabaja FROM horarios WHERE cargo = ? AND dia_semana = ? LIMIT 1";
+        $sqlH = "SELECT hora_entrada, hora_salida, trabaja FROM horarios WHERE cargo = ? AND dia_semana = ? LIMIT 1";
         $stmtH = $conexion->prepare($sqlH);
         $stmtH->bind_param("si", $cargo, $diaSemana);
         $stmtH->execute();
@@ -57,16 +58,26 @@ if ($resultado->num_rows === 0) {
 
         $estaTarde = false;
         $minutosRetraso = 0;
+        $salidaAnticipada = false;
+        $minutosFaltantesSalida = 0;
 
         if ($resH->num_rows === 1) {
             $horario = $resH->fetch_assoc();
             if ((int)$horario["trabaja"] === 1) {
                 $minActuales = (int)explode(":", $horaActual)[0] * 60 + (int)explode(":", $horaActual)[1];
-                $minProg = (int)explode(":", $horario["hora_entrada"])[0] * 60 + (int)explode(":", $horario["hora_entrada"])[1];
                 
-                if ($minActuales > $minProg) {
+                // Validación de entrada tarde
+                $minProgEntrada = (int)explode(":", $horario["hora_entrada"])[0] * 60 + (int)explode(":", $horario["hora_entrada"])[1];
+                if ($minActuales > $minProgEntrada) {
                     $estaTarde = true;
-                    $minutosRetraso = $minActuales - $minProg;
+                    $minutosRetraso = $minActuales - $minProgEntrada;
+                }
+
+                // Validación de salida anticipada
+                $minProgSalida = (int)explode(":", $horario["hora_salida"])[0] * 60 + (int)explode(":", $horario["hora_salida"])[1];
+                if ($minActuales < $minProgSalida) {
+                    $salidaAnticipada = true;
+                    $minutosFaltantesSalida = $minProgSalida - $minActuales;
                 }
             }
         }
@@ -111,7 +122,7 @@ if ($resultado->num_rows === 0) {
                 <!-- ALERTA INTEGRADA VISUAL -->
                 <div id="alerta-justificacion" style="display: none; margin-bottom: 15px; padding: 12px; border-radius: 6px; background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; text-align: left; font-size: 0.85rem;">
                     <span style="font-size: 1.1rem; vertical-align: middle; margin-right: 5px;">⚠️</span>
-                    <span id="texto-alerta-justificacion">Por favor, ingresa una justificación para continuar debido a tu retraso.</span>
+                    <span id="texto-alerta-justificacion">Por favor, ingresa una justificación para continuar.</span>
                 </div>
 
                 <form method="POST" action="registro.php" id="formAsistencia">
@@ -119,7 +130,7 @@ if ($resultado->num_rows === 0) {
                     <input type="hidden" name="dispositivo_id" value="<?php echo htmlspecialchars($dispositivo_id); ?>">
                     <input type="hidden" name="accion" id="tipoInput" value="">
 
-                    <!-- CAJA DE JUSTIFICACIÓN -->
+                    <!-- CAJA DE JUSTIFICACIÓN DE ENTRADA -->
                     <div id="grupo-justificacion" style="display: none; margin-bottom: 15px; text-align: left;">
                         <div style="background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.85rem;">
                             ⚠️ Has llegado <strong id="lblMinutos"></strong> tarde. Justificación obligatoria:
@@ -131,6 +142,20 @@ if ($resultado->num_rows === 0) {
                             placeholder="Escribe el motivo de tu retraso..."
                             style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #d9534f; font-family: inherit; resize: vertical;"
                         ><?php echo htmlspecialchars($justificacion); ?></textarea>
+                    </div>
+
+                    <!-- CAJA DE JUSTIFICACIÓN DE SALIDA ANTICIPADA -->
+                    <div id="grupo-justificacion-salida" style="display: none; margin-bottom: 15px; text-align: left;">
+                        <div style="background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.85rem;">
+                            ⚠️ Estás saliendo <strong id="lblMinutosSalida"></strong> antes de tu hora. Se registrará una deuda de tiempo. Justificación obligatoria:
+                        </div>
+                        <textarea 
+                            id="justificacion_salida" 
+                            name="justificacion_salida" 
+                            rows="2" 
+                            placeholder="Escribe el motivo de tu salida anticipada (ej. Cita médica)..."
+                            style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #d9534f; font-family: inherit; resize: vertical;"
+                        ><?php echo htmlspecialchars($justificacionSalida); ?></textarea>
                     </div>
 
                     <div class="btn-group" style="display: flex; flex-direction: column; gap: 10px;">
@@ -157,12 +182,22 @@ if ($resultado->num_rows === 0) {
                     const estaTarde = <?php echo ($estaTarde && empty($justificacion)) ? 'true' : 'false'; ?>;
                     const minutosRetraso = "<?php echo $minutosRetraso; ?> minutos";
 
+                    const salidaAnticipada = <?php echo ($salidaAnticipada && empty($justificacionSalida)) ? 'true' : 'false'; ?>;
+                    const minutosFaltantesSalida = "<?php echo $minutosFaltantesSalida; ?> minutos";
+
                     function registrarAccion(accion) {
                         const cajaJustificacion = document.getElementById('grupo-justificacion');
                         const txtJustificacion = document.getElementById('justificacion');
+                        
+                        const cajaJustificacionSalida = document.getElementById('grupo-justificacion-salida');
+                        const txtJustificacionSalida = document.getElementById('justificacion_salida');
+                        
                         const alertaVisual = document.getElementById('alerta-justificacion');
 
-                        // Si intenta marcar entrada y llegó tarde, exigimos la justificación primero
+                        // Ocultar alertas previas
+                        alertaVisual.style.display = 'none';
+
+                        // Validación de Entrada Tarde
                         if (accion === 'entrada' && estaTarde) {
                             if (cajaJustificacion.style.display === 'none') {
                                 document.getElementById('lblMinutos').textContent = minutosRetraso;
@@ -172,9 +207,28 @@ if ($resultado->num_rows === 0) {
                             }
 
                             if (txtJustificacion.value.trim() === '') {
+                                document.getElementById('texto-alerta-justificacion').textContent = 'Por favor, ingresa una justificación para continuar debido a tu retraso.';
                                 alertaVisual.style.display = 'block';
                                 txtJustificacion.style.borderColor = '#d9534f';
                                 txtJustificacion.focus();
+                                return;
+                            }
+                        }
+
+                        // Validación de Salida Anticipada
+                        if (accion === 'salida' && salidaAnticipada) {
+                            if (cajaJustificacionSalida.style.display === 'none') {
+                                document.getElementById('lblMinutosSalida').textContent = minutosFaltantesSalida;
+                                cajaJustificacionSalida.style.display = 'block';
+                                txtJustificacionSalida.focus();
+                                return; 
+                            }
+
+                            if (txtJustificacionSalida.value.trim() === '') {
+                                document.getElementById('texto-alerta-justificacion').textContent = 'Por favor, ingresa una justificación para continuar debido a tu salida anticipada.';
+                                alertaVisual.style.display = 'block';
+                                txtJustificacionSalida.style.borderColor = '#d9534f';
+                                txtJustificacionSalida.focus();
                                 return;
                             }
                         }
