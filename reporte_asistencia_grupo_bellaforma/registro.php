@@ -1,5 +1,3 @@
-<?php
-
 date_default_timezone_set("America/Bogota");
 
 require_once "conexion.php";
@@ -12,6 +10,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 $documento = trim($_POST["documento"] ?? "");
 $dispositivoId = trim($_POST["dispositivo_id"] ?? "");
 $justificacion = trim($_POST["justificacion"] ?? "");
+$accionManual = trim($_POST["accion"] ?? ""); // Captura si el usuario seleccionó explícitamente una acción (ej. salida_almuerzo, entrada_almuerzo)
 
 if ($documento === "") {
     mostrarResultado(
@@ -184,13 +183,15 @@ $horaEntradaProgramada = $horario["hora_entrada"];
 $horaSalidaProgramada = $horario["hora_salida"];
 
 // ==========================================
-// AUTO-DETECCIÓN DE TIPO (ENTRADA O SALIDA)
+// AUTO-DETECCIÓN O SELECCIÓN MANUAL DE TIPO
 // ==========================================
 $sqlAsistenciaCheck = "
     SELECT
         id,
         hora_entrada,
-        hora_salida
+        hora_salida,
+        hora_salida_almuerzo,
+        hora_entrada_almuerzo
     FROM asistencias
     WHERE empleado_id = ?
       AND fecha = ?
@@ -206,31 +207,42 @@ $stmtCheck->bind_param("is", $empleadoId, $fecha);
 $stmtCheck->execute();
 $resultadoCheck = $stmtCheck->get_result();
 
-$tipo = "entrada"; // Por defecto asumimos entrada si no hay registros hoy
-
+$regCheck = null;
 if ($resultadoCheck->num_rows > 0) {
     $regCheck = $resultadoCheck->fetch_assoc();
-    if (empty($regCheck["hora_salida"])) {
-        // Ya tiene entrada pero no salida -> le toca registrar SALIDA
-        $tipo = "salida";
-    } else {
-        // Ya tiene ambos registros hoy
-        $stmtCheck->close();
-        $conexion->close();
-        mostrarResultado(
-            "error",
-            "Registro completo",
-            "Ya registraste tu entrada y salida el día de hoy."
-        );
-    }
 }
 $stmtCheck->close();
+
+// Definir el tipo de acción basándonos en el parámetro enviado o en la lógica automática anterior
+if (!empty($accionManual)) {
+    $tipo = $accionManual; // 'entrada', 'salida', 'salida_almuerzo', 'entrada_almuerzo'
+} else {
+    // Comportamiento original por defecto si no viene de los 4 botones nuevos
+    $tipo = "entrada";
+    if ($regCheck) {
+        if (empty($regCheck["hora_salida"])) {
+            $tipo = "salida";
+        } else {
+            $conexion->close();
+            mostrarResultado(
+                "error",
+                "Registro completo",
+                "Ya registraste tu entrada y salida el día de hoy."
+            );
+        }
+    }
+}
 
 
 // ==========================================
 // PROCESAR ENTRADA
 // ==========================================
 if ($tipo === "entrada") {
+
+    if ($regCheck && !empty($regCheck["hora_entrada"])) {
+        $conexion->close();
+        mostrarResultado("error", "Ya registrado", "Ya registraste tu entrada el día de hoy.");
+    }
 
     $minutosActuales = convertirMinutos($horaActual);
     $minutosEntrada = convertirMinutos($horaEntradaProgramada);
@@ -239,7 +251,6 @@ if ($tipo === "entrada") {
         $estadoEntrada = "tarde";
         $minutosRetraso = $minutosActuales - $minutosEntrada;
 
-        // 🛑 VALIDACIÓN OBLIGATORIA: Si llega tarde, la justificación no puede estar vacía
         if ($justificacion === "") {
             $conexion->close();
             mostrarResultado(
@@ -330,6 +341,103 @@ if ($tipo === "entrada") {
             ". Tu entrada fue registrada a las " .
             formatoHora($horaActual) .
             "."
+        );
+    }
+}
+
+
+// ==========================================
+// PROCESAR SALIDA A ALMUERZO
+// ==========================================
+if ($tipo === "salida_almuerzo") {
+
+    if (!$regCheck || empty($regCheck["hora_entrada"])) {
+        $conexion->close();
+        mostrarResultado("error", "Acción no permitida", "Debes registrar tu entrada primero antes de salir a almorzar.");
+    }
+
+    if (!empty($regCheck["hora_salida_almuerzo"])) {
+        $conexion->close();
+        mostrarResultado("error", "Ya registrado", "Ya registraste tu salida a almorzar hoy.");
+    }
+
+    $sql = "UPDATE asistencias SET hora_salida_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
+    $stmt = $conexion->prepare($sql);
+    if (!$stmt) {
+        mostrarResultado("error", "Error del sistema", "No se pudo procesar la salida a almuerzo.");
+    }
+    $stmt->bind_param("sis", $horaActual, $empleadoId, $fecha);
+    $stmt->execute();
+    $stmt->close();
+    $conexion->close();
+
+    mostrarResultado(
+        "exito",
+        "Salida a Almuerzo",
+        "Hola, " . htmlspecialchars($nombre) . ". Tu salida a almorzar fue registrada a las " . formatoHora($horaActual) . "."
+    );
+}
+
+
+// ==========================================
+// PROCESAR ENTRADA DE ALMUERZO
+// ==========================================
+if ($tipo === "entrada_almuerzo") {
+
+    if (!$regCheck || empty($regCheck["hora_salida_almuerzo"])) {
+        $conexion->close();
+        mostrarResultado("error", "Acción no permitida", "Debes registrar tu salida a almorzar primero.");
+    }
+
+    if (!empty($regCheck["hora_entrada_almuerzo"])) {
+        $conexion->close();
+        mostrarResultado("error", "Ya registrado", "Ya registraste tu regreso de almuerzo hoy.");
+    }
+
+    // Horario límite de almuerzo: 2:00 PM (14:00:00)
+    $minutosActuales = convertirMinutos($horaActual);
+    $minutosLimiteAlmuerzo = convertirMinutos("14:00:00");
+    $minutosRetrasoAlmuerzo = 0;
+
+    if ($minutosActuales > $minutosLimiteAlmuerzo) {
+        $minutosRetrasoAlmuerzo = $minutosActuales - $minutosLimiteAlmuerzo;
+    }
+
+    $sql = "UPDATE asistencias SET hora_entrada_almuerzo = ?, minutos_retraso_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
+    // Nota: Si aún no has agregado la columna minutos_retraso_almuerzo en tu BD, recuerda crearla con ALTER TABLE asistencias ADD COLUMN minutos_retraso_almuerzo INT DEFAULT 0;
+    // O si prefieres sumarlo al campo existente de retraso, puedes ajustarlo. Usemos la columna nueva para mantener orden.
+    
+    // Verificamos si existe la columna minutos_retraso_almuerzo o la agregamos dinámicamente o la guardamos directamente. 
+    // Vamos a asegurar el query actualizando la columna hora_entrada_almuerzo y minutos_retraso_almuerzo:
+    $sql = "UPDATE asistencias SET hora_entrada_almuerzo = ?, minutos_retraso_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
+    
+    $stmt = $conexion->prepare($sql);
+    if (!$stmt) {
+        // Fallback por si acaso no crearon la columna auxiliar de minutos de retraso de almuerzo, intentamos solo la hora
+        $sqlAlt = "UPDATE asistencias SET hora_entrada_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
+        $stmtAlt = $conexion->prepare($sqlAlt);
+        $stmtAlt->bind_param("sis", $horaActual, $empleadoId, $fecha);
+        $stmtAlt->execute();
+        $stmtAlt->close();
+    } else {
+        $stmt->bind_param("siis", $horaActual, $minutosRetrasoAlmuerzo, $empleadoId, $fecha);
+        $stmt->execute();
+        $stmt->close();
+    }
+    
+    $conexion->close();
+
+    if ($minutosRetrasoAlmuerzo > 0) {
+        mostrarResultado(
+            "tarde",
+            "Regreso de Almuerzo",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu regreso de almuerzo fue a las " . formatoHora($horaActual) . ".<br><strong>Retraso de almuerzo: " . $minutosRetrasoAlmuerzo . " minutos.</strong>"
+        );
+    } else {
+        mostrarResultado(
+            "exito",
+            "Regreso de Almuerzo",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu regreso de almuerzo fue registrado a las " . formatoHora($horaActual) . "."
         );
     }
 }
@@ -564,5 +672,3 @@ function mostrarResultado(
     <?php
     exit;
 }
-
-?>
