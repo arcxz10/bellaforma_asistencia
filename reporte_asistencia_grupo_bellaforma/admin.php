@@ -623,7 +623,9 @@ if ($estado !== "sin") {
             a.minutos_retraso_almuerzo,
             a.hora_salida,
             a.minutos_extra,
-            a.justificacion
+            a.minutos_deuda,
+            a.justificacion,
+            a.justificacion_salida
         FROM asistencias a
 
         INNER JOIN empleados e
@@ -1488,7 +1490,9 @@ $resultadoEmpleados =
                                     <th>E. Almuerzo</th>
                                     <th>Salida</th>
                                     <th>Extra</th>
+                                    <th>Deuda</th>
                                     <th>Justificación</th>
+                                    <th>Just. Salida</th>
 
                                 </tr>
 
@@ -1504,7 +1508,7 @@ $resultadoEmpleados =
                                 <tr>
 
                                     <td
-                                        colspan="11"
+                                        colspan="13"
                                         class="sin-resultados"
                                     >
                                         No hay registros para el período seleccionado.
@@ -1651,7 +1655,40 @@ $resultadoEmpleados =
                                         </td>
 
                                         <td>
+
+                                            <?php if (
+                                                isset($fila["minutos_deuda"]) &&
+                                                (int)
+                                                $fila[
+                                                    "minutos_deuda"
+                                                ] > 0
+                                            ): ?>
+
+                                                <span class="retraso">
+
+                                                    <?= (int)
+                                                        $fila[
+                                                            "minutos_deuda"
+                                                        ] ?>
+
+                                                    min
+
+                                                </span>
+
+                                            <?php else: ?>
+
+                                                —
+
+                                            <?php endif; ?>
+
+                                        </td>
+
+                                        <td>
                                             <?= !empty($fila["justificacion"]) ? escapar($fila["justificacion"]) : "—" ?>
+                                        </td>
+
+                                        <td>
+                                            <?= !empty($fila["justificacion_salida"]) ? escapar($fila["justificacion_salida"]) : "—" ?>
                                         </td>
 
                                     </tr>
@@ -2201,8 +2238,6 @@ $resultadoEmpleados =
     }
 
 
-    // Al cargar la página, si la URL trae un hash (#empleados, #festivos, etc.)
-    // se muestra esa sección en vez de quedarse siempre en el Dashboard.
     (function inicializarSeccionActiva()
     {
         const hash =
