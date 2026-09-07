@@ -690,4 +690,3 @@ function mostrarResultado(
     </html>
     <?php
     exit;
-}
