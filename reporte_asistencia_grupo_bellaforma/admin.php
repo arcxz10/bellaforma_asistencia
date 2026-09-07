@@ -327,6 +327,43 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             "empleados"
         );
     }
+
+    if ($accion === "editar_asistencia") {
+
+        $idAsistencia = (int) ($_POST["asistencia_id"] ?? 0);
+        $minutosRetraso = (int) ($_POST["minutos_retraso"] ?? 0);
+        $minutosDeuda = (int) ($_POST["minutos_deuda"] ?? 0);
+        $justificacion = trim($_POST["justificacion"] ?? "");
+
+        if ($idAsistencia <= 0) {
+            redireccionar("Registro de asistencia inválido.", "error", "asistencias");
+        }
+
+        $sql = "
+            UPDATE asistencias
+            SET 
+                minutos_retraso = ?,
+                minutos_deuda = ?,
+                justificacion = ?
+            WHERE id = ?
+        ";
+
+        $stmt = $conexion->prepare($sql);
+
+        if (!$stmt) {
+            redireccionar("No se pudo preparar la actualización de la asistencia.", "error", "asistencias");
+        }
+
+        $stmt->bind_param("iisi", $minutosRetraso, $minutosDeuda, $justificacion, $idAsistencia);
+
+        if (!$stmt->execute()) {
+            $stmt->close();
+            redireccionar("No se pudo actualizar el registro.", "error", "asistencias");
+        }
+
+        $stmt->close();
+        redireccionar("Registro de asistencia actualizado correctamente.", "exito", "asistencias");
+    }
 }
 
 $mensaje = $_SESSION["mensaje"] ?? "";
@@ -1493,6 +1530,7 @@ $resultadoEmpleados =
                                     <th>Deuda</th>
                                     <th>Justificación</th>
                                     <th>Just. Salida</th>
+                                    <th>Acciones</th>
 
                                 </tr>
 
@@ -1508,7 +1546,7 @@ $resultadoEmpleados =
                                 <tr>
 
                                     <td
-                                        colspan="13"
+                                        colspan="14"
                                         class="sin-resultados"
                                     >
                                         No hay registros para el período seleccionado.
@@ -1689,6 +1727,21 @@ $resultadoEmpleados =
 
                                         <td>
                                             <?= !empty($fila["justificacion_salida"]) ? escapar($fila["justificacion_salida"]) : "—" ?>
+                                        </td>
+
+                                        <td>
+                                            <button
+                                                type="button"
+                                                onclick='abrirModalAsistencia(
+                                                    <?= (int)$fila["id"] ?>,
+                                                    <?= (int)$fila["minutos_retraso"] ?>,
+                                                    <?= (int)($fila["minutos_deuda"] ?? 0) ?>,
+                                                    <?= json_encode($fila["justificacion"] ?? "") ?>
+                                                )'
+                                                class="btn-editar"
+                                            >
+                                                Editar
+                                            </button>
                                         </td>
 
                                     </tr>
@@ -2210,6 +2263,41 @@ $resultadoEmpleados =
 
 </div>
 
+<!-- Modal para Editar Asistencia / Retraso -->
+<div
+    class="modal"
+    id="modalAsistencia"
+    style="display:none;"
+>
+    <div class="modal-contenido">
+        <h3>Editar Retraso y Deuda</h3>
+        <form method="POST" class="formulario-modal">
+            <input type="hidden" name="accion" value="editar_asistencia">
+            <input type="hidden" name="asistencia_id" id="editAsistenciaId">
+
+            <div>
+                <label for="editMinutosRetraso">Minutos de Retraso</label>
+                <input type="number" id="editMinutosRetraso" name="minutos_retraso" required>
+            </div>
+
+            <div>
+                <label for="editMinutosDeuda">Minutos de Deuda</label>
+                <input type="number" id="editMinutosDeuda" name="minutos_deuda" required>
+            </div>
+
+            <div>
+                <label for="editJustificacion">Justificación</label>
+                <textarea id="editJustificacion" name="justificacion" rows="3" style="width:150px;"></textarea>
+            </div>
+
+            <div class="botones-modal">
+                <button type="button" class="boton boton-secundario" onclick="cerrarModalAsistencia()">Cancelar</button>
+                <button type="submit" class="boton">Guardar Cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 
 <script>
 
@@ -2478,6 +2566,18 @@ $resultadoEmpleados =
         }
     }
 
+    function abrirModalAsistencia(id, retraso, deuda, justificacion) {
+        document.getElementById("editAsistenciaId").value = id;
+        document.getElementById("editMinutosRetraso").value = retraso;
+        document.getElementById("editMinutosDeuda").value = deuda;
+        document.getElementById("editJustificacion").value = justificacion || "";
+        document.getElementById("modalAsistencia").style.display = "flex";
+    }
+
+    function cerrarModalAsistencia() {
+        document.getElementById("modalAsistencia").style.display = "none";
+    }
+
 
     document
         .querySelectorAll(".nav-item[href^=\"#\"]")
@@ -2517,6 +2617,15 @@ $resultadoEmpleados =
 
             if (event.target === modalConfirmar) {
                 cerrarConfirmar();
+            }
+
+            const modalAsistencia =
+                document.getElementById(
+                    "modalAsistencia"
+                );
+
+            if (event.target === modalAsistencia) {
+                cerrarModalAsistencia();
             }
         }
     );
