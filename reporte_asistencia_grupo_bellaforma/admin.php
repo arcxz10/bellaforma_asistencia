@@ -618,6 +618,9 @@ if ($estado !== "sin") {
             ) AS horario_salida,
             a.hora_entrada,
             a.minutos_retraso,
+            a.hora_salida_almuerzo,
+            a.hora_entrada_almuerzo,
+            a.minutos_retraso_almuerzo,
             a.hora_salida,
             a.minutos_extra,
             a.justificacion
@@ -1475,41 +1478,17 @@ $resultadoEmpleados =
 
                                 <tr>
 
-                                    <th>
-                                        Fecha
-                                    </th>
-
-                                    <th>
-                                        Empleado
-                                    </th>
-
-                                    <th>
-                                        Cargo
-                                    </th>
-
-                                    <th>
-                                        Entrada
-                                    </th>
-
-                                    <th>
-                                        Estado
-                                    </th>
-
-                                    <th>
-                                        Retraso
-                                    </th>
-
-                                    <th>
-                                        Salida
-                                    </th>
-
-                                    <th>
-                                        Extra
-                                    </th>
-
-                                    <th>
-                                        Justificación
-                                    </th>
+                                    <th>Fecha</th>
+                                    <th>Empleado</th>
+                                    <th>Cargo</th>
+                                    <th>Entrada</th>
+                                    <th>Estado</th>
+                                    <th>Retraso</th>
+                                    <th>S. Almuerzo</th>
+                                    <th>E. Almuerzo</th>
+                                    <th>Salida</th>
+                                    <th>Extra</th>
+                                    <th>Justificación</th>
 
                                 </tr>
 
@@ -1525,7 +1504,7 @@ $resultadoEmpleados =
                                 <tr>
 
                                     <td
-                                        colspan="9"
+                                        colspan="11"
                                         class="sin-resultados"
                                     >
                                         No hay registros para el período seleccionado.
@@ -1621,6 +1600,19 @@ $resultadoEmpleados =
 
                                             <?php endif; ?>
 
+                                        </td>
+
+                                        <td>
+                                            <?= formatoHora($fila["hora_salida_almuerzo"]) ?>
+                                        </td>
+
+                                        <td>
+                                            <?php 
+                                                echo formatoHora($fila["hora_entrada_almuerzo"]);
+                                                if (!empty($fila["minutos_retraso_almuerzo"]) && (int)$fila["minutos_retraso_almuerzo"] > 0) {
+                                                    echo '<br><small class="retraso">+' . (int)$fila["minutos_retraso_almuerzo"] . ' min</small>';
+                                                }
+                                            ?>
                                         </td>
 
                                         <td>
