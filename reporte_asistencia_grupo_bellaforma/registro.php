@@ -394,9 +394,9 @@ if ($tipo === "entrada_almuerzo") {
         mostrarResultado("error", "Ya registrado", "Ya registraste tu regreso de almuerzo hoy.");
     }
 
-    // Horario límite de almuerzo: 2:00 PM (14:00:00)
+// Horario límite de almuerzo: 1:10 PM (13:10:00)
     $minutosActuales = convertirMinutos($horaActual);
-    $minutosLimiteAlmuerzo = convertirMinutos("14:00:00");
+    $minutosLimiteAlmuerzo = convertirMinutos("13:10:00");
     $minutosRetrasoAlmuerzo = 0;
 
     if ($minutosActuales > $minutosLimiteAlmuerzo) {
