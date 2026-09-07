@@ -10,6 +10,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 $documento = trim($_POST["documento"] ?? "");
 $dispositivoId = trim($_POST["dispositivo_id"] ?? "");
 $justificacion = trim($_POST["justificacion"] ?? "");
+$justificacionSalida = trim($_POST["justificacion_salida"] ?? ""); // Captura la justificación de salida
 $accionManual = trim($_POST["accion"] ?? ""); // Captura si el usuario seleccionó explícitamente una acción (ej. salida_almuerzo, entrada_almuerzo)
 
 if ($documento === "") {
@@ -394,7 +395,7 @@ if ($tipo === "entrada_almuerzo") {
         mostrarResultado("error", "Ya registrado", "Ya registraste tu regreso de almuerzo hoy.");
     }
 
-// Horario límite de almuerzo: 1:10 PM (13:10:00)
+    // Horario límite de almuerzo: 1:10 PM (13:10:00)
     $minutosActuales = convertirMinutos($horaActual);
     $minutosLimiteAlmuerzo = convertirMinutos("13:10:00");
     $minutosRetrasoAlmuerzo = 0;
@@ -404,16 +405,9 @@ if ($tipo === "entrada_almuerzo") {
     }
 
     $sql = "UPDATE asistencias SET hora_entrada_almuerzo = ?, minutos_retraso_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
-    // Nota: Si aún no has agregado la columna minutos_retraso_almuerzo en tu BD, recuerda crearla con ALTER TABLE asistencias ADD COLUMN minutos_retraso_almuerzo INT DEFAULT 0;
-    // O si prefieres sumarlo al campo existente de retraso, puedes ajustarlo. Usemos la columna nueva para mantener orden.
-    
-    // Verificamos si existe la columna minutos_retraso_almuerzo o la agregamos dinámicamente o la guardamos directamente. 
-    // Vamos a asegurar el query actualizando la columna hora_entrada_almuerzo y minutos_retraso_almuerzo:
-    $sql = "UPDATE asistencias SET hora_entrada_almuerzo = ?, minutos_retraso_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
     
     $stmt = $conexion->prepare($sql);
     if (!$stmt) {
-        // Fallback por si acaso no crearon la columna auxiliar de minutos de retraso de almuerzo, intentamos solo la hora
         $sqlAlt = "UPDATE asistencias SET hora_entrada_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
         $stmtAlt = $conexion->prepare($sqlAlt);
         $stmtAlt->bind_param("sis", $horaActual, $empleadoId, $fecha);
