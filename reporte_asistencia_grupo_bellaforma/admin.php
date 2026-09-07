@@ -331,9 +331,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if ($accion === "editar_asistencia") {
 
         $idAsistencia = (int) ($_POST["asistencia_id"] ?? 0);
-        $minutosRetraso = (int) ($_POST["minutos_retraso"] ?? 0);
         $minutosDeuda = (int) ($_POST["minutos_deuda"] ?? 0);
-        $justificacion = trim($_POST["justificacion"] ?? "");
 
         if ($idAsistencia <= 0) {
             redireccionar("Registro de asistencia inválido.", "error", "asistencias");
@@ -341,20 +339,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $sql = "
             UPDATE asistencias
-            SET 
-                minutos_retraso = ?,
-                minutos_deuda = ?,
-                justificacion = ?
+            SET minutos_deuda = ?
             WHERE id = ?
         ";
 
         $stmt = $conexion->prepare($sql);
 
         if (!$stmt) {
-            redireccionar("No se pudo preparar la actualización de la asistencia.", "error", "asistencias");
+            redireccionar("No se pudo preparar la actualización de la deuda.", "error", "asistencias");
         }
 
-        $stmt->bind_param("iisi", $minutosRetraso, $minutosDeuda, $justificacion, $idAsistencia);
+        $stmt->bind_param("ii", $minutosDeuda, $idAsistencia);
 
         if (!$stmt->execute()) {
             $stmt->close();
@@ -362,7 +357,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
 
         $stmt->close();
-        redireccionar("Registro de asistencia actualizado correctamente.", "exito", "asistencias");
+        redireccionar("Minutos de deuda actualizados correctamente.", "exito", "asistencias");
     }
 }
 
@@ -1734,9 +1729,7 @@ $resultadoEmpleados =
                                                 type="button"
                                                 onclick='abrirModalAsistencia(
                                                     <?= (int)$fila["id"] ?>,
-                                                    <?= (int)$fila["minutos_retraso"] ?>,
-                                                    <?= (int)($fila["minutos_deuda"] ?? 0) ?>,
-                                                    <?= json_encode($fila["justificacion"] ?? "") ?>
+                                                    <?= (int)($fila["minutos_deuda"] ?? 0) ?>
                                                 )'
                                                 class="btn-editar"
                                             >
@@ -2263,36 +2256,26 @@ $resultadoEmpleados =
 
 </div>
 
-<!-- Modal para Editar Asistencia / Retraso -->
+<!-- Modal para Editar Minutos de Deuda -->
 <div
     class="modal"
     id="modalAsistencia"
     style="display:none;"
 >
-    <div class="modal-contenido">
-        <h3>Editar Retraso y Deuda</h3>
+    <div class="modal-contenido" style="max-width: 350px;">
+        <h3>Editar Minutos de Deuda</h3>
         <form method="POST" class="formulario-modal">
             <input type="hidden" name="accion" value="editar_asistencia">
             <input type="hidden" name="asistencia_id" id="editAsistenciaId">
 
-            <div>
-                <label for="editMinutosRetraso">Minutos de Retraso</label>
-                <input type="number" id="editMinutosRetraso" name="minutos_retraso" required>
+            <div style="margin-bottom: 15px;">
+                <label for="editMinutosDeuda" style="display:block; margin-bottom: 5px; font-weight: bold;">Minutos de Deuda</label>
+                <input type="number" id="editMinutosDeuda" name="minutos_deuda" required style="width: 100%; padding: 8px; box-sizing: border-box;">
             </div>
 
-            <div>
-                <label for="editMinutosDeuda">Minutos de Deuda</label>
-                <input type="number" id="editMinutosDeuda" name="minutos_deuda" required>
-            </div>
-
-            <div>
-                <label for="editJustificacion">Justificación</label>
-                <textarea id="editJustificacion" name="justificacion" rows="3" style="width:150px;"></textarea>
-            </div>
-
-            <div class="botones-modal">
+            <div class="botones-modal" style="display: flex; justify-content: flex-end; gap: 10px;">
                 <button type="button" class="boton boton-secundario" onclick="cerrarModalAsistencia()">Cancelar</button>
-                <button type="submit" class="boton">Guardar Cambios</button>
+                <button type="submit" class="boton">Guardar</button>
             </div>
         </form>
     </div>
@@ -2566,11 +2549,9 @@ $resultadoEmpleados =
         }
     }
 
-    function abrirModalAsistencia(id, retraso, deuda, justificacion) {
+    function abrirModalAsistencia(id, deuda) {
         document.getElementById("editAsistenciaId").value = id;
-        document.getElementById("editMinutosRetraso").value = retraso;
         document.getElementById("editMinutosDeuda").value = deuda;
-        document.getElementById("editJustificacion").value = justificacion || "";
         document.getElementById("modalAsistencia").style.display = "flex";
     }
 
