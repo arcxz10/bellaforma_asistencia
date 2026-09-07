@@ -111,7 +111,7 @@ if ($resultado->num_rows === 0) {
                     <p><?php echo htmlspecialchars($empleado['cargo']); ?></p>
                 </div>
 
-                <div class="alert alert-info">
+                <div class="alert alert-info" id="info-seleccion">
                     <div class="alert-icon">ℹ️</div>
                     <div class="alert-content">
                         <strong>¿Qué deseas hacer?</strong><br>
@@ -158,22 +158,30 @@ if ($resultado->num_rows === 0) {
                         ><?php echo htmlspecialchars($justificacionSalida); ?></textarea>
                     </div>
 
-                    <div class="btn-group" style="display: flex; flex-direction: column; gap: 10px;">
-                        <button type="button" class="btn btn-primary" onclick="registrarAccion('entrada')" style="width: 100%;">
+                    <!-- CONTENEDOR DE LOS 4 BOTONES INICIALES -->
+                    <div class="btn-group" id="grupo-botones-opciones" style="display: flex; flex-direction: column; gap: 10px;">
+                        <button type="button" class="btn btn-primary" onclick="seleccionarAccion('entrada')" style="width: 100%;">
                             ⏱️ Registrar Entrada
                         </button>
-                        <button type="button" class="btn btn-warning" onclick="registrarAccion('salida_almuerzo')" style="width: 100%; background-color: #f0ad4e; color: white;">
+                        <button type="button" class="btn btn-warning" onclick="seleccionarAccion('salida_almuerzo')" style="width: 100%; background-color: #f0ad4e; color: white;">
                             🍽️ Salida a Almuerzo
                         </button>
-                        <button type="button" class="btn btn-info" onclick="registrarAccion('entrada_almuerzo')" style="width: 100%; background-color: #5bc0de; color: white;">
+                        <button type="button" class="btn btn-info" onclick="seleccionarAccion('entrada_almuerzo')" style="width: 100%; background-color: #5bc0de; color: white;">
                             🍛 Entrada de Almuerzo
                         </button>
-                        <button type="button" class="btn btn-secondary" onclick="registrarAccion('salida')" style="width: 100%;">
+                        <button type="button" class="btn btn-secondary" onclick="seleccionarAccion('salida')" style="width: 100%;">
                             🚪 Registrar Salida
                         </button>
                     </div>
 
-                    <a href="registro.html" class="btn btn-back" style="display: block; margin-top: 15px;">
+                    <!-- BOTÓN DE CONFIRMACIÓN (OCULTO INICIALMENTE) -->
+                    <div id="grupo-boton-confirmar" style="display: none; margin-top: 10px;">
+                        <button type="button" class="btn btn-success" onclick="confirmarRegistro()" style="width: 100%; background-color: #5cb85c; color: white; padding: 12px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer;">
+                            ✔️ Confirmar Registro
+                        </button>
+                    </div>
+
+                    <a href="registro.html" class="btn btn-back" id="btn-volver" style="display: block; margin-top: 15px;">
                         ← Volver a Registro
                     </a>
                 </form>
@@ -185,7 +193,37 @@ if ($resultado->num_rows === 0) {
                     const salidaAnticipada = <?php echo ($salidaAnticipada && empty($justificacionSalida)) ? 'true' : 'false'; ?>;
                     const minutosFaltantesSalida = "<?php echo $minutosFaltantesSalida; ?> minutos";
 
-                    function registrarAccion(accion) {
+                    let accionSeleccionada = '';
+
+                    function seleccionarAccion(accion) {
+                        accionSeleccionada = accion;
+                        document.getElementById('tipoInput').value = accion;
+
+                        // Ocultar los 4 botones principales y el mensaje informativo inicial
+                        document.getElementById('grupo-botones-opciones').style.display = 'none';
+                        document.getElementById('info-seleccion').style.display = 'none';
+
+                        // Mostrar el botón de confirmar
+                        document.getElementById('grupo-boton-confirmar').style.display = 'block';
+
+                        // Validaciones específicas si llega tarde o sale temprano
+                        const cajaJustificacion = document.getElementById('grupo-justificacion');
+                        const cajaJustificacionSalida = document.getElementById('grupo-justificacion-salida');
+
+                        if (accion === 'entrada' && estaTarde) {
+                            document.getElementById('lblMinutos').textContent = minutosRetraso;
+                            cajaJustificacion.style.display = 'block';
+                            document.getElementById('justificacion').focus();
+                        }
+
+                        if (accion === 'salida' && salidaAnticipada) {
+                            document.getElementById('lblMinutosSalida').textContent = minutosFaltantesSalida;
+                            cajaJustificacionSalida.style.display = 'block';
+                            document.getElementById('justificacion_salida').focus();
+                        }
+                    }
+
+                    function confirmarRegistro() {
                         const cajaJustificacion = document.getElementById('grupo-justificacion');
                         const txtJustificacion = document.getElementById('justificacion');
                         
@@ -193,19 +231,10 @@ if ($resultado->num_rows === 0) {
                         const txtJustificacionSalida = document.getElementById('justificacion_salida');
                         
                         const alertaVisual = document.getElementById('alerta-justificacion');
-
-                        // Ocultar alertas previas
                         alertaVisual.style.display = 'none';
 
-                        // Validación de Entrada Tarde
-                        if (accion === 'entrada' && estaTarde) {
-                            if (cajaJustificacion.style.display === 'none') {
-                                document.getElementById('lblMinutos').textContent = minutosRetraso;
-                                cajaJustificacion.style.display = 'block';
-                                txtJustificacion.focus();
-                                return; 
-                            }
-
+                        // Validar si requiere justificación de entrada y está vacía
+                        if (accionSeleccionada === 'entrada' && estaTarde && cajaJustificacion.style.display !== 'none') {
                             if (txtJustificacion.value.trim() === '') {
                                 document.getElementById('texto-alerta-justificacion').textContent = 'Por favor, ingresa una justificación para continuar debido a tu retraso.';
                                 alertaVisual.style.display = 'block';
@@ -215,15 +244,8 @@ if ($resultado->num_rows === 0) {
                             }
                         }
 
-                        // Validación de Salida Anticipada
-                        if (accion === 'salida' && salidaAnticipada) {
-                            if (cajaJustificacionSalida.style.display === 'none') {
-                                document.getElementById('lblMinutosSalida').textContent = minutosFaltantesSalida;
-                                cajaJustificacionSalida.style.display = 'block';
-                                txtJustificacionSalida.focus();
-                                return; 
-                            }
-
+                        // Validar si requiere justificación de salida y está vacía
+                        if (accionSeleccionada === 'salida' && salidaAnticipada && cajaJustificacionSalida.style.display !== 'none') {
                             if (txtJustificacionSalida.value.trim() === '') {
                                 document.getElementById('texto-alerta-justificacion').textContent = 'Por favor, ingresa una justificación para continuar debido a tu salida anticipada.';
                                 alertaVisual.style.display = 'block';
@@ -233,7 +255,7 @@ if ($resultado->num_rows === 0) {
                             }
                         }
 
-                        document.getElementById('tipoInput').value = accion;
+                        // Enviar el formulario una vez confirmado y validado
                         document.getElementById('formAsistencia').submit();
                     }
                 </script>
