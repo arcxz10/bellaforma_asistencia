@@ -693,6 +693,6 @@ function mostrarResultado(
     </body>
 
     </html>
-    <?>
+    <?php
     exit;
 }
