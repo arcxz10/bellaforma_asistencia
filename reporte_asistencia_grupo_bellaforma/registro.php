@@ -442,7 +442,6 @@ if ($tipo === "entrada_almuerzo") {
     }
 }
 
-
 // ==========================================
 // PROCESAR SALIDA
 // ==========================================
@@ -490,17 +489,43 @@ if ($tipo === "salida") {
     $minutosActuales = convertirMinutos($horaActual);
     $minutosSalida = convertirMinutos($horaSalidaProgramada);
 
+    $minutosExtra = 0;
+    $minutosDeuda = 0;
+
     if ($minutosActuales > $minutosSalida) {
         $minutosExtra = $minutosActuales - $minutosSalida;
-    } else {
-        $minutosExtra = 0;
+    } elseif ($minutosActuales < $minutosSalida) {
+        $minutosDeuda = $minutosSalida - $minutosActuales;
+        
+        // Si sale antes, la justificación de salida es obligatoria
+        if ($justificacionSalida === "") {
+            $conexion->close();
+            mostrarResultado(
+                "error",
+                "Justificación requerida",
+                "Estás saliendo " . $minutosDeuda . " minutos antes de tu horario. Es obligatorio ingresar una justificación."
+            );
+        }
+    }
+
+    // Si hizo horas extra pero también tiene deuda, compensamos automáticamente
+    if ($minutosExtra > 0 && $minutosDeuda > 0) {
+        if ($minutosExtra >= $minutosDeuda) {
+            $minutosExtra = $minutosExtra - $minutosDeuda;
+            $minutosDeuda = 0; // Se cubrió toda la deuda con las horas extra
+        } else {
+            $minutosDeuda = $minutosDeuda - $minutosExtra;
+            $minutosExtra = 0; // Las horas extra no alcanzaron a cubrir toda la deuda
+        }
     }
 
     $sql = "
         UPDATE asistencias
         SET
             hora_salida = ?,
-            minutos_extra = ?
+            minutos_extra = ?,
+            minutos_deuda = ?,
+            justificacion_salida = ?
         WHERE id = ?
     ";
 
@@ -517,9 +542,11 @@ if ($tipo === "salida") {
     $asistenciaId = (int) $asistencia["id"];
 
     $stmt->bind_param(
-        "sii",
+        "siisi",
         $horaActual,
         $minutosExtra,
+        $minutosDeuda,
+        $justificacionSalida,
         $asistenciaId
     );
 
@@ -537,27 +564,23 @@ if ($tipo === "salida") {
     $stmt->close();
     $conexion->close();
 
-    if ($minutosExtra > 0) {
+    if ($minutosDeuda > 0) {
+        mostrarResultado(
+            "tarde",
+            "Salida anticipada registrada",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu salida fue registrada a las " . formatoHora($horaActual) . ".<br><strong>Quedaste debiendo: " . convertirMinutosTexto($minutosDeuda) . ".</strong>"
+        );
+    } elseif ($minutosExtra > 0) {
         mostrarResultado(
             "extra",
             "Salida registrada",
-            "Hola, " .
-            htmlspecialchars($nombre) .
-            ". Tu salida fue registrada a las " .
-            formatoHora($horaActual) .
-            ".<br><strong>Horas extra: " .
-            convertirMinutosTexto($minutosExtra) .
-            ".</strong>"
+            "Hola, " . htmlspecialchars($nombre) . ". Tu salida fue registrada a las " . formatoHora($horaActual) . ".<br><strong>Horas extra netas: " . convertirMinutosTexto($minutosExtra) . ".</strong>"
         );
     } else {
         mostrarResultado(
             "exito",
             "Salida registrada",
-            "Hola, " .
-            htmlspecialchars($nombre) .
-            ". Tu salida fue registrada a las " .
-            formatoHora($horaActual) .
-            "."
+            "Hola, " . htmlspecialchars($nombre) . ". Tu salida fue registrada a las " . formatoHora($horaActual) . "."
         );
     }
 }
