@@ -489,6 +489,37 @@ if ($tipo === "salida") {
         }
     }
 
+    // Descontar minutos de deuda de días anteriores si hoy hizo horas extra
+    if ($minutosExtra > 0) {
+        $sqlDeudas = "SELECT id, minutos_deuda FROM asistencias WHERE empleado_id = ? AND minutos_deuda > 0 AND fecha < ? ORDER BY fecha ASC";
+        $stmtDeudas = $conexion->prepare($sqlDeudas);
+        $stmtDeudas->bind_param("is", $empleadoId, $fecha);
+        $stmtDeudas->execute();
+        $resDeudas = $stmtDeudas->get_result();
+        
+        while ($rowDeuda = $resDeudas->fetch_assoc()) {
+            if ($minutosExtra <= 0) break;
+            
+            $deudaId = $rowDeuda["id"];
+            $deudaPendiente = (int) $rowDeuda["minutos_deuda"];
+            
+            if ($minutosExtra >= $deudaPendiente) {
+                $minutosExtra -= $deudaPendiente;
+                $nuevaDeuda = 0;
+            } else {
+                $nuevaDeuda = $deudaPendiente - $minutosExtra;
+                $minutosExtra = 0;
+            }
+            
+            $sqlUpdateDeuda = "UPDATE asistencias SET minutos_deuda = ? WHERE id = ?";
+            $stmtUpd = $conexion->prepare($sqlUpdateDeuda);
+            $stmtUpd->bind_param("ii", $nuevaDeuda, $deudaId);
+            $stmtUpd->execute();
+            $stmtUpd->close();
+        }
+        $stmtDeudas->close();
+    }
+
     $sql = "
         UPDATE asistencias
         SET
@@ -662,6 +693,6 @@ function mostrarResultado(
     </body>
 
     </html>
-    <?php
+    <?>
     exit;
 }
