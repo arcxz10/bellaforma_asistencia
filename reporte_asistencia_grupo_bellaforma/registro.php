@@ -10,8 +10,8 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 $documento = trim($_POST["documento"] ?? "");
 $dispositivoId = trim($_POST["dispositivo_id"] ?? "");
 $justificacion = trim($_POST["justificacion"] ?? "");
-$justificacionSalida = trim($_POST["justificacion_salida"] ?? ""); // Captura la justificación de salida
-$accionManual = trim($_POST["accion"] ?? ""); // Captura si el usuario seleccionó explícitamente una acción (ej. salida_almuerzo, entrada_almuerzo)
+$justificacionSalida = trim($_POST["justificacion_salida"] ?? ""); 
+$accionManual = trim($_POST["accion"] ?? ""); 
 
 if ($documento === "") {
     mostrarResultado(
@@ -183,9 +183,6 @@ if ((int) $horario["trabaja"] !== 1) {
 $horaEntradaProgramada = $horario["hora_entrada"];
 $horaSalidaProgramada = $horario["hora_salida"];
 
-// ==========================================
-// AUTO-DETECCIÓN O SELECCIÓN MANUAL DE TIPO
-// ==========================================
 $sqlAsistenciaCheck = "
     SELECT
         id,
@@ -214,11 +211,9 @@ if ($resultadoCheck->num_rows > 0) {
 }
 $stmtCheck->close();
 
-// Definir el tipo de acción basándonos en el parámetro enviado o en la lógica automática anterior
 if (!empty($accionManual)) {
-    $tipo = $accionManual; // 'entrada', 'salida', 'salida_almuerzo', 'entrada_almuerzo'
+    $tipo = $accionManual; 
 } else {
-    // Comportamiento original por defecto si no viene de los 4 botones nuevos
     $tipo = "entrada";
     if ($regCheck) {
         if (empty($regCheck["hora_salida"])) {
@@ -234,10 +229,6 @@ if (!empty($accionManual)) {
     }
 }
 
-
-// ==========================================
-// PROCESAR ENTRADA
-// ==========================================
 if ($tipo === "entrada") {
 
     if ($regCheck && !empty($regCheck["hora_entrada"])) {
@@ -346,10 +337,6 @@ if ($tipo === "entrada") {
     }
 }
 
-
-// ==========================================
-// PROCESAR SALIDA A ALMUERZO
-// ==========================================
 if ($tipo === "salida_almuerzo") {
 
     if (!$regCheck || empty($regCheck["hora_entrada"])) {
@@ -379,10 +366,6 @@ if ($tipo === "salida_almuerzo") {
     );
 }
 
-
-// ==========================================
-// PROCESAR ENTRADA DE ALMUERZO
-// ==========================================
 if ($tipo === "entrada_almuerzo") {
 
     if (!$regCheck || empty($regCheck["hora_salida_almuerzo"])) {
@@ -395,7 +378,6 @@ if ($tipo === "entrada_almuerzo") {
         mostrarResultado("error", "Ya registrado", "Ya registraste tu regreso de almuerzo hoy.");
     }
 
-    // Horario límite de almuerzo: 1:10 PM (13:10:00)
     $minutosActuales = convertirMinutos($horaActual);
     $minutosLimiteAlmuerzo = convertirMinutos("13:10:00");
     $minutosRetrasoAlmuerzo = 0;
@@ -436,12 +418,8 @@ if ($tipo === "entrada_almuerzo") {
     }
 }
 
-// ==========================================
-// PROCESAR SALIDA
-// ==========================================
 if ($tipo === "salida") {
 
-    // Volvemos a consultar el ID del registro de asistencia de hoy para actualizarlo
     $sql = "
         SELECT
             id,
@@ -491,7 +469,6 @@ if ($tipo === "salida") {
     } elseif ($minutosActuales < $minutosSalida) {
         $minutosDeuda = $minutosSalida - $minutosActuales;
         
-        // Si sale antes, la justificación de salida es obligatoria
         if ($justificacionSalida === "") {
             $conexion->close();
             mostrarResultado(
@@ -502,14 +479,13 @@ if ($tipo === "salida") {
         }
     }
 
-    // Si hizo horas extra pero también tiene deuda, compensamos automáticamente
     if ($minutosExtra > 0 && $minutosDeuda > 0) {
         if ($minutosExtra >= $minutosDeuda) {
             $minutosExtra = $minutosExtra - $minutosDeuda;
-            $minutosDeuda = 0; // Se cubrió toda la deuda con las horas extra
+            $minutosDeuda = 0; 
         } else {
             $minutosDeuda = $minutosDeuda - $minutosExtra;
-            $minutosExtra = 0; // Las horas extra no alcanzaron a cubrir toda la deuda
+            $minutosExtra = 0; 
         }
     }
 
@@ -688,3 +664,4 @@ function mostrarResultado(
     </html>
     <?php
     exit;
+}
