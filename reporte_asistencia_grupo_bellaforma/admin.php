@@ -1780,72 +1780,30 @@ $resultadoEmpleados =
             </section>
 
 
-            <section
-                id="historial"
-                class="section"
-            >
+           <section id="historial" class="section">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
                     <div>
-                        <h2>
-                            📂 Historial Completo de Asistencias y Tiempos
-                        </h2>
-                        <p style="margin: 0;">
-                            Consulta el acumulado histórico de retrasos, horas extra y deudas de los empleados.
-                        </p>
+                        <h2>📂 Acumulado General por Empleado</h2>
+                        <p style="margin: 0;">Resumen total histórico de retrasos, horas extra y deudas acumuladas por cada empleado.</p>
                     </div>
-                    <button
-                        type="button"
-                        class="btn-justificaciones"
-                        onclick="abrirModalTodasJustificaciones()"
-                    >
-                        Ver todas las justificaciones
-                    </button>
+                    <button type="button" class="btn-justificaciones" onclick="abrirModalTodasJustificaciones()">Ver todas las justificaciones</button>
                 </div>
 
-                <form
-                    method="GET"
-                    action="admin.php#historial"
-                    class="filtros"
-                >
+                <form method="GET" action="admin.php#historial" class="filtros">
                     <input type="hidden" name="seccion" value="historial">
-                    
                     <div>
                         <label for="desde_historial">Desde</label>
-                        <input
-                            type="date"
-                            id="desde_historial"
-                            name="desde_h"
-                            value="<?= escapar($_GET["desde_h"] ?? "") ?>"
-                        >
+                        <input type="date" id="desde_historial" name="desde_h" value="<?= escapar($_GET["desde_h"] ?? "") ?>">
                     </div>
-
                     <div>
                         <label for="hasta_historial">Hasta</label>
-                        <input
-                            type="date"
-                            id="hasta_historial"
-                            name="hasta_h"
-                            value="<?= escapar($_GET["hasta_h"] ?? "") ?>"
-                        >
+                        <input type="date" id="hasta_historial" name="hasta_h" value="<?= escapar($_GET["hasta_h"] ?? "") ?>">
                     </div>
-
                     <div>
                         <label for="buscar_historial">Empleado</label>
-                        <input
-                            type="text"
-                            id="buscar_historial"
-                            name="buscar_h"
-                            placeholder="Nombre o identificación"
-                            value="<?= escapar($_GET["buscar_h"] ?? "") ?>"
-                        >
+                        <input type="text" id="buscar_historial" name="buscar_h" placeholder="Nombre o identificación" value="<?= escapar($_GET["buscar_h"] ?? "") ?>">
                     </div>
-
-                    <button
-                        type="submit"
-                        class="btn-filtrar"
-                    >
-                        Filtrar Historial
-                    </button>
+                    <button type="submit" class="btn-filtrar">Filtrar Acumulado</button>
                 </form>
 
                 <?php
@@ -1853,93 +1811,99 @@ $resultadoEmpleados =
                 $hastaH = $_GET["hasta_h"] ?? "";
                 $buscarH = trim($_GET["buscar_h"] ?? "");
 
-                $sqlHistorialCompleto = "
+                $sqlAcumuladoGeneral = "
                     SELECT
-                        a.id,
-                        a.fecha,
+                        e.id,
                         e.nombre,
                         e.identificacion,
                         e.cargo,
-                        a.minutos_retraso,
-                        a.minutos_extra,
-                        a.minutos_deuda,
-                        a.justificacion,
-                        a.justificacion_salida
-                    FROM asistencias a
-                    INNER JOIN empleados e ON e.id = a.empleado_id
-                    WHERE 1=1
+                        COUNT(a.id) AS total_dias,
+                        COALESCE(SUM(a.minutos_retraso), 0) AS total_retraso,
+                        COALESCE(SUM(a.minutos_extra), 0) AS total_extra,
+                        COALESCE(SUM(a.minutos_deuda), 0) AS total_deuda
+                    FROM empleados e
+                    LEFT JOIN asistencias a ON a.empleado_id = e.id
                 ";
 
-                $paramsH = [];
-                $tiposH = "";
+                $paramsAG = [];
+                $tiposAG = "";
+                $whereAG = ["e.activo = 1"];
 
                 if (!empty($desdeH) && !empty($hastaH)) {
-                    $sqlHistorialCompleto .= " AND a.fecha BETWEEN ? AND ?";
-                    $paramsH[] = $desdeH;
-                    $paramsH[] = $hastaH;
-                    $tiposH .= "ss";
+                    $whereAG[] = "a.fecha BETWEEN ? AND ?";
+                    $paramsAG[] = $desdeH;
+                    $paramsAG[] = $hastaH;
+                    $tiposAG .= "ss";
                 }
 
                 if (!empty($buscarH)) {
-                    $sqlHistorialCompleto .= " AND (e.nombre LIKE ? OR e.identificacion LIKE ?)";
-                    $likeH = "%" . $buscarH . "%";
-                    $paramsH[] = $likeH;
-                    $paramsH[] = $likeH;
-                    $tiposH .= "ss";
+                    $whereAG[] = "(e.nombre LIKE ? OR e.identificacion LIKE ?)";
+                    $likeAG = "%" . $buscarH . "%";
+                    $paramsAG[] = $likeAG;
+                    $paramsAG[] = $likeAG;
+                    $tiposAG .= "ss";
                 }
 
-                $sqlHistorialCompleto .= " ORDER BY a.fecha DESC, e.nombre ASC LIMIT 100";
-
-                $stmtHC = $conexion->prepare($sqlHistorialCompleto);
-                if (!empty($paramsH)) {
-                    $stmtHC->bind_param($tiposH, ...$paramsH);
+                if (count($whereAG) > 0) {
+                    $sqlAcumuladoGeneral .= " WHERE " . implode(" AND ", $whereAG);
                 }
-                $stmtHC->execute();
-                $resultadoHC = $stmtHC->get_result();
+
+                $sqlAcumuladoGeneral .= " GROUP BY e.id, e.nombre, e.identificacion, e.cargo ORDER BY e.nombre ASC";
+
+                $stmtAG = $conexion->prepare($sqlAcumuladoGeneral);
+                if ($stmtAG && !empty($paramsAG)) {
+                    $stmtAG->bind_param($tiposAG, ...$paramsAG);
+                }
+                if ($stmtAG) {
+                    $stmtAG->execute();
+                    $resultadoAG = $stmtAG->get_result();
+                } else {
+                    $resultadoAG = null;
+                }
                 ?>
 
                 <div class="tabla-contenedor">
                     <table class="tabla">
                         <thead>
                             <tr>
-                                <th>Fecha</th>
                                 <th>Empleado</th>
+                                <th>Identificación</th>
                                 <th>Cargo</th>
-                                <th>Retraso</th>
-                                <th>Extra</th>
-                                <th>Deuda</th>
+                                <th>Días Asistidos</th>
+                                <th>Total Retraso</th>
+                                <th>Total Extra</th>
+                                <th>Total Deuda</th>
                             </tr>
                         </thead>
                         <tbody>
-                        <?php if (!$resultadoHC || $resultadoHC->num_rows === 0): ?>
+                        <?php if (!$resultadoAG || $resultadoAG->num_rows === 0): ?>
                             <tr>
-                                <td colspan="6" class="sin-resultados">
-                                    No se encontraron registros en el historial.
-                                </td>
+                                <td colspan="7" class="sin-resultados">No se encontraron registros acumulados.</td>
                             </tr>
                         <?php else: ?>
-                            <?php while ($rowH = $resultadoHC->fetch_assoc()): ?>
+                            <?php while ($rowAG = $resultadoAG->fetch_assoc()): ?>
                                 <tr>
-                                    <td><?= escapar($rowH["fecha"]) ?></td>
-                                    <td><?= escapar($rowH["nombre"]) ?></td>
-                                    <td><?= escapar($rowH["cargo"]) ?></td>
+                                    <td><?= escapar($rowAG["nombre"]) ?></td>
+                                    <td><?= escapar($rowAG["identificacion"]) ?></td>
+                                    <td><?= escapar($rowAG["cargo"]) ?></td>
+                                    <td><?= (int)$rowAG["total_dias"] ?></td>
                                     <td>
-                                        <?php if (!empty($rowH["minutos_retraso"]) && (int)$rowH["minutos_retraso"] > 0): ?>
-                                            <span class="color-retraso"><?= (int)$rowH["minutos_retraso"] ?> min</span>
+                                        <?php if ((int)$rowAG["total_retraso"] > 0): ?>
+                                            <span class="color-retraso"><?= minutosAHoras($rowAG["total_retraso"]) ?> (<?= (int)$rowAG["total_retraso"] ?> min)</span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if (!empty($rowH["minutos_extra"]) && (int)$rowH["minutos_extra"] > 0): ?>
-                                            <span class="color-extra"><?= minutosAHoras($rowH["minutos_extra"]) ?></span>
+                                        <?php if ((int)$rowAG["total_extra"] > 0): ?>
+                                            <span class="color-extra"><?= minutosAHoras($rowAG["total_extra"]) ?></span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if (!empty($rowH["minutos_deuda"]) && (int)$rowH["minutos_deuda"] > 0): ?>
-                                            <span class="color-deuda"><?= (int)$rowH["minutos_deuda"] ?> min</span>
+                                        <?php if ((int)$rowAG["total_deuda"] > 0): ?>
+                                            <span class="color-deuda"><?= minutosAHoras($rowAG["total_deuda"]) ?> (<?= (int)$rowAG["total_deuda"] ?> min)</span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
