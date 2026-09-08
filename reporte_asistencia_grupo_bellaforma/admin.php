@@ -1891,11 +1891,15 @@ $resultadoEmpleados =
                 $sqlHistorialCompleto .= " ORDER BY a.fecha DESC, e.nombre ASC LIMIT 100";
 
                 $stmtHC = $conexion->prepare($sqlHistorialCompleto);
-                if (!empty($paramsH)) {
+                if ($stmtHC && !empty($paramsH)) {
                     $stmtHC->bind_param($tiposH, ...$paramsH);
                 }
-                $stmtHC->execute();
-                $resultadoHC = $stmtHC->get_result();
+                if ($stmtHC) {
+                    $stmtHC->execute();
+                    $resultadoHC = $stmtHC->get_result();
+                } else {
+                    $resultadoHC = null;
+                }
                 ?>
 
                 <div class="tabla-contenedor">
