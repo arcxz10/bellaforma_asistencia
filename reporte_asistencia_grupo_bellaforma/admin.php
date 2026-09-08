@@ -963,10 +963,22 @@ $resultadoEmpleados =
         href="css/admin.css"
     >
     <style>
-        /* Colores específicos solicitados para el Historial Completo */
-        .color-retraso { color: #dc3545 !important; font-weight: bold; } /* Rojo */
-        .color-extra { color: #d39e00 !important; font-weight: bold; }   /* Amarillo */
-        .color-deuda { color: #007bff !important; font-weight: bold; }   /* Azul */
+        .color-retraso, .retraso, .estado.estado-tarde { color: #dc3545 !important; font-weight: bold; }
+        .color-extra, .extra { color: #d39e00 !important; font-weight: bold; }
+        .color-deuda { color: #007bff !important; font-weight: bold; }
+        .estado.estado-puntual { color: #28a745 !important; font-weight: bold; }
+        .btn-justificaciones {
+            background-color: #6c757d;
+            color: #fff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-justificaciones:hover {
+            background-color: #5a6268;
+        }
     </style>
 
 </head>
@@ -1660,7 +1672,7 @@ $resultadoEmpleados =
                                         <td>
                                             <?php 
                                                 echo formatoHora($fila["hora_entrada_almuerzo"]);
-                                                if (!empty($fila["minutos_retraso_almuerzo"]) && (int)$fila["minutos_retraso_almuerzo"] > 0) {
+                                                if (!empty($fila["minutos_retraso_almuerzo"]) && (int)$fila["minutos_retraso_almuerzo] > 0) {
                                                     echo '<br><small class="retraso">+' . (int)$fila["minutos_retraso_almuerzo"] . ' min</small>';
                                                 }
                                             ?>
@@ -1711,7 +1723,7 @@ $resultadoEmpleados =
                                                 ] > 0
                                             ): ?>
 
-                                                <span class="retraso">
+                                                <span class="color-deuda">
 
                                                     <?= (int)
                                                         $fila[
@@ -1772,12 +1784,23 @@ $resultadoEmpleados =
                 id="historial"
                 class="section"
             >
-                <h2>
-                    📂 Historial Completo de Asistencias y Tiempos
-                </h2>
-                <p>
-                    Consulta el acumulado histórico de retrasos, horas extra y deudas de los empleados.
-                </p>
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+                    <div>
+                        <h2>
+                            📂 Historial Completo de Asistencias y Tiempos
+                        </h2>
+                        <p style="margin: 0;">
+                            Consulta el acumulado histórico de retrasos, horas extra y deudas de los empleados.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        class="btn-justificaciones"
+                        onclick="abrirModalTodasJustificaciones()"
+                    >
+                        Ver todas las justificaciones
+                    </button>
+                </div>
 
                 <form
                     method="GET"
@@ -1837,12 +1860,7 @@ $resultadoEmpleados =
                         e.nombre,
                         e.identificacion,
                         e.cargo,
-                        a.hora_entrada,
                         a.minutos_retraso,
-                        a.hora_salida_almuerzo,
-                        a.hora_entrada_almuerzo,
-                        a.minutos_retraso_almuerzo,
-                        a.hora_salida,
                         a.minutos_extra,
                         a.minutos_deuda,
                         a.justificacion,
@@ -1887,20 +1905,15 @@ $resultadoEmpleados =
                                 <th>Fecha</th>
                                 <th>Empleado</th>
                                 <th>Cargo</th>
-                                <th>Entrada</th>
                                 <th>Retraso</th>
-                                <th>S. Almuerzo</th>
-                                <th>E. Almuerzo</th>
-                                <th>Salida</th>
                                 <th>Extra</th>
                                 <th>Deuda</th>
-                                <th>Justificación</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php if (!$resultadoHC || $resultadoHC->num_rows === 0): ?>
                             <tr>
-                                <td colspan="11" class="sin-resultados">
+                                <td colspan="6" class="sin-resultados">
                                     No se encontraron registros en el historial.
                                 </td>
                             </tr>
@@ -1910,7 +1923,6 @@ $resultadoEmpleados =
                                     <td><?= escapar($rowH["fecha"]) ?></td>
                                     <td><?= escapar($rowH["nombre"]) ?></td>
                                     <td><?= escapar($rowH["cargo"]) ?></td>
-                                    <td><?= formatoHora($rowH["hora_entrada"]) ?></td>
                                     <td>
                                         <?php if (!empty($rowH["minutos_retraso"]) && (int)$rowH["minutos_retraso"] > 0): ?>
                                             <span class="color-retraso"><?= (int)$rowH["minutos_retraso"] ?> min</span>
@@ -1918,9 +1930,6 @@ $resultadoEmpleados =
                                             —
                                         <?php endif; ?>
                                     </td>
-                                    <td><?= formatoHora($rowH["hora_salida_almuerzo"]) ?></td>
-                                    <td><?= formatoHora($rowH["hora_entrada_almuerzo"]) ?></td>
-                                    <td><?= formatoHora($rowH["hora_salida"]) ?></td>
                                     <td>
                                         <?php if (!empty($rowH["minutos_extra"]) && (int)$rowH["minutos_extra"] > 0): ?>
                                             <span class="color-extra"><?= minutosAHoras($rowH["minutos_extra"]) ?></span>
@@ -1935,7 +1944,6 @@ $resultadoEmpleados =
                                             —
                                         <?php endif; ?>
                                     </td>
-                                    <td><?= !empty($rowH["justificacion"]) ? escapar($rowH["justificacion"]) : "—" ?></td>
                                 </tr>
                             <?php endwhile; ?>
                         <?php endif; ?>
@@ -2472,6 +2480,75 @@ $resultadoEmpleados =
     </div>
 </div>
 
+<!-- Modal para Ver Todas las Justificaciones -->
+<div
+    class="modal"
+    id="modalTodasJustificaciones"
+    style="display:none;"
+>
+    <div class="modal-contenido" style="max-width: 800px; width: 90%;">
+        <h3>Todas las Justificaciones</h3>
+        <div class="tabla-contenedor" style="max-height: 400px; overflow-y: auto; margin-top: 15px;">
+            <table class="tabla">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Empleado</th>
+                        <th>Tipo</th>
+                        <th>Justificación</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $sqlJustificacionesModal = "
+                        SELECT
+                            a.fecha,
+                            e.nombre,
+                            a.justificacion,
+                            a.justificacion_salida
+                        FROM asistencias a
+                        INNER JOIN empleados e ON e.id = a.empleado_id
+                        WHERE (a.justificacion IS NOT NULL AND a.justificacion != '')
+                           OR (a.justificacion_salida IS NOT NULL AND a.justificacion_salida != '')
+                        ORDER BY a.fecha DESC, e.nombre ASC
+                    ";
+                    $resJustMod = $conexion->query($sqlJustificacionesModal);
+                    $hayJustificaciones = false;
+                    if ($resJustMod && $resJustMod->num_rows > 0) {
+                        while ($jRow = $resJustMod->fetch_assoc()) {
+                            if (!empty($jRow["justificacion"])) {
+                                $hayJustificaciones = true;
+                                echo "<tr>";
+                                echo "<td>" . escapar($jRow["fecha"]) . "</td>";
+                                echo "<td>" . escapar($jRow["nombre"]) . "</td>";
+                                echo "<td>Entrada</td>";
+                                echo "<td>" . escapar($jRow["justificacion"]) . "</td>";
+                                echo "</tr>";
+                            }
+                            if (!empty($jRow["justificacion_salida"])) {
+                                $hayJustificaciones = true;
+                                echo "<tr>";
+                                echo "<td>" . escapar($jRow["fecha"]) . "</td>";
+                                echo "<td>" . escapar($jRow["nombre"]) . "</td>";
+                                echo "<td>Salida</td>";
+                                echo "<td>" . escapar($jRow["justificacion_salida"]) . "</td>";
+                                echo "</tr>";
+                            }
+                        }
+                    }
+                    if (!$hayJustificaciones) {
+                        echo '<tr><td colspan="4" class="sin-resultados">No hay justificaciones registradas.</td></tr>';
+                    }
+                    ?>
+                </tbody>
+            </table>
+        </div>
+        <div class="botones-modal" style="display: flex; justify-content: flex-end; margin-top: 15px;">
+            <button type="button" class="boton boton-secundario" onclick="cerrarModalTodasJustificaciones()">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 
 <script>
 
@@ -2750,6 +2827,14 @@ $resultadoEmpleados =
         document.getElementById("modalAsistencia").style.display = "none";
     }
 
+    function abrirModalTodasJustificaciones() {
+        document.getElementById("modalTodasJustificaciones").style.display = "flex";
+    }
+
+    function cerrarModalTodasJustificaciones() {
+        document.getElementById("modalTodasJustificaciones").style.display = "none";
+    }
+
 
     document
         .querySelectorAll(".nav-item[href^=\"#\"]")
@@ -2798,6 +2883,15 @@ $resultadoEmpleados =
 
             if (event.target === modalAsistencia) {
                 cerrarModalAsistencia();
+            }
+
+            const modalTodasJustificaciones =
+                document.getElementById(
+                    "modalTodasJustificaciones"
+                );
+
+            if (event.target === modalTodasJustificaciones) {
+                cerrarModalTodasJustificaciones();
             }
         }
     );
