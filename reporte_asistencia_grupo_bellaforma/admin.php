@@ -962,6 +962,12 @@ $resultadoEmpleados =
         rel="stylesheet"
         href="css/admin.css"
     >
+    <style>
+        /* Colores específicos solicitados para el Historial Completo */
+        .color-retraso { color: #dc3545 !important; font-weight: bold; } /* Rojo */
+        .color-extra { color: #d39e00 !important; font-weight: bold; }   /* Amarillo */
+        .color-deuda { color: #007bff !important; font-weight: bold; }   /* Azul */
+    </style>
 
 </head>
 
@@ -1193,6 +1199,7 @@ $resultadoEmpleados =
                     action="admin.php#asistencias"
                     class="filtros"
                 >
+                    <input type="hidden" name="seccion" value="asistencias">
 
                     <div>
 
@@ -1777,7 +1784,7 @@ $resultadoEmpleados =
                     action="admin.php#historial"
                     class="filtros"
                 >
-                    <input type="hidden" name="modulo" value="historial">
+                    <input type="hidden" name="seccion" value="historial">
                     
                     <div>
                         <label for="desde_historial">Desde</label>
@@ -1904,12 +1911,30 @@ $resultadoEmpleados =
                                     <td><?= escapar($rowH["nombre"]) ?></td>
                                     <td><?= escapar($rowH["cargo"]) ?></td>
                                     <td><?= formatoHora($rowH["hora_entrada"]) ?></td>
-                                    <td><?= $rowH["minutos_retraso"] ? (int)$rowH["minutos_retraso"] . " min" : "—" ?></td>
+                                    <td>
+                                        <?php if (!empty($rowH["minutos_retraso"]) && (int)$rowH["minutos_retraso"] > 0): ?>
+                                            <span class="color-retraso"><?= (int)$rowH["minutos_retraso"] ?> min</span>
+                                        <?php else: ?>
+                                            —
+                                        <?php endif; ?>
+                                    </td>
                                     <td><?= formatoHora($rowH["hora_salida_almuerzo"]) ?></td>
                                     <td><?= formatoHora($rowH["hora_entrada_almuerzo"]) ?></td>
                                     <td><?= formatoHora($rowH["hora_salida"]) ?></td>
-                                    <td><?= $rowH["minutos_extra"] ? minutosAHoras($rowH["minutos_extra"]) : "—" ?></td>
-                                    <td><?= $rowH["minutos_deuda"] ? (int)$rowH["minutos_deuda"] . " min" : "—" ?></td>
+                                    <td>
+                                        <?php if (!empty($rowH["minutos_extra"]) && (int)$rowH["minutos_extra"] > 0): ?>
+                                            <span class="color-extra"><?= minutosAHoras($rowH["minutos_extra"]) ?></span>
+                                        <?php else: ?>
+                                            —
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($rowH["minutos_deuda"]) && (int)$rowH["minutos_deuda"] > 0): ?>
+                                            <span class="color-deuda"><?= (int)$rowH["minutos_deuda"] ?> min</span>
+                                        <?php else: ?>
+                                            —
+                                        <?php endif; ?>
+                                    </td>
                                     <td><?= !empty($rowH["justificacion"]) ? escapar($rowH["justificacion"]) : "—" ?></td>
                                 </tr>
                             <?php endwhile; ?>
