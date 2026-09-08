@@ -1,8 +1,7 @@
 <?php
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+ini_set("display_errors", 1);
 
 session_start();
 
@@ -1673,7 +1672,7 @@ $resultadoEmpleados =
                                         <td>
                                             <?php 
                                                 echo formatoHora($fila["hora_entrada_almuerzo"]);
-                                                if (!empty($fila["minutos_retraso_almuerzo"]) && (int)$fila["minutos_retraso_almuerzo"] > 0) {
+                                                if (!empty($fila["minutos_retraso_almuerzo"]) && (int)$fila["minutos_retraso_almuerzo] > 0) {
                                                     echo '<br><small class="retraso">+' . (int)$fila["minutos_retraso_almuerzo"] . ' min</small>';
                                                 }
                                             ?>
@@ -1892,15 +1891,11 @@ $resultadoEmpleados =
                 $sqlHistorialCompleto .= " ORDER BY a.fecha DESC, e.nombre ASC LIMIT 100";
 
                 $stmtHC = $conexion->prepare($sqlHistorialCompleto);
-                if ($stmtHC && !empty($paramsH)) {
+                if (!empty($paramsH)) {
                     $stmtHC->bind_param($tiposH, ...$paramsH);
                 }
-                if ($stmtHC) {
-                    $stmtHC->execute();
-                    $resultadoHC = $stmtHC->get_result();
-                } else {
-                    $resultadoHC = null;
-                }
+                $stmtHC->execute();
+                $resultadoHC = $stmtHC->get_result();
                 ?>
 
                 <div class="tabla-contenedor">
