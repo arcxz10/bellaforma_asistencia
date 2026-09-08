@@ -1001,6 +1001,13 @@ $resultadoEmpleados =
             </a>
 
             <a
+                href="#historial"
+                class="nav-item"
+            >
+                📂 Historial Completo
+            </a>
+
+            <a
                 href="#empleados"
                 class="nav-item"
             >
@@ -1751,6 +1758,165 @@ $resultadoEmpleados =
 
                 <?php endif; ?>
 
+            </section>
+
+
+            <section
+                id="historial"
+                class="section"
+            >
+                <h2>
+                    📂 Historial Completo de Asistencias y Tiempos
+                </h2>
+                <p>
+                    Consulta el acumulado histórico de retrasos, horas extra y deudas de los empleados.
+                </p>
+
+                <form
+                    method="GET"
+                    action="admin.php#historial"
+                    class="filtros"
+                >
+                    <input type="hidden" name="modulo" value="historial">
+                    
+                    <div>
+                        <label for="desde_historial">Desde</label>
+                        <input
+                            type="date"
+                            id="desde_historial"
+                            name="desde_h"
+                            value="<?= escapar($_GET["desde_h"] ?? "") ?>"
+                        >
+                    </div>
+
+                    <div>
+                        <label for="hasta_historial">Hasta</label>
+                        <input
+                            type="date"
+                            id="hasta_historial"
+                            name="hasta_h"
+                            value="<?= escapar($_GET["hasta_h"] ?? "") ?>"
+                        >
+                    </div>
+
+                    <div>
+                        <label for="buscar_historial">Empleado</label>
+                        <input
+                            type="text"
+                            id="buscar_historial"
+                            name="buscar_h"
+                            placeholder="Nombre o identificación"
+                            value="<?= escapar($_GET["buscar_h"] ?? "") ?>"
+                        >
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="btn-filtrar"
+                    >
+                        Filtrar Historial
+                    </button>
+                </form>
+
+                <?php
+                $desdeH = $_GET["desde_h"] ?? "";
+                $hastaH = $_GET["hasta_h"] ?? "";
+                $buscarH = trim($_GET["buscar_h"] ?? "");
+
+                $sqlHistorialCompleto = "
+                    SELECT
+                        a.id,
+                        a.fecha,
+                        e.nombre,
+                        e.identificacion,
+                        e.cargo,
+                        a.hora_entrada,
+                        a.minutos_retraso,
+                        a.hora_salida_almuerzo,
+                        a.hora_entrada_almuerzo,
+                        a.minutos_retraso_almuerzo,
+                        a.hora_salida,
+                        a.minutos_extra,
+                        a.minutos_deuda,
+                        a.justificacion,
+                        a.justificacion_salida
+                    FROM asistencias a
+                    INNER JOIN empleados e ON e.id = a.empleado_id
+                    WHERE 1=1
+                ";
+
+                $paramsH = [];
+                $tiposH = "";
+
+                if (!empty($desdeH) && !empty($hastaH)) {
+                    $sqlHistorialCompleto .= " AND a.fecha BETWEEN ? AND ?";
+                    $paramsH[] = $desdeH;
+                    $paramsH[] = $hastaH;
+                    $tiposH .= "ss";
+                }
+
+                if (!empty($buscarH)) {
+                    $sqlHistorialCompleto .= " AND (e.nombre LIKE ? OR e.identificacion LIKE ?)";
+                    $likeH = "%" . $buscarH . "%";
+                    $paramsH[] = $likeH;
+                    $paramsH[] = $likeH;
+                    $tiposH .= "ss";
+                }
+
+                $sqlHistorialCompleto .= " ORDER BY a.fecha DESC, e.nombre ASC LIMIT 100";
+
+                $stmtHC = $conexion->prepare($sqlHistorialCompleto);
+                if (!empty($paramsH)) {
+                    $stmtHC->bind_param($tiposH, ...$paramsH);
+                }
+                $stmtHC->execute();
+                $resultadoHC = $stmtHC->get_result();
+                ?>
+
+                <div class="tabla-contenedor">
+                    <table class="tabla">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Empleado</th>
+                                <th>Cargo</th>
+                                <th>Entrada</th>
+                                <th>Retraso</th>
+                                <th>S. Almuerzo</th>
+                                <th>E. Almuerzo</th>
+                                <th>Salida</th>
+                                <th>Extra</th>
+                                <th>Deuda</th>
+                                <th>Justificación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (!$resultadoHC || $resultadoHC->num_rows === 0): ?>
+                            <tr>
+                                <td colspan="11" class="sin-resultados">
+                                    No se encontraron registros en el historial.
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php while ($rowH = $resultadoHC->fetch_assoc()): ?>
+                                <tr>
+                                    <td><?= escapar($rowH["fecha"]) ?></td>
+                                    <td><?= escapar($rowH["nombre"]) ?></td>
+                                    <td><?= escapar($rowH["cargo"]) ?></td>
+                                    <td><?= formatoHora($rowH["hora_entrada"]) ?></td>
+                                    <td><?= $rowH["minutos_retraso"] ? (int)$rowH["minutos_retraso"] . " min" : "—" ?></td>
+                                    <td><?= formatoHora($rowH["hora_salida_almuerzo"]) ?></td>
+                                    <td><?= formatoHora($rowH["hora_entrada_almuerzo"]) ?></td>
+                                    <td><?= formatoHora($rowH["hora_salida"]) ?></td>
+                                    <td><?= $rowH["minutos_extra"] ? minutosAHoras($rowH["minutos_extra"]) : "—" ?></td>
+                                    <td><?= $rowH["minutos_deuda"] ? (int)$rowH["minutos_deuda"] . " min" : "—" ?></td>
+                                    <td><?= !empty($rowH["justificacion"]) ? escapar($rowH["justificacion"]) : "—" ?></td>
+                                </tr>
+                            <?php endwhile; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
 
