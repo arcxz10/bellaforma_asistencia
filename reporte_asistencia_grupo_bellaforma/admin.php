@@ -1672,7 +1672,7 @@ $resultadoEmpleados =
                                         <td>
                                             <?php 
                                                 echo formatoHora($fila["hora_entrada_almuerzo"]);
-                                                if (!empty($fila["minutos_retraso_almuerzo"]) && (int)$fila["minutos_retraso_almuerzo] > 0) {
+                                               if (!empty($fila["minutos_retraso_almuerzo"]) && (int)$fila["minutos_retraso_almuerzo"] > 0) {
                                                     echo '<br><small class="retraso">+' . (int)$fila["minutos_retraso_almuerzo"] . ' min</small>';
                                                 }
                                             ?>
