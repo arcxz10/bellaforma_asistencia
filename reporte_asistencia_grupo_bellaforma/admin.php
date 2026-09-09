@@ -1871,17 +1871,33 @@ $resultadoEmpleados =
                             </tr>
                         <?php else: ?>
                             <?php while ($rowAG = $resultadoAG->fetch_assoc()): 
-                                $retrasoOriginal = (int)$rowAG["total_retraso"];
-                                $extraOriginal = (int)$rowAG["total_extra"];
-                                $neto = $extraOriginal - $retrasoOriginal;
+                                $retrasoBruto = (int)$rowAG["total_retraso"];
+                                $extraBruto = (int)$rowAG["total_deuda"]; // aquí usamos variable temporal para evitar confusión
+                                $extraBrutoReal = (int)$rowAG["total_extra"];
+                                $deudaBruta = (int)$rowAG["total_deuda"];
                                 
-                                if ($neto > 0) {
-                                    $extraNeto = $neto;
+                                // Lógica de compensación en orden:
+                                // 1. Las horas extras restan primero de los retrasos.
+                                $extraDisponible = $extraBrutoReal;
+                                
+                                if ($extraDisponible >= $retrasoBruto) {
+                                    $extraDisponible -= $retrasoBruto;
                                     $retrasoNeto = 0;
                                 } else {
-                                    $extraNeto = 0;
-                                    $retrasoNeto = abs($neto);
+                                    $retrasoNeto = $retrasoBruto - $extraDisponible;
+                                    $extraDisponible = 0;
                                 }
+                                
+                                // 2. Si sobran horas extras, restan de la deuda.
+                                if ($extraDisponible >= $deudaBruta) {
+                                    $extraDisponible -= $deudaBruta;
+                                    $deudaNeta = 0;
+                                } else {
+                                    $deudaNeta = $deudaBruta - $extraDisponible;
+                                    $extraDisponible = 0;
+                                }
+                                
+                                $extraNeto = $extraDisponible;
                             ?>
                                 <tr>
                                     <td><?= escapar($rowAG["nombre"]) ?></td>
@@ -1903,8 +1919,8 @@ $resultadoEmpleados =
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if ((int)$rowAG["total_deuda"] > 0): ?>
-                                            <span class="color-deuda"><?= minutosAHoras((int)$rowAG["total_deuda"]) ?> (<?= (int)$rowAG["total_deuda"] ?> min)</span>
+                                        <?php if ($deudaNeta > 0): ?>
+                                            <span class="color-deuda"><?= minutosAHoras($deudaNeta) ?> (<?= $deudaNeta ?> min)</span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
