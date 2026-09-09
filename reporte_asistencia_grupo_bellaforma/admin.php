@@ -1870,29 +1870,41 @@ $resultadoEmpleados =
                                 <td colspan="8" class="sin-resultados">No se encontraron registros acumulados.</td>
                             </tr>
                         <?php else: ?>
-                            <?php while ($rowAG = $resultadoAG->fetch_assoc()): ?>
+                            <?php while ($rowAG = $resultadoAG->fetch_assoc()): 
+                                $retrasoOriginal = (int)$rowAG["total_retraso"];
+                                $extraOriginal = (int)$rowAG["total_extra"];
+                                $neto = $extraOriginal - $retrasoOriginal;
+                                
+                                if ($neto > 0) {
+                                    $extraNeto = $neto;
+                                    $retrasoNeto = 0;
+                                } else {
+                                    $extraNeto = 0;
+                                    $retrasoNeto = abs($neto);
+                                }
+                            ?>
                                 <tr>
                                     <td><?= escapar($rowAG["nombre"]) ?></td>
                                     <td><?= escapar($rowAG["identificacion"]) ?></td>
                                     <td><?= escapar($rowAG["cargo"]) ?></td>
                                     <td><?= (int)$rowAG["total_dias"] ?></td>
                                     <td>
-                                        <?php if ((int)$rowAG["total_retraso"] > 0): ?>
-                                            <span class="color-retraso"><?= minutosAHoras($rowAG["total_retraso"]) ?> (<?= (int)$rowAG["total_retraso"] ?> min)</span>
+                                        <?php if ($retrasoNeto > 0): ?>
+                                            <span class="color-retraso"><?= minutosAHoras($retrasoNeto) ?> (<?= $retrasoNeto ?> min)</span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if ((int)$rowAG["total_extra"] > 0): ?>
-                                            <span class="color-extra"><?= minutosAHoras($rowAG["total_extra"]) ?></span>
+                                        <?php if ($extraNeto > 0): ?>
+                                            <span class="color-extra"><?= minutosAHoras($extraNeto) ?></span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php if ((int)$rowAG["total_deuda"] > 0): ?>
-                                            <span class="color-deuda"><?= minutosAHoras($rowAG["total_deuda"]) ?> (<?= (int)$rowAG["total_deuda"] ?> min)</span>
+                                            <span class="color-deuda"><?= minutosAHoras((int)$rowAG["total_deuda"]) ?> (<?= (int)$rowAG["total_deuda"] ?> min)</span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
@@ -1903,7 +1915,7 @@ $resultadoEmpleados =
                                             onclick="abrirModalDetalleEmpleado(<?= (int)$rowAG["id"] ?>, <?= json_encode($rowAG["nombre"]) ?>, '<?= escapar($desdeH) ?>', '<?= escapar($hastaH) ?>')"
                                             class="btn-editar"
                                         >
-                                            Ver / Editar Días
+                                            Editar
                                         </button>
                                     </td>
                                 </tr>
@@ -2840,7 +2852,6 @@ $resultadoEmpleados =
         tbody.innerHTML = '<tr><td colspan="8" class="sin-resultados">Cargando registros...</td></tr>';
         document.getElementById("modalDetalleEmpleado").style.display = "flex";
 
-        // Petición AJAX para obtener los días del empleado en el rango seleccionado
         fetch('obtener_dias_empleado.php?empleado_id=' + empleadoId + '&desde=' + encodeURIComponent(desdeH) + '&hasta=' + encodeURIComponent(hastaH))
             .then(response => response.json())
             .then(data => {
