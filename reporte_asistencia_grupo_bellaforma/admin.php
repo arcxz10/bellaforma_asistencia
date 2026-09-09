@@ -1,7 +1,7 @@
 <?php
 
 error_reporting(E_ALL);
-ini_set("display_errors", 1);
+sql_mode_or_ini: ini_set("display_errors", 1);
 
 session_start();
 
@@ -1784,7 +1784,7 @@ $resultadoEmpleados =
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
                     <div>
                         <h2>📂 Acumulado General por Empleado</h2>
-                        <p style="margin: 0;">Resumen total histórico de retrasos, horas extra y deudas acumuladas por cada empleado.</p>
+                        <p style="margin: 0;">Resumen total histórico de retrasos, horas extra y deudas neteadas por cada empleado.</p>
                     </div>
                     <button type="button" class="btn-justificaciones" onclick="abrirModalTodasJustificaciones()">Ver todas las justificaciones</button>
                 </div>
@@ -1811,6 +1811,7 @@ $resultadoEmpleados =
                 $hastaH = $_GET["hasta_h"] ?? "";
                 $buscarH = trim($_GET["buscar_h"] ?? "");
 
+                // Consulta con fórmula de neteo mejorada (ej. saldo neto por día: extra - retraso o cálculo total)
                 $sqlAcumuladoGeneral = "
                     SELECT
                         e.id,
@@ -1820,7 +1821,9 @@ $resultadoEmpleados =
                         COUNT(a.id) AS total_dias,
                         COALESCE(SUM(a.minutos_retraso), 0) AS total_retraso,
                         COALESCE(SUM(a.minutos_extra), 0) AS total_extra,
-                        COALESCE(SUM(a.minutos_deuda), 0) AS total_deuda
+                        COALESCE(SUM(a.minutos_deuda), 0) AS total_deuda,
+                        COALESCE(SUM(GREATEST(0, COALESCE(a.minutos_extra, 0) - COALESCE(a.minutos_retraso, 0))), 0) AS neto_extra,
+                        COALESCE(SUM(GREATEST(0, COALESCE(a.minutos_retraso, 0) - COALESCE(a.minutos_extra, 0))), 0) AS neto_retraso
                     FROM empleados e
                     LEFT JOIN asistencias a ON a.empleado_id = e.id
                 ";
@@ -1873,12 +1876,13 @@ $resultadoEmpleados =
                                 <th>Total Retraso</th>
                                 <th>Total Extra</th>
                                 <th>Total Deuda</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php if (!$resultadoAG || $resultadoAG->num_rows === 0): ?>
                             <tr>
-                                <td colspan="7" class="sin-resultados">No se encontraron registros acumulados.</td>
+                                <td colspan="8" class="sin-resultados">No se encontraron registros acumulados.</td>
                             </tr>
                         <?php else: ?>
                             <?php while ($rowAG = $resultadoAG->fetch_assoc()): ?>
@@ -1907,6 +1911,9 @@ $resultadoEmpleados =
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <a href="admin.php?desde=<?= escapar($desdeH) ?>&hasta=<?= escapar($hastaH) ?>&buscar=<?= urlencode($rowAG["nombre"]) ?>#asistencias" class="btn-editar" style="text-decoration: none; display: inline-block; text-align: center;">Ver / Editar Registros</a>
                                     </td>
                                 </tr>
                             <?php endwhile; ?>
