@@ -1,4 +1,3 @@
-
 <?php
 
 error_reporting(E_ALL);
@@ -333,32 +332,34 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $idAsistencia = (int) ($_POST["asistencia_id"] ?? 0);
         $minutosDeuda = (int) ($_POST["minutos_deuda"] ?? 0);
+        $motivoDeuda = trim($_POST["motivo_deuda"] ?? "");
 
         if ($idAsistencia <= 0) {
-            redireccionar("Registro de asistencia inválido.", "error", "asistencias");
+            redireccionar("Registro de asistencia inválido.", "error", "historial");
         }
 
         $sql = "
             UPDATE asistencias
-            SET minutos_deuda = ?
+            SET minutos_deuda = ?,
+                justificacion = IF(? != '', ?, justificacion)
             WHERE id = ?
         ";
 
         $stmt = $conexion->prepare($sql);
 
         if (!$stmt) {
-            redireccionar("No se pudo preparar la actualización de la deuda.", "error", "asistencias");
+            redireccionar("No se pudo preparar la actualización de la deuda.", "error", "historial");
         }
 
-        $stmt->bind_param("ii", $minutosDeuda, $idAsistencia);
+        $stmt->bind_param("iisi", $minutosDeuda, $motivoDeuda, $motivoDeuda, $idAsistencia);
 
         if (!$stmt->execute()) {
             $stmt->close();
-            redireccionar("No se pudo actualizar el registro.", "error", "asistencias");
+            redireccionar("No se pudo actualizar el registro.", "error", "historial");
         }
 
         $stmt->close();
-        redireccionar("Minutos de deuda actualizados correctamente.", "exito", "asistencias");
+        redireccionar("Registro de asistencia actualizado correctamente.", "exito", "historial");
     }
 }
 
@@ -1552,7 +1553,6 @@ $resultadoEmpleados =
                                     <th>Deuda</th>
                                     <th>Justificación</th>
                                     <th>Just. Salida</th>
-                                    <th>Acciones</th>
 
                                 </tr>
 
@@ -1568,7 +1568,7 @@ $resultadoEmpleados =
                                 <tr>
 
                                     <td
-                                        colspan="14"
+                                        colspan="13"
                                         class="sin-resultados"
                                     >
                                         No hay registros para el período seleccionado.
@@ -1751,19 +1751,6 @@ $resultadoEmpleados =
                                             <?= !empty($fila["justificacion_salida"]) ? escapar($fila["justificacion_salida"]) : "—" ?>
                                         </td>
 
-                                        <td>
-                                            <button
-                                                type="button"
-                                                onclick='abrirModalAsistencia(
-                                                    <?= (int)$fila["id"] ?>,
-                                                    <?= (int)($fila["minutos_deuda"] ?? 0) ?>
-                                                )'
-                                                class="btn-editar"
-                                            >
-                                                Editar
-                                            </button>
-                                        </td>
-
                                     </tr>
 
                                 <?php endwhile; ?>
@@ -1874,12 +1861,13 @@ $resultadoEmpleados =
                                 <th>Total Retraso</th>
                                 <th>Total Extra</th>
                                 <th>Total Deuda</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php if (!$resultadoAG || $resultadoAG->num_rows === 0): ?>
                             <tr>
-                                <td colspan="7" class="sin-resultados">No se encontraron registros acumulados.</td>
+                                <td colspan="8" class="sin-resultados">No se encontraron registros acumulados.</td>
                             </tr>
                         <?php else: ?>
                             <?php while ($rowAG = $resultadoAG->fetch_assoc()): ?>
@@ -1908,6 +1896,15 @@ $resultadoEmpleados =
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <button
+                                            type="button"
+                                            onclick="abrirModalDetalleEmpleado(<?= (int)$rowAG["id"] ?>, <?= json_encode($rowAG["nombre"]) ?>, '<?= escapar($desdeH) ?>', '<?= escapar($hastaH) ?>')"
+                                            class="btn-editar"
+                                        >
+                                            Ver / Editar Días
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endwhile; ?>
@@ -2420,14 +2417,15 @@ $resultadoEmpleados =
 
 </div>
 
-<!-- Modal para Editar Minutos de Deuda -->
+<!-- Modal para Editar Minutos de Deuda por Día / Desglose -->
 <div
     class="modal"
     id="modalAsistencia"
     style="display:none;"
 >
-    <div class="modal-contenido" style="max-width: 350px;">
-        <h3>Editar Minutos de Deuda</h3>
+    <div class="modal-contenido" style="max-width: 450px;">
+        <h3>Editar Deuda de Asistencia</h3>
+        <p id="infoDetalleDia" style="font-size: 0.9rem; color: #555; margin-bottom: 10px;"></p>
         <form method="POST" class="formulario-modal">
             <input type="hidden" name="accion" value="editar_asistencia">
             <input type="hidden" name="asistencia_id" id="editAsistenciaId">
@@ -2437,11 +2435,49 @@ $resultadoEmpleados =
                 <input type="number" id="editMinutosDeuda" name="minutos_deuda" required style="width: 100%; padding: 8px; box-sizing: border-box;">
             </div>
 
+            <div style="margin-bottom: 15px;">
+                <label for="editMotivoDeuda" style="display:block; margin-bottom: 5px; font-weight: bold;">Motivo / Justificación (ej. Cita médica, salida antes de tiempo)</label>
+                <input type="text" id="editMotivoDeuda" name="motivo_deuda" placeholder="Desglose del motivo..." style="width: 100%; padding: 8px; box-sizing: border-box;">
+            </div>
+
             <div class="botones-modal" style="display: flex; justify-content: flex-end; gap: 10px;">
                 <button type="button" class="boton boton-secundario" onclick="cerrarModalAsistencia()">Cancelar</button>
                 <button type="submit" class="boton">Guardar</button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Modal para Listar los Días del Empleado desde el Historial Completo -->
+<div
+    class="modal"
+    id="modalDetalleEmpleado"
+    style="display:none;"
+>
+    <div class="modal-contenido" style="max-width: 850px; width: 95%;">
+        <h3 id="tituloDetalleEmpleado">Desglose de Días del Empleado</h3>
+        <div class="tabla-contenedor" style="max-height: 400px; overflow-y: auto; margin-top: 15px;">
+            <table class="tabla">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Entrada</th>
+                        <th>Salida</th>
+                        <th>Retraso</th>
+                        <th>Extra</th>
+                        <th>Deuda</th>
+                        <th>Motivo / Justificación</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaDiasEmpleadoBody">
+                    <tr><td colspan="8" class="sin-resultados">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="botones-modal" style="display: flex; justify-content: flex-end; margin-top: 15px;">
+            <button type="button" class="boton boton-secundario" onclick="cerrarModalDetalleEmpleado()">Cerrar</button>
+        </div>
     </div>
 </div>
 
@@ -2782,14 +2818,59 @@ $resultadoEmpleados =
         }
     }
 
-    function abrirModalAsistencia(id, deuda) {
+    function abrirModalAsistencia(id, deuda, fecha, motivo) {
         document.getElementById("editAsistenciaId").value = id;
         document.getElementById("editMinutosDeuda").value = deuda;
+        document.getElementById("editMotivoDeuda").value = motivo || "";
+        if (fecha) {
+            document.getElementById("infoDetalleDia").textContent = "Fecha del registro: " + fecha;
+        } else {
+            document.getElementById("infoDetalleDia").textContent = "";
+        }
         document.getElementById("modalAsistencia").style.display = "flex";
     }
 
     function cerrarModalAsistencia() {
         document.getElementById("modalAsistencia").style.display = "none";
+    }
+
+    function abrirModalDetalleEmpleado(empleadoId, nombreEmpleado, desdeH, hastaH) {
+        document.getElementById("tituloDetalleEmpleado").textContent = "Desglose de Días - " + nombreEmpleado;
+        const tbody = document.getElementById("tablaDiasEmpleadoBody");
+        tbody.innerHTML = '<tr><td colspan="8" class="sin-resultados">Cargando registros...</td></tr>';
+        document.getElementById("modalDetalleEmpleado").style.display = "flex";
+
+        // Petición AJAX para obtener los días del empleado en el rango seleccionado
+        fetch('obtener_dias_empleado.php?empleado_id=' + empleadoId + '&desde=' + encodeURIComponent(desdeH) + '&hasta=' + encodeURIComponent(hastaH))
+            .then(response => response.json())
+            .then(data => {
+                tbody.innerHTML = "";
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="sin-resultados">No hay registros en el período seleccionado.</td></tr>';
+                    return;
+                }
+                data.forEach(row => {
+                    let tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td>${row.fecha}</td>
+                        <td>${row.hora_entrada ? row.hora_entrada : '—'}</td>
+                        <td>${row.hora_salida ? row.hora_salida : '—'}</td>
+                        <td>${row.minutos_retraso > 0 ? row.minutos_retraso + ' min' : '—'}</td>
+                        <td>${row.minutos_extra > 0 ? row.minutos_extra + ' min' : '—'}</td>
+                        <td>${row.minutos_deuda > 0 ? row.minutos_deuda + ' min' : '—'}</td>
+                        <td>${row.justificacion ? row.justificacion : '—'}</td>
+                        <td><button type="button" class="btn-editar" onclick="abrirModalAsistencia(${row.id}, ${row.minutos_deuda}, '${row.fecha}', ${JSON.stringify(row.justificacion || '')})">Editar</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(error => {
+                tbody.innerHTML = '<tr><td colspan="8" class="sin-resultados">Error al cargar los datos.</td></tr>';
+            });
+    }
+
+    function cerrarModalDetalleEmpleado() {
+        document.getElementById("modalDetalleEmpleado").style.display = "none";
     }
 
     function abrirModalTodasJustificaciones() {
@@ -2848,6 +2929,15 @@ $resultadoEmpleados =
 
             if (event.target === modalAsistencia) {
                 cerrarModalAsistencia();
+            }
+
+            const modalDetalleEmpleado =
+                document.getElementById(
+                    "modalDetalleEmpleado"
+                );
+
+            if (event.target === modalDetalleEmpleado) {
+                cerrarModalDetalleEmpleado();
             }
 
             const modalTodasJustificaciones =
