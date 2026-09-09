@@ -11,6 +11,16 @@ $empleadoId = (int)($_POST["empleado_id"] ?? 0);
 $justificacion = trim($_POST["justificacion"] ?? "");
 $enviado = isset($_POST["enviar_registro"]);
 
+$fecha = date("Y-m-d");
+$horaActual = date("H:i:s");
+
+// BLOQUEO ESTRICTO: Si la hora actual es mayor a las 5:30 PM (17:30:00), se rechaza el registro
+if ($horaActual > "17:30:00") {
+    $conexion->close();
+    echo "<script>alert('El horario de registro de asistencia ha finalizado a las 5:30 PM.'); window.location.href='registro.html';</script>";
+    exit;
+}
+
 // Buscar datos del empleado
 $sql = "SELECT nombre, cargo FROM empleados WHERE id = ? AND activo = 1 LIMIT 1";
 $stmt = $conexion->prepare($sql);
@@ -18,6 +28,8 @@ $stmt->bind_param("i", $empleadoId);
 $stmt->execute();
 $res = $stmt->get_result();
 if ($res->num_rows !== 1) {
+    $stmt->close();
+    $conexion->close();
     echo "<script>alert('Error de empleado.'); window.location.href='registro.html';</script>";
     exit;
 }
@@ -26,8 +38,6 @@ $stmt->close();
 
 $cargo = $emp["cargo"];
 $nombre = $emp["nombre"];
-$fecha = date("Y-m-d");
-$horaActual = date("H:i:s");
 $diaSemana = (int)date("N");
 
 // Consultar horario de entrada
@@ -38,7 +48,6 @@ $stmtH->execute();
 $resH = $stmtH->get_result();
 $horario = $resH->fetch_assoc();
 $stmtH->close();
-$conexion->close();
 
 $horaEntradaProg = $horario["hora_entrada"] ?? "08:00:00";
 $minActuales = (int)explode(":", $horaActual)[0] * 60 + (int)explode(":", $horaActual)[1];
@@ -47,8 +56,9 @@ $minProg = (int)explode(":", $horaEntradaProg)[0] * 60 + (int)explode(":", $hora
 $estaTarde = $minActuales > $minProg;
 $minutosRetraso = $estaTarde ? ($minActuales - $minProg) : 0;
 
-// Si está tarde y aún no ha enviado la justificación, mostramos la pantalla con el cuadro de texto (Segunda Foto)
+// Si está tarde y aún no ha enviado la justificación, mostramos la pantalla con el cuadro de texto
 if ($estaTarde && !$enviado) {
+    $conexion->close();
     ?>
     <!DOCTYPE html>
     <html lang="es">
@@ -89,5 +99,34 @@ if ($estaTarde && !$enviado) {
     exit;
 }
 
-// Si llegó a tiempo, o si ya escribió la justificación, guardamos en la BD por medio de registro.php o directo
-// (Aquí puedes redirigir o procesar el insert final)
+// Verificar si ya registró asistencia hoy para evitar duplicados
+$sqlCheck = "SELECT id FROM asistencias WHERE empleado_id = ? AND fecha = ? LIMIT 1";
+$stmtCheck = $conexion->prepare($sqlCheck);
+$stmtCheck->bind_param("is", $empleadoId, $fecha);
+$stmtCheck->execute();
+$resCheck = $stmtCheck->get_result();
+if ($resCheck->num_rows > 0) {
+    $stmtCheck->close();
+    $conexion->close();
+    echo "<script>alert('Ya has registrado tu asistencia el día de hoy.'); window.location.href='registro.html';</script>";
+    exit;
+}
+$stmtCheck->close();
+
+// Guardar la asistencia en la base de datos
+$estado = $estaTarde ? "Tarde" : "A tiempo";
+$sqlInsert = "INSERT INTO asistencias (empleado_id, fecha, hora_entrada, estado, minutos_retraso, justificacion) VALUES (?, ?, ?, ?, ?, ?)";
+$stmtInsert = $conexion->prepare($sqlInsert);
+$stmtInsert->bind_param("isssis", $empleadoId, $fecha, $horaActual, $estado, $minutosRetraso, $justificacion);
+
+if ($stmtInsert->execute()) {
+    $stmtInsert->close();
+    $conexion->close();
+    echo "<script>alert('¡Asistencia registrada con éxito!'); window.location.href='registro.html';</script>";
+    exit;
+} else {
+    $stmtInsert->close();
+    $conexion->close();
+    echo "<script>alert('Error al registrar la asistencia.'); window.location.href='registro.html';</script>";
+    exit;
+}
