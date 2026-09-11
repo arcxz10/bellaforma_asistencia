@@ -1858,10 +1858,10 @@ $resultadoEmpleados =
                                 <th>Identificación</th>
                                 <th>Cargo</th>
                                 <th>Días Asistidos</th>
+                                <th>Días No Asistidos</th>
                                 <th>Total Retraso</th>
                                 <th>Total Extra</th>
                                 <th>Total Deuda</th>
-                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1872,9 +1872,16 @@ $resultadoEmpleados =
                         <?php else: ?>
                             <?php while ($rowAG = $resultadoAG->fetch_assoc()): 
                                 $retrasoBruto = (int)$rowAG["total_retraso"];
-                                $extraBruto = (int)$rowAG["total_deuda"]; // aquí usamos variable temporal para evitar confusión
                                 $extraBrutoReal = (int)$rowAG["total_extra"];
                                 $deudaBruta = (int)$rowAG["total_deuda"];
+                                $diasAsistidos = (int)$rowAG["total_dias"];
+                                
+                                $diasNoAsistidos = "—";
+                                if (!empty($desdeH) && !empty($hastaH)) {
+                                    $diasTotalesRango = (strtotime($hastaH) - strtotime($desdeH)) / 86400 + 1;
+                                    $diasNoAsistidosCalc = $diasTotalesRango - $diasAsistidos;
+                                    $diasNoAsistidos = $diasNoAsistidosCalc > 0 ? $diasNoAsistidosCalc : 0;
+                                }
                                 
                                 // Lógica de compensación en orden:
                                 // 1. Las horas extras restan primero de los retrasos.
@@ -1903,7 +1910,8 @@ $resultadoEmpleados =
                                     <td><?= escapar($rowAG["nombre"]) ?></td>
                                     <td><?= escapar($rowAG["identificacion"]) ?></td>
                                     <td><?= escapar($rowAG["cargo"]) ?></td>
-                                    <td><?= (int)$rowAG["total_dias"] ?></td>
+                                    <td><?= $diasAsistidos ?></td>
+                                    <td><?= $diasNoAsistidos ?></td>
                                     <td>
                                         <?php if ($retrasoNeto > 0): ?>
                                             <span class="color-retraso"><?= minutosAHoras($retrasoNeto) ?> (<?= $retrasoNeto ?> min)</span>
@@ -1924,15 +1932,6 @@ $resultadoEmpleados =
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <button
-                                            type="button"
-                                            onclick="abrirModalDetalleEmpleado(<?= (int)$rowAG["id"] ?>, <?= json_encode($rowAG["nombre"]) ?>, '<?= escapar($desdeH) ?>', '<?= escapar($hastaH) ?>')"
-                                            class="btn-editar"
-                                        >
-                                            Editar
-                                        </button>
                                     </td>
                                 </tr>
                             <?php endwhile; ?>
