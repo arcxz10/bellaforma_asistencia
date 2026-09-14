@@ -423,6 +423,7 @@ if ($tipo === "salida") {
     $sql = "
         SELECT
             id,
+            hora_entrada,
             hora_salida
         FROM asistencias
         WHERE empleado_id = ?
@@ -464,28 +465,35 @@ if ($tipo === "salida") {
     $minutosExtra = 0;
     $minutosDeuda = 0;
 
-    if ($minutosActuales > $minutosSalida) {
-        $minutosExtra = $minutosActuales - $minutosSalida;
-    } elseif ($minutosActuales < $minutosSalida) {
-        $minutosDeuda = $minutosSalida - $minutosActuales;
-        
-        if ($justificacionSalida === "") {
-            $conexion->close();
-            mostrarResultado(
-                "error",
-                "Justificación requerida",
-                "Estás saliendo " . $minutosDeuda . " minutos antes de tu horario. Es obligatorio ingresar una justificación."
-            );
+    // Regla especial temporada: Sábado para Producción cuenta 100% tiempo trabajado como extra
+    if ($cargo === 'Producción' && $diaSemana === 6) {
+        $minutosEntradaReal = convertirMinutos($asistencia["hora_entrada"]);
+        $minutosExtra = max(0, $minutosActuales - $minutosEntradaReal);
+        $minutosDeuda = 0;
+    } else {
+        if ($minutosActuales > $minutosSalida) {
+            $minutosExtra = $minutosActuales - $minutosSalida;
+        } elseif ($minutosActuales < $minutosSalida) {
+            $minutosDeuda = $minutosSalida - $minutosActuales;
+            
+            if ($justificacionSalida === "") {
+                $conexion->close();
+                mostrarResultado(
+                    "error",
+                    "Justificación requerida",
+                    "Estás saliendo " . $minutosDeuda . " minutos antes de tu horario. Es obligatorio ingresar una justificación."
+                );
+            }
         }
-    }
 
-    if ($minutosExtra > 0 && $minutosDeuda > 0) {
-        if ($minutosExtra >= $minutosDeuda) {
-            $minutosExtra = $minutosExtra - $minutosDeuda;
-            $minutosDeuda = 0; 
-        } else {
-            $minutosDeuda = $minutosDeuda - $minutosExtra;
-            $minutosExtra = 0; 
+        if ($minutosExtra > 0 && $minutosDeuda > 0) {
+            if ($minutosExtra >= $minutosDeuda) {
+                $minutosExtra = $minutosExtra - $minutosDeuda;
+                $minutosDeuda = 0; 
+            } else {
+                $minutosDeuda = $minutosDeuda - $minutosExtra;
+                $minutosExtra = 0; 
+            }
         }
     }
 
@@ -590,7 +598,7 @@ function convertirMinutos($hora)
 {
     $partes = explode(":", $hora);
     $horas = (int) ($partes[0] ?? 0);
-    $minutos = (int) ($partes[1] ?? 0);
+    $minutos = (int) ($partes ?? 0);
 
     return ($horas * 60) + $minutos;
 }
@@ -611,7 +619,7 @@ function formatoHora($hora)
 {
     $partes = explode(":", $hora);
     $horas = (int) ($partes[0] ?? 0);
-    $minutos = (int) ($partes[1] ?? 0);
+    $minutos = (int) ($partes ?? 0);
 
     $periodo = $horas >= 12 ? "PM" : "AM";
     $horas = $horas % 12;
