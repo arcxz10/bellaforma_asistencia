@@ -598,7 +598,7 @@ function convertirMinutos($hora)
 {
     $partes = explode(":", $hora);
     $horas = (int) ($partes[0] ?? 0);
-    $minutos = (int) ($partes ?? 0);
+    $minutos = (int) ($partes[1] ?? 0);
 
     return ($horas * 60) + $minutos;
 }
@@ -619,7 +619,7 @@ function formatoHora($hora)
 {
     $partes = explode(":", $hora);
     $horas = (int) ($partes[0] ?? 0);
-    $minutos = (int) ($partes ?? 0);
+    $minutos = (int) ($partes[1] ?? 0);
 
     $periodo = $horas >= 12 ? "PM" : "AM";
     $horas = $horas % 12;
@@ -701,6 +701,6 @@ function mostrarResultado(
     </body>
 
     </html>
-    <?php
+    <?>
     exit;
 }
