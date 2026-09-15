@@ -236,8 +236,11 @@ if ($tipo === "entrada") {
         mostrarResultado("error", "Ya registrado", "Ya registraste tu entrada el día de hoy.");
     }
 
-    $minutosActuales = convertirMinutos($horaActual);
-    $minutosEntrada = convertirMinutos($horaEntradaProgramada);
+    // Validación de entrada corregida por minutos independientes del formato de hora
+    $minutosActuales = (int)date("H") * 60 + (int)date("i");
+    
+    $partesHorario = explode(":", $horaEntradaProgramada);
+    $minutosEntrada = ((int)($partesHorario[0] ?? 0) * 60) + (int)($partesHorario[1] ?? 0);
 
     if ($minutosActuales > $minutosEntrada) {
         $estadoEntrada = "tarde";
