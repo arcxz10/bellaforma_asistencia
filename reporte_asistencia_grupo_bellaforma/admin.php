@@ -300,7 +300,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $id = (int) ($_POST["id"] ?? 0);
         $nuevoEstado = (int) ($_POST["nuevo_estado"] ?? 0);
 
-        if (
+     if (
             $id <= 0 ||
             !in_array($nuevoEstado,, true)
         ) {
