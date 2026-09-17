@@ -69,17 +69,17 @@ if ($resultado->num_rows === 0) {
         if ($resH->num_rows === 1) {
             $horario = $resH->fetch_assoc();
             if ((int)$horario["trabaja"] === 1) {
-                $minActuales = (int)explode(":", $horaActual)[0] * 60 + (int)explode(":", $horaActual);
+                $minActuales = (int)explode(":", $horaActual)[0] * 60 + (int)explode(":", $horaActual)[1];
                 
                 // Validación de entrada tarde
-                $minProgEntrada = (int)explode(":", $horario["hora_entrada"])[0] * 60 + (int)explode(":", $horario["hora_entrada"]);
+                $minProgEntrada = (int)explode(":", $horario["hora_entrada"])[0] * 60 + (int)explode(":", $horario["hora_entrada"])[1];
                 if ($minActuales > $minProgEntrada) {
                     $estaTarde = true;
                     $minutosRetraso = $minActuales - $minProgEntrada;
                 }
 
                 // Validación de salida anticipada
-                $minProgSalida = (int)explode(":", $horario["hora_salida"])[0] * 60 + (int)explode(":", $horario["hora_salida"]);
+                $minProgSalida = (int)explode(":", $horario["hora_salida"])[0] * 60 + (int)explode(":", $horario["hora_salida"])[1];
                 if ($minActuales < $minProgSalida) {
                     $salidaAnticipada = true;
                     $minutosFaltantesSalida = $minProgSalida - $minActuales;
@@ -127,7 +127,7 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
                 </div>
 
                 <!-- ALERTA INTEGRADA VISUAL -->
-                <div id="alerta-justificacion" style="display: none; margin-bottom: 15px; padding: 12px; border-radius: 6px; background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; text-align: left; font-size: 0.85rem;">
+                <div id="alerta-justificacion" class="alert-warning-box" style="display: none;">
                     <span style="font-size: 1.1rem; vertical-align: middle; margin-right: 5px;">⚠️</span>
                     <span id="texto-alerta-justificacion">Por favor, ingresa una justificación para continuar.</span>
                 </div>
@@ -138,8 +138,8 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
                     <input type="hidden" name="accion" id="tipoInput" value="">
 
                     <!-- CAJA DE JUSTIFICACIÓN DE ENTRADA -->
-                    <div id="grupo-justificacion" style="display: none; margin-bottom: 15px; text-align: left;">
-                        <div style="background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.85rem;">
+                    <div id="grupo-justificacion" style="display: none;" class="justificacion-container">
+                        <div class="justificacion-warning-text">
                             ⚠️ Has llegado <strong id="lblMinutos"></strong> tarde. Justificación obligatoria:
                         </div>
                         <textarea 
@@ -147,13 +147,13 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
                             name="justificacion" 
                             rows="2" 
                             placeholder="Escribe el motivo de tu retraso..."
-                            style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #d9534f; font-family: inherit; resize: vertical;"
+                            class="justificacion-textarea"
                         ><?php echo htmlspecialchars($justificacion); ?></textarea>
                     </div>
 
                     <!-- CAJA DE JUSTIFICACIÓN DE SALIDA ANTICIPADA -->
-                    <div id="grupo-justificacion-salida" style="display: none; margin-bottom: 15px; text-align: left;">
-                        <div style="background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 0.85rem;">
+                    <div id="grupo-justificacion-salida" style="display: none;" class="justificacion-container">
+                        <div class="justificacion-warning-text">
                             ⚠️ Estás saliendo <strong id="lblMinutosSalida"></strong> antes de tu hora. Se registrará una deuda de tiempo. Justificación obligatoria:
                         </div>
                         <textarea 
@@ -161,7 +161,7 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
                             name="justificacion_salida" 
                             rows="2" 
                             placeholder="Escribe el motivo de tu salida anticipada (ej. Cita médica)..."
-                            style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #d9534f; font-family: inherit; resize: vertical;"
+                            class="justificacion-textarea"
                         ><?php echo htmlspecialchars($justificacionSalida); ?></textarea>
                     </div>
 
@@ -170,10 +170,10 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
                         <button type="button" class="btn btn-primary" onclick="seleccionarAccion('entrada')" style="width: 100%;">
                             ⏱️ Registrar Entrada
                         </button>
-                        <button type="button" class="btn btn-warning" onclick="seleccionarAccion('salida_almuerzo')" style="width: 100%; background-color: #f0ad4e; color: white;">
+                        <button type="button" class="btn btn-warning" onclick="seleccionarAccion('salida_almuerzo')" style="width: 100%;">
                             🍽️ Salida a Almuerzo
                         </button>
-                        <button type="button" class="btn btn-info" onclick="seleccionarAccion('entrada_almuerzo')" style="width: 100%; background-color: #5bc0de; color: white;">
+                        <button type="button" class="btn btn-info" onclick="seleccionarAccion('entrada_almuerzo')" style="width: 100%;">
                             🍛 Entrada de Almuerzo
                         </button>
                         <button type="button" class="btn btn-secondary" onclick="seleccionarAccion('salida')" style="width: 100%;">
@@ -183,7 +183,7 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
 
                     <!-- BOTÓN DE CONFIRMACIÓN (OCULTO INICIALMENTE) -->
                     <div id="grupo-boton-confirmar" style="display: none; margin-top: 10px;">
-                        <button type="button" class="btn btn-success" onclick="confirmarRegistro()" style="width: 100%; background-color: #5cb85c; color: white; padding: 12px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer;">
+                        <button type="button" class="btn btn-success" onclick="confirmarRegistro()" style="width: 100%;">
                             ✔️ Confirmar Registro
                         </button>
                     </div>
@@ -194,9 +194,9 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
                 </form>
 
                 <!-- NUEVOS BOTONES DE PERMISOS Y MATERIALES -->
-                <div style="margin-top: 15px; display: flex; gap: 10px; border-top: 1px solid #eee; padding-top: 15px;">
-                    <a href="form_permiso.php" style="flex:1; text-align:center; background:#4caf50; color:white; padding:10px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">📝 Pedir Permiso</a>
-                    <a href="form_material.php" style="flex:1; text-align:center; background:#00897b; color:white; padding:10px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">📦 Pedir Material</a>
+                <div class="action-links-footer">
+                    <a href="form_permiso.php" class="action-link-permiso">📝 Pedir Permiso</a>
+                    <a href="form_material.php" class="action-link-material">📦 Pedir Material</a>
                 </div>
 
                 <script>
