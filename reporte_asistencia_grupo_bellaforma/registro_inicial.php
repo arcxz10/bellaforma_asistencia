@@ -1,16 +1,16 @@
 <?php
+session_start();
 require 'conexion.php';
 date_default_timezone_set("America/Bogota");
 
-if (!isset($_POST['documento']) || !isset($_POST['dispositivo_id'])) {
-    header('Location: registro.html');
-    exit;
+// Guardar en sesión si vienen por POST
+if (isset($_POST['documento']) && isset($_POST['dispositivo_id'])) {
+    $_SESSION['documento'] = trim($_POST['documento']);
+    $_SESSION['dispositivo_id'] = trim($_POST['dispositivo_id']);
 }
 
-$documento = trim($_POST['documento']);
-$dispositivo_id = trim($_POST['dispositivo_id']);
-$justificacion = trim($_POST['justificacion'] ?? '');
-$justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
+$documento = $_SESSION['documento'] ?? '';
+$dispositivo_id = $_SESSION['dispositivo_id'] ?? '';
 
 if (empty($documento) || empty($dispositivo_id)) {
     header('Location: registro.html');
@@ -25,12 +25,14 @@ $stmt->execute();
 $resultado = $stmt->get_result();
 
 $empleado_id_db = null;
+$error = null;
 
 if ($resultado->num_rows === 0) {
     $error = "Empleado no encontrado, inactivo o pendiente de aprobación";
 } else {
     $empleado = $resultado->fetch_assoc();
     $empleado_id_db = $empleado['id'];
+    $_SESSION['empleado_id'] = $empleado_id_db; // Guardar ID en sesión por si acaso
 
     // Validar dispositivo
     $consulta_dispositivo = "SELECT dispositivo_id FROM empleados WHERE id = ?";
@@ -67,17 +69,17 @@ if ($resultado->num_rows === 0) {
         if ($resH->num_rows === 1) {
             $horario = $resH->fetch_assoc();
             if ((int)$horario["trabaja"] === 1) {
-                $minActuales = (int)explode(":", $horaActual)[0] * 60 + (int)explode(":", $horaActual)[1];
+                $minActuales = (int)explode(":", $horaActual)[0] * 60 + (int)explode(":", $horaActual);
                 
                 // Validación de entrada tarde
-                $minProgEntrada = (int)explode(":", $horario["hora_entrada"])[0] * 60 + (int)explode(":", $horario["hora_entrada"])[1];
+                $minProgEntrada = (int)explode(":", $horario["hora_entrada"])[0] * 60 + (int)explode(":", $horario["hora_entrada"]);
                 if ($minActuales > $minProgEntrada) {
                     $estaTarde = true;
                     $minutosRetraso = $minActuales - $minProgEntrada;
                 }
 
                 // Validación de salida anticipada
-                $minProgSalida = (int)explode(":", $horario["hora_salida"])[0] * 60 + (int)explode(":", $horario["hora_salida"])[1];
+                $minProgSalida = (int)explode(":", $horario["hora_salida"])[0] * 60 + (int)explode(":", $horario["hora_salida"]);
                 if ($minActuales < $minProgSalida) {
                     $salidaAnticipada = true;
                     $minutosFaltantesSalida = $minProgSalida - $minActuales;
@@ -87,6 +89,8 @@ if ($resultado->num_rows === 0) {
         $stmtH->close();
     }
 }
+$justificacion = trim($_POST['justificacion'] ?? '');
+$justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -128,7 +132,7 @@ if ($resultado->num_rows === 0) {
                     <span id="texto-alerta-justificacion">Por favor, ingresa una justificación para continuar.</span>
                 </div>
 
-                <form method="POST" action="registro.php" id="formAsistencia">
+                <form method="POST" action="procesar_asistencia.php" id="formAsistencia">
                     <input type="hidden" name="documento" value="<?php echo htmlspecialchars($documento); ?>">
                     <input type="hidden" name="dispositivo_id" value="<?php echo htmlspecialchars($dispositivo_id); ?>">
                     <input type="hidden" name="accion" id="tipoInput" value="">
@@ -185,14 +189,14 @@ if ($resultado->num_rows === 0) {
                     </div>
 
                     <a href="registro.html" class="btn btn-back" id="btn-volver" style="display: block; margin-top: 15px;">
-                        ← Volver a Registro
+                        ← Cambiar / Volver a Registro
                     </a>
                 </form>
 
                 <!-- NUEVOS BOTONES DE PERMISOS Y MATERIALES -->
                 <div style="margin-top: 15px; display: flex; gap: 10px; border-top: 1px solid #eee; padding-top: 15px;">
-                    <a href="form_permiso.php?empleado_id=<?= htmlspecialchars($empleado_id_db ?? '') ?>" style="flex:1; text-align:center; background:#4caf50; color:white; padding:10px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">📝 Pedir Permiso</a>
-                    <a href="form_material.php?empleado_id=<?= htmlspecialchars($empleado_id_db ?? '') ?>" style="flex:1; text-align:center; background:#00897b; color:white; padding:10px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">📦 Pedir Material</a>
+                    <a href="form_permiso.php" style="flex:1; text-align:center; background:#4caf50; color:white; padding:10px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">📝 Pedir Permiso</a>
+                    <a href="form_material.php" style="flex:1; text-align:center; background:#00897b; color:white; padding:10px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">📦 Pedir Material</a>
                 </div>
 
                 <script>
@@ -208,14 +212,10 @@ if ($resultado->num_rows === 0) {
                         accionSeleccionada = accion;
                         document.getElementById('tipoInput').value = accion;
 
-                        // Ocultar los 4 botones principales y el mensaje informativo inicial
                         document.getElementById('grupo-botones-opciones').style.display = 'none';
                         document.getElementById('info-seleccion').style.display = 'none';
-
-                        // Mostrar el botón de confirmar
                         document.getElementById('grupo-boton-confirmar').style.display = 'block';
 
-                        // Validaciones específicas si llega tarde o sale temprano
                         const cajaJustificacion = document.getElementById('grupo-justificacion');
                         const cajaJustificacionSalida = document.getElementById('grupo-justificacion-salida');
 
@@ -242,7 +242,6 @@ if ($resultado->num_rows === 0) {
                         const alertaVisual = document.getElementById('alerta-justificacion');
                         alertaVisual.style.display = 'none';
 
-                        // Validar si requiere justificación de entrada y está vacía
                         if (accionSeleccionada === 'entrada' && estaTarde && cajaJustificacion.style.display !== 'none') {
                             if (txtJustificacion.value.trim() === '') {
                                 document.getElementById('texto-alerta-justificacion').textContent = 'Por favor, ingresa una justificación para continuar debido a tu retraso.';
@@ -253,7 +252,6 @@ if ($resultado->num_rows === 0) {
                             }
                         }
 
-                        // Validar si requiere justificación de salida y está vacía
                         if (accionSeleccionada === 'salida' && salidaAnticipada && cajaJustificacionSalida.style.display !== 'none') {
                             if (txtJustificacionSalida.value.trim() === '') {
                                 document.getElementById('texto-alerta-justificacion').textContent = 'Por favor, ingresa una justificación para continuar debido a tu salida anticipada.';
@@ -264,7 +262,6 @@ if ($resultado->num_rows === 0) {
                             }
                         }
 
-                        // Enviar el formulario una vez confirmado y validado
                         document.getElementById('formAsistencia').submit();
                     }
                 </script>
