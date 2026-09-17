@@ -25,26 +25,23 @@ $mensaje = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tipo_permiso = trim($_POST['tipo_permiso'] ?? '');
     $motivo = trim($_POST['motivo'] ?? '');
-    $fecha_inicio = null;
-    $fecha_fin = null;
+    $fecha_seleccionada = '';
 
     if ($tipo_permiso === 'dia_completo') {
-        $dia_faltar = trim($_POST['dia_faltar'] ?? '');
-        $fecha_inicio = $dia_faltar . ' 00:00:00';
-        $fecha_fin = $dia_faltar . ' 23:59:59';
+        $fecha_seleccionada = trim($_POST['dia_faltar'] ?? '');
     } elseif ($tipo_permiso === 'llegada_tarde') {
-        $fecha_inicio = trim($_POST['fecha_llegada'] ?? '');
-        $fecha_fin = $fecha_inicio;
+        $fecha_seleccionada = trim($_POST['fecha_llegada'] ?? '');
     } elseif ($tipo_permiso === 'salida_temprano') {
-        $fecha_inicio = trim($_POST['fecha_salida'] ?? '');
-        $fecha_fin = $fecha_inicio;
+        $fecha_seleccionada = trim($_POST['fecha_salida'] ?? '');
     }
 
-    if (!empty($tipo_permiso) && !empty($motivo) && !empty($fecha_inicio)) {
+    if (!empty($tipo_permiso) && !empty($motivo) && !empty($fecha_seleccionada)) {
         $motivo_completo = "[" . strtoupper(str_replace('_', ' ', $tipo_permiso)) . "] " . $motivo;
-        $sql = "INSERT INTO permisos (empleado_id, motivo, fecha_inicio, fecha_fin) VALUES (?, ?, ?, ?)";
+        
+        // Ajusta 'fecha_inicio' si tu columna en la tabla permisos se llama distinto (ej. 'fecha')
+        $sql = "INSERT INTO permisos (empleado_id, motivo, fecha_inicio) VALUES (?, ?, ?)";
         $stmt = $conexion->prepare($sql);
-        $stmt->bind_param("isss", $empleado_id, $motivo_completo, $fecha_inicio, $fecha_fin);
+        $stmt->bind_param("iss", $empleado_id, $motivo_completo, $fecha_seleccionada);
         if ($stmt->execute()) {
             $url_retorno = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . $empleado_id : "registro.php";
             header("Location: " . $url_retorno);
@@ -53,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mensaje = "Error DB: " . $stmt->error;
         }
     } else {
-        $mensaje = "Por favor selecciona el tipo de permiso y completa los campos requeridos.";
+        $mensaje = "Por favor selecciona el tipo de novedad, la fecha y el motivo.";
     }
 }
 $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmlspecialchars($empleado_id) : "registro.php";
@@ -67,9 +64,9 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
     <link rel="stylesheet" href="css/registro_inicial.css">
     <style>
         .tipo-grid { display: flex; gap: 8px; margin-bottom: 15px; }
-        .tipo-btn { flex: 1; padding: 10px 6px; border: 1px solid #ccc; background: #f8f9fa; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 600; text-align: center; transition: all 0.2s; color: #333; }
+        .tipo-btn { flex: 1; padding: 10px 4px; border: 1px solid #ccc; background: #f8f9fa; border-radius: 6px; cursor: pointer; font-size: 0.72rem; font-weight: 600; text-align: center; transition: all 0.2s; color: #333; }
         .tipo-btn.active { background: #4caf50; color: white; border-color: #4caf50; box-shadow: 0 2px 5px rgba(76,175,80,0.3); }
-        .dinamico-block { display: none; margin-bottom: 15px; text-align: left; background: #f1f8e9; padding: 12px; border-radius: 6px; border: 1px ssolid #dedede; }
+        .dinamico-block { display: none; margin-bottom: 15px; text-align: left; background: #f1f8e9; padding: 12px; border-radius: 6px; border: 1px solid #dedede; }
         .form-group { margin-bottom: 12px; text-align: left; }
         .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.85rem; color: #444; }
         .form-group input, .form-group textarea { width: 100%; padding: 9px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; font-size: 0.9rem; box-sizing: border-box; }
@@ -101,7 +98,6 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
                     </div>
                 </div>
 
-                <!-- Bloque Faltar Día -->
                 <div id="block_dia_completo" class="dinamico-block" style="display:none;">
                     <div class="form-group" style="margin-bottom:0;">
                         <label>¿Qué día vas a faltar?</label>
@@ -109,7 +105,6 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
                     </div>
                 </div>
 
-                <!-- Bloque Llegada Tarde -->
                 <div id="block_llegada_tarde" class="dinamico-block" style="display:none;">
                     <div class="form-group" style="margin-bottom:0;">
                         <label>Fecha y hora estimada de llegada:</label>
@@ -117,7 +112,6 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
                     </div>
                 </div>
 
-                <!-- Bloque Salida Temprano -->
                 <div id="block_salida_temprano" class="dinamico-block" style="display:none;">
                     <div class="form-group" style="margin-bottom:0;">
                         <label>Fecha y hora de salida:</label>
