@@ -8,17 +8,15 @@ $tipo_alerta = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $empleado_id_post = $_POST['empleado_id'] ?? $empleado_id;
-    $material = trim($_POST['material'] ?? '');
-    $cantidad = intval($_POST['cantidad'] ?? 0);
+    $material = trim($_POST['material']);
+    $cantidad = intval($_POST['cantidad']);
 
     if ($empleado_id_post && $material && $cantidad > 0) {
         $stmt = $conexion->prepare("INSERT INTO solicitud_materiales (empleado_id, material, cantidad) VALUES (?, ?, ?)");
         $stmt->bind_param("isi", $empleado_id_post, $material, $cantidad);
         if ($stmt->execute()) {
-            $stmt->close();
-            // Redirección inmediata tras éxito
-            header("Location: registro_inicial.php?id=" . urlencode($empleado_id_post));
-            exit();
+            $mensaje = "¡Solicitud de material enviada!";
+            $tipo_alerta = "success";
         } else {
             $mensaje = "Error al registrar la solicitud.";
             $tipo_alerta = "error";
@@ -57,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="alert <?= $tipo_alerta ?>"><?= $mensaje ?></div>
         <?php endif; ?>
         <form method="POST">
-            <input type="hidden" name="empleado_id" value="<?= htmlspecialchars($empleado_id ?? '') ?>">
+            <input type="hidden" name="empleado_id" value="<?= htmlspecialchars($empleado_id) ?>">
             <label>Nombre del Material / Insumo:</label>
             <input type="text" name="material" placeholder="Ej. Guantes talla M, Tinta..." required>
 
@@ -66,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <button type="submit">Solicitar Material</button>
         </form>
-        <a href="registro_inicial.php?id=<?= htmlspecialchars($empleado_id ?? '') ?>" class="back-link">← Volver al panel de registro</a>
+        <a href="registro_inicial.php?id=<?= $empleado_id ?>" class="back-link">← Volver al panel de registro</a>
     </div>
 </body>
 </html>
