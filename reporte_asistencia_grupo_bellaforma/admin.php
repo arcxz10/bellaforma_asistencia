@@ -14,6 +14,30 @@ require_once "conexion.php";
 
 date_default_timezone_set("America/Bogota");
 
+// --- PROCESAR ACCIONES DE PERMISOS O MATERIALES ---
+if (isset($_GET['accion_solicitud'], $_GET['id_solicitud'], $_GET['tipo_solicitud'])) {
+    $id_sol = intval($_GET['id_solicitud']);
+    $accion_sol = $_GET['accion_solicitud']; // 'aprobado' o 'rechazado'
+    $tipo_sol = $_GET['tipo_solicitud'];     // 'permiso' o 'material'
+    
+    $estado_valido_sol = in_array($accion_sol, ['aprobado', 'rechazado'], true) ? $accion_sol : 'pendiente';
+    
+    if ($tipo_sol === 'permiso') {
+        $stmt_sol = $conexion->prepare("UPDATE permisos SET estado = ? WHERE id = ?");
+    } else {
+        $stmt_sol = $conexion->prepare("UPDATE solicitud_materiales SET estado = ? WHERE id = ?");
+    }
+    if ($stmt_sol) {
+        $stmt_sol->bind_param("si", $estado_valido_sol, $id_sol);
+        $stmt_sol->execute();
+        $stmt_sol->close();
+    }
+    
+    $seccion_destino_sol = ($tipo_sol === 'permiso') ? 'permisos' : 'materiales';
+    header("Location: admin.php#" . $seccion_destino_sol);
+    exit;
+}
+
 function escapar($valor)
 {
     return htmlspecialchars((string) $valor, ENT_QUOTES, "UTF-8");
@@ -28,7 +52,7 @@ function formatoHora($hora)
     $partes = explode(":", $hora);
 
     $horas = (int) ($partes[0] ?? 0);
-    $minutos = (int) ($partes[1] ?? 0);
+    $minutos = (int) ($partes ?? 0);
 
     $periodo = $horas >= 12 ? "PM" : "AM";
 
@@ -169,6 +193,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         redireccionar(
             "Empleado agregado correctamente.",
+            "exito",
             "empleados"
         );
     }
@@ -265,6 +290,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         redireccionar(
             "Empleado actualizado correctamente.",
+            "exito",
             "empleados"
         );
     }
@@ -276,7 +302,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         if (
             $id <= 0 ||
-            !in_array($nuevoEstado, [0, 1], true)
+            !in_array($nuevoEstado,, true)
         ) {
             redireccionar(
                 "Estado inválido.",
@@ -324,6 +350,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $nuevoEstado === 1
                 ? "Empleado activado correctamente."
                 : "Empleado desactivado correctamente.",
+            "exito",
             "empleados"
         );
     }
@@ -1047,6 +1074,20 @@ $resultadoEmpleados =
                 target="_blank"
             >
                 📱 Código QR
+            </a>
+
+            <a
+                href="#permisos"
+                class="nav-item"
+            >
+                📝 Permisos
+            </a>
+
+            <a
+                href="#materiales"
+                class="nav-item"
+            >
+                📦 Materiales
             </a>
 
         </nav>
@@ -1883,8 +1924,6 @@ $resultadoEmpleados =
                                     $diasNoAsistidos = $diasNoAsistidosCalc > 0 ? $diasNoAsistidosCalc : 0;
                                 }
                                 
-                                // Lógica de compensación en orden:
-                                // 1. Las horas extras restan primero de los retrasos.
                                 $extraDisponible = $extraBrutoReal;
                                 
                                 if ($extraDisponible >= $retrasoBruto) {
@@ -1895,7 +1934,6 @@ $resultadoEmpleados =
                                     $extraDisponible = 0;
                                 }
                                 
-                                // 2. Si sobran horas extras, restan de la deuda.
                                 if ($extraDisponible >= $deudaBruta) {
                                     $extraDisponible -= $deudaBruta;
                                     $deudaNeta = 0;
@@ -2250,6 +2288,104 @@ $resultadoEmpleados =
 
                 </div>
 
+            </section>
+
+            <!-- SECCIÓN PERMISOS INTEGRADA -->
+            <section
+                id="permisos"
+                class="section"
+            >
+                <h2>📝 Solicitudes de Permisos</h2>
+                <div class="tabla-contenedor">
+                    <table class="tabla">
+                        <thead>
+                            <tr>
+                                <th>Empleado</th>
+                                <th>Tipo</th>
+                                <th>Fecha</th>
+                                <th>Motivo</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $q_permisos = $conexion->query("SELECT p.*, e.nombre FROM permisos p JOIN empleados e ON p.empleado_id = e.id ORDER BY p.creado_en DESC");
+                            if (!$q_permisos || $q_permisos->num_rows === 0):
+                            ?>
+                                <tr>
+                                    <td colspan="6" class="sin-resultados">No hay solicitudes de permisos.</td>
+                                </tr>
+                            <?php else: ?>
+                                <?php while($rowP = $q_permisos->fetch_assoc()): ?>
+                                <tr>
+                                    <td><?= escapar($rowP['nombre']) ?></td>
+                                    <td><?= escapar($rowP['tipo']) ?></td>
+                                    <td><?= escapar($rowP['fecha']) ?></td>
+                                    <td><?= escapar($rowP['motivo']) ?></td>
+                                    <td><strong><?= ucfirst(escapar($rowP['estado'])) ?></strong></td>
+                                    <td>
+                                        <?php if($rowP['estado'] === 'pendiente'): ?>
+                                            <a href="admin.php?accion_solicitud=aprobado&id_solicitud=<?= $rowP['id'] ?>&tipo_solicitud=permiso" class="btn-activar" style="padding:5px 10px; text-decoration:none; font-size:11px;">Aprobar</a>
+                                            <a href="admin.php?accion_solicitud=rechazado&id_solicitud=<?= $rowP['id'] ?>&tipo_solicitud=permiso" class="btn-eliminar" style="padding:5px 10px; text-decoration:none; font-size:11px;">Rechazar</a>
+                                        <?php else: ?>
+                                            <span style="color:#78909c;">Gestionado</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <?php endwhile; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECCIÓN MATERIALES INTEGRADA -->
+            <section
+                id="materiales"
+                class="section"
+            >
+                <h2>📦 Solicitudes de Materiales</h2>
+                <div class="tabla-contenedor">
+                    <table class="tabla">
+                        <thead>
+                            <tr>
+                                <th>Empleado</th>
+                                <th>Material</th>
+                                <th>Cantidad</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $q_materiales = $conexion->query("SELECT sm.*, e.nombre FROM solicitud_materiales sm JOIN empleados e ON sm.empleado_id = e.id ORDER BY sm.creado_en DESC");
+                            if (!$q_materiales || $q_materiales->num_rows === 0):
+                            ?>
+                                <tr>
+                                    <td colspan="5" class="sin-resultados">No hay solicitudes de materiales.</td>
+                                </tr>
+                            <?php else: ?>
+                                <?php while($rowM = $q_materiales->fetch_assoc()): ?>
+                                <tr>
+                                    <td><?= escapar($rowM['nombre']) ?></td>
+                                    <td><?= escapar($rowM['material']) ?></td>
+                                    <td><?= escapar($rowM['cantidad']) ?></td>
+                                    <td><strong><?= ucfirst(escapar($rowM['estado'])) ?></strong></td>
+                                    <td>
+                                        <?php if($rowM['estado'] === 'pendiente'): ?>
+                                            <a href="admin.php?accion_solicitud=aprobado&id_solicitud=<?= $rowM['id'] ?>&tipo_solicitud=material" class="btn-activar" style="padding:5px 10px; text-decoration:none; font-size:11px;">Aprobar</a>
+                                            <a href="admin.php?accion_solicitud=rechazado&id_solicitud=<?= $rowM['id'] ?>&tipo_solicitud=material" class="btn-eliminar" style="padding:5px 10px; text-decoration:none; font-size:11px;">Rechazar</a>
+                                        <?php else: ?>
+                                            <span style="color:#78909c;">Gestionado</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <?php endwhile; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
         </div>
