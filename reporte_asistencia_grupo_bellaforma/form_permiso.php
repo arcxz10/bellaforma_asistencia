@@ -1,33 +1,44 @@
 <?php
 session_start();
-include_once 'conexion.php'; // Ajusta si tu archivo de conexión se llama diferente
+require 'conexion.php';
 
-$empleado_id = $_SESSION['empleado_id'] ?? $_GET['empleado_id'] ?? null;
-$mensaje = "";
-$tipo_alerta = "";
+// Validar que exista sesión o documento activo
+if (!isset($_SESSION['empleado_id']) && !isset($_SESSION['documento'])) {
+    header("Location: registro.html");
+    exit();
+}
+
+$empleado_id = $_SESSION['empleado_id'] ?? null;
+$mensaje = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $empleado_id_post = $_POST['empleado_id'] ?? $empleado_id;
-    $tipo = $_POST['tipo'] ?? '';
-    $fecha = $_POST['fecha'] ?? '';
     $motivo = trim($_POST['motivo'] ?? '');
+    $fecha_inicio = trim($_POST['fecha_inicio'] ?? '');
+    $fecha_fin = trim($_POST['fecha_fin'] ?? '');
 
-    if ($empleado_id_post && $tipo && $fecha && $motivo) {
-        $stmt = $conexion->prepare("INSERT INTO permisos (empleado_id, tipo, fecha, motivo) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("isss", $empleado_id_post, $tipo, $fecha, $motivo);
+    // Resolver empleado_id si solo está el documento en sesión
+    if (!$empleado_id && isset($_SESSION['documento'])) {
+        $st = $conexion->prepare("SELECT id FROM empleados WHERE identificacion = ?");
+        $st->bind_param("s", $_SESSION['documento']);
+        $st->execute();
+        if ($row = $st->get_result()->fetch_assoc()) {
+            $empleado_id = $row['id'];
+            $_SESSION['empleado_id'] = $empleado_id;
+        }
+    }
+
+    if ($empleado_id && !empty($motivo) && !empty($fecha_inicio)) {
+        $sql = "INSERT INTO permisos (empleado_id, motivo, fecha_inicio, fecha_fin) VALUES (?, ?, ?, ?)";
+        $stmt = $conexion->prepare($sql);
+        $stmt->bind_param("isss", $empleado_id, $motivo, $fecha_inicio, $fecha_fin);
         if ($stmt->execute()) {
-            $stmt->close();
-            // Redirección inmediata tras éxito
-            header("Location: registro_inicial.php?id=" . urlencode($empleado_id_post));
+            header("Location: registro.php");
             exit();
         } else {
-            $mensaje = "Error al guardar la solicitud.";
-            $tipo_alerta = "error";
+            $mensaje = "Error al registrar el permiso.";
         }
-        $stmt->close();
     } else {
-        $mensaje = "Por favor completa todos los campos.";
-        $tipo_alerta = "error";
+        $mensaje = "Por favor completa los campos requeridos.";
     }
 }
 ?>
@@ -35,46 +46,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Solicitar Permiso - Bellaforma</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Poppins', sans-serif; background-color: #e8f5e9; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
-        h2 { color: #2e7d32; text-align: center; margin-bottom: 20px; }
-        label { display: block; margin-top: 15px; font-weight: 600; color: #333; font-size: 14px; }
-        select, input, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-family: inherit; }
-        button { width: 100%; background-color: #2e7d32; color: white; border: none; padding: 12px; border-radius: 8px; margin-top: 20px; font-weight: 600; cursor: pointer; font-size: 16px; }
-        button:hover { background-color: #1b5e20; }
-        .back-link { display: block; text-align: center; margin-top: 15px; color: #555; text-decoration: none; font-size: 14px; }
-        .alert { padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-size: 14px; }
-        .alert.success { background-color: #d4edda; color: #155724; }
-        .alert.error { background-color: #f8d7da; color: #721c24; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedir Permiso | Grupo Bellaforma</title>
+    <link rel="stylesheet" href="css/registro_inicial.css">
 </head>
 <body>
-    <div class="card">
-        <h2>Solicitar Permiso</h2>
-        <?php if($mensaje): ?>
-            <div class="alert <?= $tipo_alerta ?>"><?= $mensaje ?></div>
-        <?php endif; ?>
-        <form method="POST">
-            <input type="hidden" name="empleado_id" value="<?= htmlspecialchars($empleado_id ?? '') ?>">
-            <label>Tipo de Permiso:</label>
-            <select name="tipo" required>
-                <option value="llegada_tarde">Llegada Tarde</option>
-                <option value="salida_temprana">Salida Temprana</option>
-                <option value="ausencia">Ausencia / Día libre</option>
-            </select>
-
-            <label>Fecha:</label>
-            <input type="date" name="fecha" required min="<?= date('Y-m-d') ?>">
-
-            <label>Motivo:</label>
-            <textarea name="motivo" rows="4" placeholder="Explica brevemente..." required></textarea>
-
-            <button type="submit">Enviar Solicitud</button>
-        </form>
-        <a href="registro_inicial.php?id=<?= htmlspecialchars($empleado_id ?? '') ?>" class="back-link">← Volver al panel de registro</a>
+    <div class="container-inicial">
+        <div class="card-inicial">
+            <div class="card-header">
+                <div class="logo-circle">📝</div>
+                <h1>Pedir Permiso</h1>
+                <p>Grupo Bellaforma</p>
+            </div>
+            <?php if (!empty($mensaje)): ?>
+                <div class="alert alert-danger" style="margin-bottom:15px; padding:10px; background:#f2dede; color:#a94442; border-radius:6px; font-size:0.85rem;"><?= htmlspecialchars($mensaje) ?></div>
+            <?php endif; ?>
+            <form method="POST">
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9rem;">Motivo del Permiso:</label>
+                    <textarea name="motivo" rows="3" required style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc; font-family:inherit;"></textarea>
+                </div>
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9rem;">Fecha / Hora Inicio:</label>
+                    <input type="datetime-local" name="fecha_inicio" required style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
+                </div>
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9rem;">Fecha / Hora Fin:</label>
+                    <input type="datetime-local" name="fecha_fin" required style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
+                </div>
+                <button type="submit" style="width:100%; padding:12px; background:#4caf50; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Enviar Solicitud</button>
+            </form>
+            <a href="registro.php" style="display:block; margin-top:15px; text-align:center; color:#555; text-decoration:none; font-size:0.9rem;">← Volver al panel de registro</a>
+        </div>
     </div>
 </body>
 </html>
