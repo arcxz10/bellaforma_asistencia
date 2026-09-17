@@ -24,10 +24,13 @@ $stmt->bind_param('s', $documento);
 $stmt->execute();
 $resultado = $stmt->get_result();
 
+$empleado_id_db = null;
+
 if ($resultado->num_rows === 0) {
     $error = "Empleado no encontrado, inactivo o pendiente de aprobación";
 } else {
     $empleado = $resultado->fetch_assoc();
+    $empleado_id_db = $empleado['id'];
 
     // Validar dispositivo
     $consulta_dispositivo = "SELECT dispositivo_id FROM empleados WHERE id = ?";
@@ -185,6 +188,12 @@ if ($resultado->num_rows === 0) {
                         ← Volver a Registro
                     </a>
                 </form>
+
+                <!-- NUEVOS BOTONES DE PERMISOS Y MATERIALES -->
+                <div style="margin-top: 15px; display: flex; gap: 10px; border-top: 1px solid #eee; padding-top: 15px;">
+                    <a href="form_permiso.php?empleado_id=<?= htmlspecialchars($empleado_id_db ?? '') ?>" style="flex:1; text-align:center; background:#4caf50; color:white; padding:10px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">📝 Pedir Permiso</a>
+                    <a href="form_material.php?empleado_id=<?= htmlspecialchars($empleado_id_db ?? '') ?>" style="flex:1; text-align:center; background:#00897b; color:white; padding:10px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">📦 Pedir Material</a>
+                </div>
 
                 <script>
                     const estaTarde = <?php echo ($estaTarde && empty($justificacion)) ? 'true' : 'false'; ?>;
