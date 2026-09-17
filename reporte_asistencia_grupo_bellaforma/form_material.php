@@ -1,32 +1,44 @@
 <?php
 session_start();
-include_once 'conexion.php';
+require 'conexion.php';
 
-$empleado_id = $_SESSION['empleado_id'] ?? $_GET['empleado_id'] ?? null;
-$mensaje = "";
-$tipo_alerta = "";
+// Validar que exista sesión o documento activo
+if (!isset($_SESSION['empleado_id']) && !isset($_SESSION['documento'])) {
+    header("Location: registro.html");
+    exit();
+}
+
+$empleado_id = $_SESSION['empleado_id'] ?? null;
+$mensaje = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $empleado_id_post = $_POST['empleado_id'] ?? $empleado_id;
     $material = trim($_POST['material'] ?? '');
-    $cantidad = intval($_POST['cantidad'] ?? 0);
+    $cantidad = (int)($_POST['cantidad'] ?? 1);
+    $observacion = trim($_POST['observacion'] ?? '');
 
-    if ($empleado_id_post && $material && $cantidad > 0) {
-        $stmt = $conexion->prepare("INSERT INTO solicitud_materiales (empleado_id, material, cantidad) VALUES (?, ?, ?)");
-        $stmt->bind_param("isi", $empleado_id_post, $material, $cantidad);
+    // Resolver empleado_id si solo está el documento en sesión
+    if (!$empleado_id && isset($_SESSION['documento'])) {
+        $st = $conexion->prepare("SELECT id FROM empleados WHERE identificacion = ?");
+        $st->bind_param("s", $_SESSION['documento']);
+        $st->execute();
+        if ($row = $st->get_result()->fetch_assoc()) {
+            $empleado_id = $row['id'];
+            $_SESSION['empleado_id'] = $empleado_id;
+        }
+    }
+
+    if ($empleado_id && !empty($material) && $cantidad > 0) {
+        $sql = "INSERT INTO solicitudes_material (empleado_id, material, cantidad, observacion) VALUES (?, ?, ?, ?)";
+        $stmt = $conexion->prepare($sql);
+        $stmt->bind_param("isis", $empleado_id, $material, $cantidad, $observacion);
         if ($stmt->execute()) {
-            $stmt->close();
-            // Redirección inmediata tras éxito
-            header("Location: registro_inicial.php?id=" . urlencode($empleado_id_post));
+            header("Location: registro.php");
             exit();
         } else {
-            $mensaje = "Error al registrar la solicitud.";
-            $tipo_alerta = "error";
+            $mensaje = "Error al solicitar el material.";
         }
-        $stmt->close();
     } else {
-        $mensaje = "Ingresa un material válido y cantidad mayor a 0.";
-        $tipo_alerta = "error";
+        $mensaje = "Por favor completa los campos requeridos.";
     }
 }
 ?>
@@ -34,39 +46,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Pedir Material - Bellaforma</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Poppins', sans-serif; background-color: #e8f5e9; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
-        h2 { color: #2e7d32; text-align: center; margin-bottom: 20px; }
-        label { display: block; margin-top: 15px; font-weight: 600; color: #333; font-size: 14px; }
-        input { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-family: inherit; }
-        button { width: 100%; background-color: #2e7d32; color: white; border: none; padding: 12px; border-radius: 8px; margin-top: 20px; font-weight: 600; cursor: pointer; font-size: 16px; }
-        button:hover { background-color: #1b5e20; }
-        .back-link { display: block; text-align: center; margin-top: 15px; color: #555; text-decoration: none; font-size: 14px; }
-        .alert { padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-size: 14px; }
-        .alert.success { background-color: #d4edda; color: #155724; }
-        .alert.error { background-color: #f8d7da; color: #721c24; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedir Material | Grupo Bellaforma</title>
+    <link rel="stylesheet" href="css/registro_inicial.css">
 </head>
 <body>
-    <div class="card">
-        <h2>Pedir Material</h2>
-        <?php if($mensaje): ?>
-            <div class="alert <?= $tipo_alerta ?>"><?= $mensaje ?></div>
-        <?php endif; ?>
-        <form method="POST">
-            <input type="hidden" name="empleado_id" value="<?= htmlspecialchars($empleado_id ?? '') ?>">
-            <label>Nombre del Material / Insumo:</label>
-            <input type="text" name="material" placeholder="Ej. Guantes talla M, Tinta..." required>
-
-            <label>Cantidad:</label>
-            <input type="number" name="cantidad" value="1" min="1" required>
-
-            <button type="submit">Solicitar Material</button>
-        </form>
-        <a href="registro_inicial.php?id=<?= htmlspecialchars($empleado_id ?? '') ?>" class="back-link">← Volver al panel de registro</a>
+    <div class="container-inicial">
+        <div class="card-inicial">
+            <div class="card-header">
+                <div class="logo-circle">📦</div>
+                <h1>Pedir Material</h1>
+                <p>Grupo Bellaforma</p>
+            </div>
+            <?php if (!empty($mensaje)): ?>
+                <div class="alert alert-danger" style="margin-bottom:15px; padding:10px; background:#f2dede; color:#a94442; border-radius:6px; font-size:0.85rem;"><?= htmlspecialchars($mensaje) ?></div>
+            <?php endif; ?>
+            <form method="POST">
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9rem;">Material / Insumo:</label>
+                    <input type="text" name="material" required placeholder="Ej. Guantes, tapabocas, gel..." style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
+                </div>
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9rem;">Cantidad:</label>
+                    <input type="number" name="cantidad" value="1" min="1" required style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
+                </div>
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9rem;">Observaciones (Opcional):</label>
+                    <textarea name="observacion" rows="2" placeholder="Detalles adicionales..." style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc; font-family:inherit;"></textarea>
+                </div>
+                <button type="submit" style="width:100%; padding:12px; background:#00897b; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Enviar Solicitud</button>
+            </form>
+            <a href="registro.php" style="display:block; margin-top:15px; text-align:center; color:#555; text-decoration:none; font-size:0.9rem;">← Volver al panel de registro</a>
+        </div>
     </div>
 </body>
 </html>
