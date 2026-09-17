@@ -8,16 +8,18 @@ $tipo_alerta = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $empleado_id_post = $_POST['empleado_id'] ?? $empleado_id;
-    $tipo = $_POST['tipo'];
-    $fecha = $_POST['fecha'];
-    $motivo = trim($_POST['motivo']);
+    $tipo = $_POST['tipo'] ?? '';
+    $fecha = $_POST['fecha'] ?? '';
+    $motivo = trim($_POST['motivo'] ?? '');
 
     if ($empleado_id_post && $tipo && $fecha && $motivo) {
         $stmt = $conexion->prepare("INSERT INTO permisos (empleado_id, tipo, fecha, motivo) VALUES (?, ?, ?, ?)");
         $stmt->bind_param("isss", $empleado_id_post, $tipo, $fecha, $motivo);
         if ($stmt->execute()) {
-            $mensaje = "¡Permiso solicitado con éxito! El administrador lo revisará.";
-            $tipo_alerta = "success";
+            $stmt->close();
+            // Redirección inmediata tras éxito
+            header("Location: registro_inicial.php?id=" . urlencode($empleado_id_post));
+            exit();
         } else {
             $mensaje = "Error al guardar la solicitud.";
             $tipo_alerta = "error";
@@ -56,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="alert <?= $tipo_alerta ?>"><?= $mensaje ?></div>
         <?php endif; ?>
         <form method="POST">
-            <input type="hidden" name="empleado_id" value="<?= htmlspecialchars($empleado_id) ?>">
+            <input type="hidden" name="empleado_id" value="<?= htmlspecialchars($empleado_id ?? '') ?>">
             <label>Tipo de Permiso:</label>
             <select name="tipo" required>
                 <option value="llegada_tarde">Llegada Tarde</option>
@@ -72,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <button type="submit">Enviar Solicitud</button>
         </form>
-        <a href="registro_inicial.php?id=<?= $empleado_id ?>" class="back-link">← Volver al panel de registro</a>
+        <a href="registro_inicial.php?id=<?= htmlspecialchars($empleado_id ?? '') ?>" class="back-link">← Volver al panel de registro</a>
     </div>
 </body>
 </html>
