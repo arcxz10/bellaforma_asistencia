@@ -1,6 +1,21 @@
 <?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+session_start();
 require 'conexion.php';
-$empleado_id = $_GET['empleado_id'] ?? $_POST['empleado_id'] ?? null;
+
+$empleado_id = $_GET['empleado_id'] ?? $_POST['empleado_id'] ?? $_SESSION['empleado_id'] ?? null;
+
+// Si aún no hay ID, intentar buscar por documento en sesión si existe
+if (!$empleado_id && isset($_SESSION['documento'])) {
+    $st = $conexion->prepare("SELECT id FROM empleados WHERE identificacion = ?");
+    $st->bind_param("s", $_SESSION['documento']);
+    $st->execute();
+    if ($row = $st->get_result()->fetch_assoc()) {
+        $empleado_id = $row['id'];
+        $_SESSION['empleado_id'] = $empleado_id;
+    }
+}
 
 if (!$empleado_id) {
     header("Location: registro.html");
@@ -18,15 +33,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $conexion->prepare($sql);
         $stmt->bind_param("isss", $empleado_id, $motivo, $fecha_inicio, $fecha_fin);
         if ($stmt->execute()) {
-            header("Location: registro.php?empleado_id=" . $empleado_id);
+            $url_retorno = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . $empleado_id : "registro.php";
+            header("Location: " . $url_retorno);
             exit();
         } else {
-            $mensaje = "Error al registrar el permiso.";
+            $mensaje = "Error DB al registrar permiso: " . $stmt->error;
         }
     } else {
         $mensaje = "Por favor completa todos los campos requeridos.";
     }
 }
+$link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmlspecialchars($empleado_id) : "registro.php";
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -63,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <button type="submit" style="width:100%; padding:12px; background:#4caf50; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Enviar Solicitud</button>
             </form>
-            <a href="registro.php?empleado_id=<?= htmlspecialchars($empleado_id) ?>" style="display:block; margin-top:15px; text-align:center; color:#555; text-decoration:none; font-size:0.9rem;">← Volver al panel de registro</a>
+            <a href="<?= $link_volver ?>" style="display:block; margin-top:15px; text-align:center; color:#555; text-decoration:none; font-size:0.9rem;">← Volver al panel de registro</a>
         </div>
     </div>
 </body>
