@@ -27,7 +27,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $motivo = trim($_POST['motivo'] ?? '');
     $fecha_seleccionada = '';
 
+    // Mapear tipo a los valores que ya usas en la BD (ej. 'ausencia' para faltar día, o el mismo)
+    $tipo_db = $tipo_permiso;
     if ($tipo_permiso === 'dia_completo') {
+        $tipo_db = 'ausencia';
         $fecha_seleccionada = trim($_POST['dia_faltar'] ?? '');
     } elseif ($tipo_permiso === 'llegada_tarde') {
         $fecha_seleccionada = trim($_POST['fecha_llegada'] ?? '');
@@ -36,12 +39,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!empty($tipo_permiso) && !empty($motivo) && !empty($fecha_seleccionada)) {
-        $motivo_completo = "[" . strtoupper(str_replace('_', ' ', $tipo_permiso)) . "] " . $motivo;
-        
-        // Ajusta 'fecha_inicio' si tu columna en la tabla permisos se llama distinto (ej. 'fecha')
-        $sql = "INSERT INTO permisos (empleado_id, motivo, fecha_inicio) VALUES (?, ?, ?)";
+        // Apuntando exacto a columnas reales: empleado_id, tipo, fecha, motivo
+        $sql = "INSERT INTO permisos (empleado_id, tipo, fecha, motivo) VALUES (?, ?, ?, ?)";
         $stmt = $conexion->prepare($sql);
-        $stmt->bind_param("iss", $empleado_id, $motivo_completo, $fecha_seleccionada);
+        $stmt->bind_param("isss", $empleado_id, $tipo_db, $fecha_seleccionada, $motivo);
+        
         if ($stmt->execute()) {
             $url_retorno = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . $empleado_id : "registro.php";
             header("Location: " . $url_retorno);
@@ -50,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mensaje = "Error DB: " . $stmt->error;
         }
     } else {
-        $mensaje = "Por favor selecciona el tipo de novedad, la fecha y el motivo.";
+        $mensaje = "Por favor selecciona el tipo de novedad, la fecha/hora y escribe el motivo.";
     }
 }
 $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmlspecialchars($empleado_id) : "registro.php";
