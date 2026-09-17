@@ -6,7 +6,6 @@ require 'conexion.php';
 
 $empleado_id = $_GET['empleado_id'] ?? $_POST['empleado_id'] ?? $_SESSION['empleado_id'] ?? null;
 
-// Si aún no hay ID, intentar buscar por documento en sesión si existe
 if (!$empleado_id && isset($_SESSION['documento'])) {
     $st = $conexion->prepare("SELECT id FROM empleados WHERE identificacion = ?");
     $st->bind_param("s", $_SESSION['documento']);
@@ -24,23 +23,37 @@ if (!$empleado_id) {
 
 $mensaje = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $tipo_permiso = trim($_POST['tipo_permiso'] ?? '');
     $motivo = trim($_POST['motivo'] ?? '');
-    $fecha_inicio = trim($_POST['fecha_inicio'] ?? '');
-    $fecha_fin = trim($_POST['fecha_fin'] ?? '');
+    $fecha_inicio = null;
+    $fecha_fin = null;
 
-    if (!empty($motivo) && !empty($fecha_inicio) && !empty($fecha_fin)) {
+    if ($tipo_permiso === 'dia_completo') {
+        $dia_faltar = trim($_POST['dia_faltar'] ?? '');
+        $fecha_inicio = $dia_faltar . ' 00:00:00';
+        $fecha_fin = $dia_faltar . ' 23:59:59';
+    } elseif ($tipo_permiso === 'llegada_tarde') {
+        $fecha_inicio = trim($_POST['fecha_llegada'] ?? '');
+        $fecha_fin = $fecha_inicio;
+    } elseif ($tipo_permiso === 'salida_temprano') {
+        $fecha_inicio = trim($_POST['fecha_salida'] ?? '');
+        $fecha_fin = $fecha_inicio;
+    }
+
+    if (!empty($tipo_permiso) && !empty($motivo) && !empty($fecha_inicio)) {
+        $motivo_completo = "[" . strtoupper(str_replace('_', ' ', $tipo_permiso)) . "] " . $motivo;
         $sql = "INSERT INTO permisos (empleado_id, motivo, fecha_inicio, fecha_fin) VALUES (?, ?, ?, ?)";
         $stmt = $conexion->prepare($sql);
-        $stmt->bind_param("isss", $empleado_id, $motivo, $fecha_inicio, $fecha_fin);
+        $stmt->bind_param("isss", $empleado_id, $motivo_completo, $fecha_inicio, $fecha_fin);
         if ($stmt->execute()) {
             $url_retorno = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . $empleado_id : "registro.php";
             header("Location: " . $url_retorno);
             exit();
         } else {
-            $mensaje = "Error DB al registrar permiso: " . $stmt->error;
+            $mensaje = "Error DB: " . $stmt->error;
         }
     } else {
-        $mensaje = "Por favor completa todos los campos requeridos.";
+        $mensaje = "Por favor selecciona el tipo de permiso y completa los campos requeridos.";
     }
 }
 $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmlspecialchars($empleado_id) : "registro.php";
@@ -52,6 +65,15 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pedir Permiso | Grupo Bellaforma</title>
     <link rel="stylesheet" href="css/registro_inicial.css">
+    <style>
+        .tipo-grid { display: flex; gap: 8px; margin-bottom: 15px; }
+        .tipo-btn { flex: 1; padding: 10px 6px; border: 1px solid #ccc; background: #f8f9fa; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 600; text-align: center; transition: all 0.2s; color: #333; }
+        .tipo-btn.active { background: #4caf50; color: white; border-color: #4caf50; box-shadow: 0 2px 5px rgba(76,175,80,0.3); }
+        .dinamico-block { display: none; margin-bottom: 15px; text-align: left; background: #f1f8e9; padding: 12px; border-radius: 6px; border: 1px ssolid #dedede; }
+        .form-group { margin-bottom: 12px; text-align: left; }
+        .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.85rem; color: #444; }
+        .form-group input, .form-group textarea { width: 100%; padding: 9px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; font-size: 0.9rem; box-sizing: border-box; }
+    </style>
 </head>
 <body>
     <div class="container-inicial">
@@ -61,27 +83,81 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
                 <h1>Pedir Permiso</h1>
                 <p>Grupo Bellaforma</p>
             </div>
+            
             <?php if (!empty($mensaje)): ?>
                 <div class="alert alert-danger" style="margin-bottom:15px; padding:10px; background:#f2dede; color:#a94442; border-radius:6px; font-size:0.85rem;"><?= htmlspecialchars($mensaje) ?></div>
             <?php endif; ?>
-            <form method="POST">
+
+            <form method="POST" id="formPermiso">
                 <input type="hidden" name="empleado_id" value="<?= htmlspecialchars($empleado_id) ?>">
-                <div style="margin-bottom: 15px; text-align: left;">
-                    <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9rem;">Motivo del Permiso:</label>
-                    <textarea name="motivo" rows="3" required style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc; font-family:inherit;"></textarea>
+                <input type="hidden" name="tipo_permiso" id="tipo_permiso_input" value="">
+
+                <div class="form-group">
+                    <label>Selecciona el tipo de novedad:</label>
+                    <div class="tipo-grid">
+                        <button type="button" class="tipo-btn" onclick="selTipo('dia_completo', this)">📅 Faltar día</button>
+                        <button type="button" class="tipo-btn" onclick="selTipo('llegada_tarde', this)">⏰ Llegada tarde</button>
+                        <button type="button" class="tipo-btn" onclick="selTipo('salida_temprano', this)">🚪 Salida temprano</button>
+                    </div>
                 </div>
-                <div style="margin-bottom: 15px; text-align: left;">
-                    <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9rem;">Fecha / Hora Inicio:</label>
-                    <input type="datetime-local" name="fecha_inicio" required style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
+
+                <!-- Bloque Faltar Día -->
+                <div id="block_dia_completo" class="dinamico-block" style="display:none;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>¿Qué día vas a faltar?</label>
+                        <input type="date" name="dia_faltar" id="input_dia_faltar">
+                    </div>
                 </div>
-                <div style="margin-bottom: 15px; text-align: left;">
-                    <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9rem;">Fecha / Hora Fin:</label>
-                    <input type="datetime-local" name="fecha_fin" required style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
+
+                <!-- Bloque Llegada Tarde -->
+                <div id="block_llegada_tarde" class="dinamico-block" style="display:none;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Fecha y hora estimada de llegada:</label>
+                        <input type="datetime-local" name="fecha_llegada" id="input_llegada">
+                    </div>
                 </div>
-                <button type="submit" style="width:100%; padding:12px; background:#4caf50; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Enviar Solicitud</button>
+
+                <!-- Bloque Salida Temprano -->
+                <div id="block_salida_temprano" class="dinamico-block" style="display:none;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Fecha y hora de salida:</label>
+                        <input type="datetime-local" name="fecha_salida" id="input_salida">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Motivo:</label>
+                    <textarea name="motivo" rows="3" required placeholder="Explica brevemente el motivo..."></textarea>
+                </div>
+
+                <button type="submit" style="width:100%; padding:12px; background:#4caf50; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer; font-size: 0.95rem;">Enviar Solicitud</button>
             </form>
             <a href="<?= $link_volver ?>" style="display:block; margin-top:15px; text-align:center; color:#555; text-decoration:none; font-size:0.9rem;">← Volver al panel de registro</a>
         </div>
     </div>
+
+    <script>
+        function selTipo(tipo, btn) {
+            document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tipo_permiso_input').value = tipo;
+
+            document.querySelectorAll('.dinamico-block').forEach(b => b.style.display = 'none');
+            document.getElementById('input_dia_faltar').required = false;
+            document.getElementById('input_llegada').required = false;
+            document.getElementById('input_salida').required = false;
+
+            if (tipo === 'dia_completo') {
+                document.getElementById('block_dia_completo').style.display = 'block';
+                document.getElementById('input_dia_faltar').required = true;
+            } else if (tipo === 'llegada_tarde') {
+                document.getElementById('block_llegada_tarde').style.display = 'block';
+                document.getElementById('input_llegada').required = true;
+            } else if (tipo === 'salida_temprano') {
+                document.getElementById('block_salida_temprano').style.display = 'block';
+                document.getElementById('input_salida').required = true;
+            }
+        }
+    </script>
 </body>
 </html>
