@@ -1,6 +1,6 @@
 <?php
 session_start();
-include_once 'conexion.php'; // Ajusta si tu archivo de conexión se llama diferente
+include_once 'conexion.php';
 
 $empleado_id = $_SESSION['empleado_id'] ?? $_GET['empleado_id'] ?? null;
 $mensaje = "";
