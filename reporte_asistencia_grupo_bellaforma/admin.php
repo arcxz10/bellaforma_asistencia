@@ -1,4 +1,4 @@
-<?php
+[cite: 12]<?php
 
 error_reporting(E_ALL);
 ini_set("display_errors", 1);
@@ -302,7 +302,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         if (
             $id <= 0 ||
-            !in_array($nuevoEstado, true)
+            !in_array($nuevoEstado,, true)
         ) {
             redireccionar(
                 "Estado inválido.",
@@ -949,21 +949,19 @@ if ($buscar !== "") {
     $stmtAcumulado->close();
 }
 
-// CORRECCIÓN VISUAL: JOIN con la tabla de horarios (dia_semana = 1 o estándar) para alinear la vista
 $sqlEmpleados = "
     SELECT
-        e.id,
-        e.nombre,
-        e.identificacion,
-        e.cargo,
-        COALESCE(h.hora_entrada, e.hora_entrada) AS hora_entrada,
-        COALESCE(h.hora_salida, e.hora_salida) AS hora_salida,
-        e.activo
-    FROM empleados e
-    LEFT JOIN horarios h ON h.cargo = e.cargo AND h.dia_semana = 1
+        id,
+        nombre,
+        identificacion,
+        cargo,
+        hora_entrada,
+        hora_salida,
+        activo
+    FROM empleados
     ORDER BY
-        e.activo DESC,
-        e.nombre ASC
+        activo DESC,
+        nombre ASC
 ";
 
 $resultadoEmpleados =
