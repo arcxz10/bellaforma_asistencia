@@ -949,19 +949,21 @@ if ($buscar !== "") {
     $stmtAcumulado->close();
 }
 
+// CORRECCIÓN VISUAL: JOIN con la tabla de horarios (dia_semana = 1 o estándar) para alinear la vista
 $sqlEmpleados = "
     SELECT
-        id,
-        nombre,
-        identificacion,
-        cargo,
-        hora_entrada,
-        hora_salida,
-        activo
-    FROM empleados
+        e.id,
+        e.nombre,
+        e.identificacion,
+        e.cargo,
+        COALESCE(h.hora_entrada, e.hora_entrada) AS hora_entrada,
+        COALESCE(h.hora_salida, e.hora_salida) AS hora_salida,
+        e.activo
+    FROM empleados e
+    LEFT JOIN horarios h ON h.cargo = e.cargo AND h.dia_semana = 1
     ORDER BY
-        activo DESC,
-        nombre ASC
+        e.activo DESC,
+        e.nombre ASC
 ";
 
 $resultadoEmpleados =
