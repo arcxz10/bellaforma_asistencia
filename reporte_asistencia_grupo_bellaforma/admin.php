@@ -1,4 +1,4 @@
-[cite: 12]<?php
+<?php
 
 error_reporting(E_ALL);
 ini_set("display_errors", 1);
@@ -52,7 +52,7 @@ function formatoHora($hora)
     $partes = explode(":", $hora);
 
     $horas = (int) ($partes[0] ?? 0);
-    $minutos = (int) ($partes ?? 0);
+    $minutos = (int) ($partes[1] ?? 0);
 
     $periodo = $horas >= 12 ? "PM" : "AM";
 
@@ -69,6 +69,7 @@ function formatoHora($hora)
         $periodo
     );
 }
+
 function minutosAHoras($minutos)
 {
     $minutos = (int) $minutos;
@@ -950,17 +951,29 @@ if ($buscar !== "") {
 
 $sqlEmpleados = "
     SELECT
-        id,
-        nombre,
-        identificacion,
-        cargo,
-        hora_entrada,
-        hora_salida,
-        activo
-    FROM empleados
+        e.id,
+        e.nombre,
+        e.identificacion,
+        e.cargo,
+        COALESCE(
+            h.hora_entrada,
+            e.hora_entrada
+        ) AS hora_entrada,
+        COALESCE(
+            h.hora_salida,
+            e.hora_salida
+        ) AS hora_salida,
+        e.activo
+    FROM empleados e
+
+    LEFT JOIN horarios h
+        ON h.cargo = e.cargo
+        AND h.dia_semana = 1
+        AND h.trabaja = 1
+
     ORDER BY
-        activo DESC,
-        nombre ASC
+        e.activo DESC,
+        e.nombre ASC
 ";
 
 $resultadoEmpleados =
