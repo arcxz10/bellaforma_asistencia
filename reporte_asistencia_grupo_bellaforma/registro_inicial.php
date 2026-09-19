@@ -132,7 +132,7 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
                     <span id="texto-alerta-justificacion">Por favor, ingresa una justificación para continuar.</span>
                 </div>
 
-                <form method="POST" action="procesar_asistencia.php" id="formAsistencia">
+                <form method="POST" action="registro.php" id="formAsistencia">
                     <input type="hidden" name="documento" value="<?php echo htmlspecialchars($documento); ?>">
                     <input type="hidden" name="dispositivo_id" value="<?php echo htmlspecialchars($dispositivo_id); ?>">
                     <input type="hidden" name="accion" id="tipoInput" value="">
