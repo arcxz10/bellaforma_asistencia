@@ -189,11 +189,6 @@ if ($stmt) {
             font-weight: bold;
         }
 
-        .valor-pagar {
-            color: #33691E !important;
-            font-weight: bold;
-        }
-
         .nota-liquidacion {
             background: #F6FBF2;
             border-left: 4px solid #7CB342;
@@ -256,9 +251,7 @@ if ($stmt) {
             <div class="content">
 
                 <div class="nota-liquidacion">
-                    ℹ️ Aquí solo se cuentan los minutos <strong>pendientes por liquidar</strong> (los que aún no has pagado/descontado). Al presionar
-                    "Liquidar", esos minutos se marcan como pagados y dejan de sumar para el próximo periodo — pero
-                    siguen apareciendo siempre en <strong>Historial Completo</strong>, sin que se borre nada.
+                    ℹ️ Aquí solo se cuentan los minutos <strong>pendientes por liquidar</strong> (los que aún no has pagado/descontado). Si filtras por fechas (ej. del 1 al 15), el botón "Liquidar" solo marca como pagados los registros de <strong>ese rango de fechas</strong> para ese empleado. Nada se borra: en <strong>Historial Completo</strong> siempre vas a seguir viendo todo, liquidado o no.
                 </div>
 
                 <?php if ($mensaje !== ""): ?>
@@ -299,14 +292,13 @@ if ($stmt) {
                                 <th>Retraso pendiente</th>
                                 <th>Extra pendiente</th>
                                 <th>Deuda pendiente</th>
-                                <th>Neto a pagar/descontar</th>
                                 <th>Acción</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php if (!$resultado || $resultado->num_rows === 0): ?>
                             <tr>
-                                <td colspan="9" class="sin-resultados">
+                                <td colspan="8" class="sin-resultados">
                                     No hay minutos pendientes por liquidar en este momento.
                                 </td>
                             </tr>
@@ -316,28 +308,6 @@ if ($stmt) {
                                 $retrasoBruto = (int) $fila["total_retraso"];
                                 $extraBruto = (int) $fila["total_extra"];
                                 $deudaBruta = (int) $fila["total_deuda"];
-
-                                // Esta SÍ es la única pantalla donde el tiempo extra
-                                // compensa primero el retraso, y luego la deuda.
-                                $extraDisponible = $extraBruto;
-
-                                if ($extraDisponible >= $retrasoBruto) {
-                                    $extraDisponible -= $retrasoBruto;
-                                    $retrasoNeto = 0;
-                                } else {
-                                    $retrasoNeto = $retrasoBruto - $extraDisponible;
-                                    $extraDisponible = 0;
-                                }
-
-                                if ($extraDisponible >= $deudaBruta) {
-                                    $extraDisponible -= $deudaBruta;
-                                    $deudaNeta = 0;
-                                } else {
-                                    $deudaNeta = $deudaBruta - $extraDisponible;
-                                    $extraDisponible = 0;
-                                }
-
-                                $extraNeto = $extraDisponible;
                             ?>
                                 <tr>
                                     <td><?= escapar($fila["nombre"]) ?></td>
@@ -363,17 +333,6 @@ if ($stmt) {
                                             <span class="color-deuda"><?= minutosAHoras($deudaBruta) ?></span>
                                         <?php else: ?>
                                             —
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if ($retrasoNeto > 0): ?>
-                                            <span class="color-retraso">Descontar <?= minutosAHoras($retrasoNeto) ?></span>
-                                        <?php elseif ($deudaNeta > 0): ?>
-                                            <span class="color-deuda">Descontar <?= minutosAHoras($deudaNeta) ?></span>
-                                        <?php elseif ($extraNeto > 0): ?>
-                                            <span class="valor-pagar">Pagar <?= minutosAHoras($extraNeto) ?></span>
-                                        <?php else: ?>
-                                            <span class="valor-pagar">Sin novedad</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
