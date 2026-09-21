@@ -1091,7 +1091,6 @@ $resultadoEmpleados =
             <a
                 href="liquidacion.php"
                 class="nav-item"
-                target="_blank"
             >
                 💰 Liquidación
             </a>
