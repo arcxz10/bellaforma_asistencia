@@ -251,7 +251,7 @@ if ($stmt) {
             <div class="content">
 
                 <div class="nota-liquidacion">
-                    ℹ️ Aquí solo se cuentan los minutos <strong>pendientes por liquidar</strong> (los que aún no has pagado/descontado). Si filtras por fechas (ej. del 1 al 15), el botón "Liquidar" solo marca como pagados los registros de <strong>ese rango de fechas</strong> para ese empleado. Nada se borra: en <strong>Historial Completo</strong> siempre vas a seguir viendo todo, liquidado o no.
+                    ℹ️ Aquí solo se cuentan los minutos <strong>pendientes por liquidar</strong> (los que aún no has pagado/descontado). Se filtran por fechas (ej. del 1 al 15), el botón "Liquidar" solo marca como pagados los registros de <strong>ese rango de fechas</strong> para ese empleado. Nada se borra: en <strong>Historial Completo</strong> siempre se va seguir viendo todo, liquidado o no.
                 </div>
 
                 <?php if ($mensaje !== ""): ?>
