@@ -1089,6 +1089,14 @@ $resultadoEmpleados =
             </a>
 
             <a
+                href="liquidacion.php"
+                class="nav-item"
+                target="_blank"
+            >
+                💰 Liquidación
+            </a>
+
+            <a
                 href="#permisos"
                 class="nav-item"
             >
@@ -1923,38 +1931,18 @@ $resultadoEmpleados =
                                 <td colspan="8" class="sin-resultados">No se encontraron registros acumulados.</td>
                             </tr>
                         <?php else: ?>
-                            <?php while ($rowAG = $resultadoAG->fetch_assoc()): 
+                            <?php while ($rowAG = $resultadoAG->fetch_assoc()):
                                 $retrasoBruto = (int)$rowAG["total_retraso"];
-                                $extraBrutoReal = (int)$rowAG["total_extra"];
+                                $extraBruto = (int)$rowAG["total_extra"];
                                 $deudaBruta = (int)$rowAG["total_deuda"];
                                 $diasAsistidos = (int)$rowAG["total_dias"];
-                                
+
                                 $diasNoAsistidos = "—";
                                 if (!empty($desdeH) && !empty($hastaH)) {
                                     $diasTotalesRango = (strtotime($hastaH) - strtotime($desdeH)) / 86400 + 1;
                                     $diasNoAsistidosCalc = $diasTotalesRango - $diasAsistidos;
                                     $diasNoAsistidos = $diasNoAsistidosCalc > 0 ? $diasNoAsistidosCalc : 0;
                                 }
-                                
-                                $extraDisponible = $extraBrutoReal;
-                                
-                                if ($extraDisponible >= $retrasoBruto) {
-                                    $extraDisponible -= $retrasoBruto;
-                                    $retrasoNeto = 0;
-                                } else {
-                                    $retrasoNeto = $retrasoBruto - $extraDisponible;
-                                    $extraDisponible = 0;
-                                }
-                                
-                                if ($extraDisponible >= $deudaBruta) {
-                                    $extraDisponible -= $deudaBruta;
-                                    $deudaNeta = 0;
-                                } else {
-                                    $deudaNeta = $deudaBruta - $extraDisponible;
-                                    $extraDisponible = 0;
-                                }
-                                
-                                $extraNeto = $extraDisponible;
                             ?>
                                 <tr>
                                     <td><?= escapar($rowAG["nombre"]) ?></td>
@@ -1963,22 +1951,22 @@ $resultadoEmpleados =
                                     <td><?= $diasAsistidos ?></td>
                                     <td><?= $diasNoAsistidos ?></td>
                                     <td>
-                                        <?php if ($retrasoNeto > 0): ?>
-                                            <span class="color-retraso"><?= minutosAHoras($retrasoNeto) ?> (<?= $retrasoNeto ?> min)</span>
+                                        <?php if ($retrasoBruto > 0): ?>
+                                            <span class="color-retraso"><?= minutosAHoras($retrasoBruto) ?> (<?= $retrasoBruto ?> min)</span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if ($extraNeto > 0): ?>
-                                            <span class="color-extra"><?= minutosAHoras($extraNeto) ?></span>
+                                        <?php if ($extraBruto > 0): ?>
+                                            <span class="color-extra"><?= minutosAHoras($extraBruto) ?></span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if ($deudaNeta > 0): ?>
-                                            <span class="color-deuda"><?= minutosAHoras($deudaNeta) ?> (<?= $deudaNeta ?> min)</span>
+                                        <?php if ($deudaBruta > 0): ?>
+                                            <span class="color-deuda"><?= minutosAHoras($deudaBruta) ?> (<?= $deudaBruta ?> min)</span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
