@@ -1032,10 +1032,10 @@ $resultadoEmpleados =
 
         <div class="sidebar-header">
 
-            <img src="img/logo-blanco.png" alt="Grupo Bella Forma S.A.S." class="logo-marca-sidebar">
+            <img src="img/logo-blanco.png" alt="Bellaforma" class="logo-marca-sidebar">
 
             <h2>
-                GRUPO BELLA FORMA
+                Bellaforma
             </h2>
 
             <p>
