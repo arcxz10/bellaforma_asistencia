@@ -326,7 +326,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         if (
             $id <= 0 ||
-            !in_array($nuevoEstado, [0, 1], true)
+            !in_array($nuevoEstado, true)
         ) {
             redireccionar(
                 "Estado inválido.",
@@ -1023,19 +1023,42 @@ $resultadoEmpleados =
         Panel Administrativo - Bellaforma
     </title>
 
-    <link rel="icon" type="image/x-icon" href="img/favicon.ico">
-    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
-    <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-
     <link
         rel="stylesheet"
         href="css/admin.css"
     >
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <style>
         .color-retraso, .retraso, .estado.estado-tarde { color: #dc3545 !important; font-weight: bold; }
         .color-extra, .extra { color: #d39e00 !important; font-weight: bold; }
         .color-deuda { color: #007bff !important; font-weight: bold; }
         .estado.estado-puntual { color: #28a745 !important; font-weight: bold; }
+        .tarjeta-grafico {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+        .tarjeta-grafico-cabecera {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .selector-metrica {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .selector-metrica select {
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
         .btn-justificaciones {
             background-color: #6c757d;
             color: #fff;
@@ -1935,10 +1958,42 @@ $resultadoEmpleados =
                 if ($stmtAG) {
                     $stmtAG->execute();
                     $resultadoAG = $stmtAG->get_result();
+                    $filasAcumulado = $resultadoAG ? $resultadoAG->fetch_all(MYSQLI_ASSOC) : [];
                 } else {
                     $resultadoAG = null;
+                    $filasAcumulado = [];
                 }
+
+                $datosGraficoAcumulado = array_map(function ($f) {
+                    return [
+                        "nombre" => $f["nombre"],
+                        "cargo" => $f["cargo"],
+                        "retraso" => (int) $f["total_retraso"],
+                        "extra" => (int) $f["total_extra"],
+                        "deuda" => (int) $f["total_deuda"],
+                    ];
+                }, $filasAcumulado);
                 ?>
+
+                <div class="tarjeta-grafico">
+                    <div class="tarjeta-grafico-cabecera">
+                        <h3 style="margin:0;">📊 Ranking de Empleados</h3>
+                        <div class="selector-metrica">
+                            <label for="metricaGraficoHistorial">Ver por:</label>
+                            <select id="metricaGraficoHistorial" onchange="actualizarGraficoAcumulado()">
+                                <option value="retraso">Minutos de retraso</option>
+                                <option value="extra">Minutos extra</option>
+                                <option value="deuda">Minutos que deben</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="position: relative; width: 100%;" id="contenedorGraficoAcumulado">
+                        <canvas id="graficoAcumuladoHistorial" height="90"></canvas>
+                    </div>
+                    <p id="sinDatosGrafico" style="display:none; text-align:center; color:#6c757d; margin-top: 10px;">
+                        No hay datos para graficar con los filtros actuales.
+                    </p>
+                </div>
 
                 <div class="tabla-contenedor">
                     <table class="tabla">
@@ -1955,12 +2010,12 @@ $resultadoEmpleados =
                             </tr>
                         </thead>
                         <tbody>
-                        <?php if (!$resultadoAG || $resultadoAG->num_rows === 0): ?>
+                        <?php if (empty($filasAcumulado)): ?>
                             <tr>
                                 <td colspan="8" class="sin-resultados">No se encontraron registros acumulados.</td>
                             </tr>
                         <?php else: ?>
-                            <?php while ($rowAG = $resultadoAG->fetch_assoc()):
+                            <?php foreach ($filasAcumulado as $rowAG):
                                 $retrasoBruto = (int)$rowAG["total_retraso"];
                                 $extraBruto = (int)$rowAG["total_extra"];
                                 $deudaBruta = (int)$rowAG["total_deuda"];
@@ -2001,11 +2056,102 @@ $resultadoEmpleados =
                                         <?php endif; ?>
                                     </td>
                                 </tr>
-                            <?php endwhile; ?>
+                            <?php endforeach; ?>
                         <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
+
+                <script>
+                    const datosGraficoAcumulado = <?= json_encode($datosGraficoAcumulado, JSON_UNESCAPED_UNICODE) ?>;
+                    let graficoAcumuladoInstancia = null;
+
+                    function actualizarGraficoAcumulado() {
+                        const metrica = document.getElementById("metricaGraficoHistorial").value;
+                        const etiquetasMetrica = {
+                            retraso: "Minutos de retraso",
+                            extra: "Minutos extra",
+                            deuda: "Minutos que deben"
+                        };
+                        const coloresMetrica = {
+                            retraso: "#dc3545",
+                            extra: "#d39e00",
+                            deuda: "#007bff"
+                        };
+
+                        const ordenado = [...datosGraficoAcumulado]
+                            .filter(f => f[metrica] > 0)
+                            .sort((a, b) => b[metrica] - a[metrica]);
+
+                        const sinDatos = document.getElementById("sinDatosGrafico");
+                        const contenedor = document.getElementById("contenedorGraficoAcumulado");
+
+                        if (ordenado.length === 0) {
+                            sinDatos.style.display = "block";
+                            contenedor.style.display = "none";
+                            if (graficoAcumuladoInstancia) {
+                                graficoAcumuladoInstancia.destroy();
+                                graficoAcumuladoInstancia = null;
+                            }
+                            return;
+                        }
+
+                        sinDatos.style.display = "none";
+                        contenedor.style.display = "block";
+
+                        const etiquetas = ordenado.map(f => f.nombre + " (" + f.cargo + ")");
+                        const valores = ordenado.map(f => f[metrica]);
+
+                        // Altura dinámica según cantidad de empleados, para que no se amontonen las barras
+                        const canvas = document.getElementById("graficoAcumuladoHistorial");
+                        canvas.parentElement.style.height = Math.max(90, ordenado.length * 34) + "px";
+
+                        if (graficoAcumuladoInstancia) {
+                            graficoAcumuladoInstancia.destroy();
+                        }
+
+                        graficoAcumuladoInstancia = new Chart(canvas, {
+                            type: "bar",
+                            data: {
+                                labels: etiquetas,
+                                datasets: [{
+                                    label: etiquetasMetrica[metrica],
+                                    data: valores,
+                                    backgroundColor: coloresMetrica[metrica],
+                                    borderRadius: 4,
+                                    maxBarThickness: 26
+                                }]
+                            },
+                            options: {
+                                indexAxis: "y",
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: (ctx) => {
+                                                const min = ctx.parsed.x;
+                                                const h = Math.floor(min / 60);
+                                                const m = min % 60;
+                                                const texto = h > 0 ? (h + "h " + m + "min") : (m + " min");
+                                                return etiquetasMetrica[metrica] + ": " + texto;
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        beginAtZero: true,
+                                        title: { display: true, text: "Minutos" }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    document.addEventListener("DOMContentLoaded", actualizarGraficoAcumulado);
+                </script>
             </section>
 
 
