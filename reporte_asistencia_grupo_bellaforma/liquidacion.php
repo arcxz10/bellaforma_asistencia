@@ -190,13 +190,13 @@ if ($stmt) {
         }
 
         .nota-liquidacion {
-            background: #F6FBF2;
-            border-left: 4px solid #7CB342;
+            background: #F5FAFF;
+            border-left: 4px solid #1565C0;
             padding: 15px 20px;
             border-radius: 8px;
             margin-bottom: 20px;
             font-size: 14px;
-            color: #33691E;
+            color: #0D47A1;
             line-height: 1.5;
         }
 
@@ -221,7 +221,7 @@ if ($stmt) {
 
         .btn-liquidar {
             padding: 8px 14px;
-            background: #7CB342;
+            background: #1565C0;
             color: white;
             border: none;
             border-radius: 6px;
@@ -231,7 +231,7 @@ if ($stmt) {
         }
 
         .btn-liquidar:hover {
-            background: #558B2F;
+            background: #1565C0;
         }
     </style>
 
@@ -245,13 +245,13 @@ if ($stmt) {
 
             <div class="top-header">
                 <h1>💰 Liquidación de Nómina</h1>
-                <a href="admin.php" class="btn-back" style="text-decoration:none; color:#33691E; font-size:14px;">← Volver al panel</a>
+                <a href="admin.php" class="btn-back" style="text-decoration:none; color:#0D47A1; font-size:14px;">← Volver al panel</a>
             </div>
 
             <div class="content">
 
                 <div class="nota-liquidacion">
-                    ℹ️ Aquí solo se cuentan los minutos <strong>pendientes por liquidar</strong> (los que aún no has pagado/descontado). Se filtran por fechas (ej. del 1 al 15), el botón "Liquidar" solo marca como pagados los registros de <strong>ese rango de fechas</strong> para ese empleado. Nada se borra: en <strong>Historial Completo</strong> siempre se va seguir viendo todo, liquidado o no.
+                    ℹ️ Aquí solo se cuentan los minutos <strong>pendientes por liquidar</strong> (los que aún no has pagado/descontado). El tiempo extra ya compensa primero el retraso y luego la deuda pendiente — por ejemplo, 30 min de retraso con 45 min de extra quedan mostrados como 15 min de extra y 0 de retraso. Si filtras por fechas (ej. del 1 al 15), el botón "Liquidar" solo marca como pagados los registros de <strong>ese rango de fechas</strong> para ese empleado. Nada se borra: en <strong>Historial Completo</strong> siempre vas a seguir viendo todo (sin compensar), liquidado o no.
                 </div>
 
                 <?php if ($mensaje !== ""): ?>
@@ -308,6 +308,29 @@ if ($stmt) {
                                 $retrasoBruto = (int) $fila["total_retraso"];
                                 $extraBruto = (int) $fila["total_extra"];
                                 $deudaBruta = (int) $fila["total_deuda"];
+
+                                // El tiempo extra primero recupera el retraso (la empresa
+                                // le da la oportunidad de compensarlo quedándose más tiempo
+                                // a la salida), y lo que sobre recupera la deuda.
+                                $extraDisponible = $extraBruto;
+
+                                if ($extraDisponible >= $retrasoBruto) {
+                                    $extraDisponible -= $retrasoBruto;
+                                    $retrasoNeto = 0;
+                                } else {
+                                    $retrasoNeto = $retrasoBruto - $extraDisponible;
+                                    $extraDisponible = 0;
+                                }
+
+                                if ($extraDisponible >= $deudaBruta) {
+                                    $extraDisponible -= $deudaBruta;
+                                    $deudaNeta = 0;
+                                } else {
+                                    $deudaNeta = $deudaBruta - $extraDisponible;
+                                    $extraDisponible = 0;
+                                }
+
+                                $extraNeto = $extraDisponible;
                             ?>
                                 <tr>
                                     <td><?= escapar($fila["nombre"]) ?></td>
@@ -315,22 +338,22 @@ if ($stmt) {
                                     <td><?= escapar($fila["cargo"]) ?></td>
                                     <td><?= (int) $fila["total_dias"] ?></td>
                                     <td>
-                                        <?php if ($retrasoBruto > 0): ?>
-                                            <span class="color-retraso"><?= minutosAHoras($retrasoBruto) ?></span>
+                                        <?php if ($retrasoNeto > 0): ?>
+                                            <span class="color-retraso"><?= minutosAHoras($retrasoNeto) ?></span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if ($extraBruto > 0): ?>
-                                            <span class="color-extra"><?= minutosAHoras($extraBruto) ?></span>
+                                        <?php if ($extraNeto > 0): ?>
+                                            <span class="color-extra"><?= minutosAHoras($extraNeto) ?></span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if ($deudaBruta > 0): ?>
-                                            <span class="color-deuda"><?= minutosAHoras($deudaBruta) ?></span>
+                                        <?php if ($deudaNeta > 0): ?>
+                                            <span class="color-deuda"><?= minutosAHoras($deudaNeta) ?></span>
                                         <?php else: ?>
                                             —
                                         <?php endif; ?>
