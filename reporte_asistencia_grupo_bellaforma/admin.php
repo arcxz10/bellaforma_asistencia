@@ -1023,6 +1023,10 @@ $resultadoEmpleados =
         Panel Administrativo - Bellaforma
     </title>
 
+    <link rel="icon" type="image/x-icon" href="img/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+
     <link
         rel="stylesheet"
         href="css/admin.css"
