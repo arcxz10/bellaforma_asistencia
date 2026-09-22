@@ -9,8 +9,8 @@
 }
 
 :root {
-    --primary-color: #7CB342;
-    --primary-dark: #33691E;
+    --primary-color: #1565C0;
+    --primary-dark: #0D47A1;
     --secondary-color: #FFC93C;
     --dark-color: #1a1a1a;
     --light-color: #f8f9fa;
@@ -22,7 +22,7 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #DCEDC8 0%, #8BC34A 50%, #558B2F 100%);
+    background: linear-gradient(135deg, #BBDEFB 0%, #42A5F5 50%, #1565C0 100%);
     min-height: 100vh;
     padding: 20px;
 }
@@ -45,6 +45,14 @@ body {
     font-size: 28px;
     color: var(--primary-color);
     font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo-marca-chica {
+    width: 40px;
+    height: 40px;
 }
 
 .header-time {
@@ -131,7 +139,7 @@ input:focus,
 select:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 10px rgba(124, 179, 66, 0.25);
+    box-shadow: 0 0 10px rgba(21, 101, 192, 0.25);
 }
 
 input::placeholder {
@@ -155,12 +163,12 @@ input::placeholder {
 .btn-primary {
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     color: white;
-    box-shadow: 0 5px 15px rgba(124, 179, 66, 0.35);
+    box-shadow: 0 5px 15px rgba(21, 101, 192, 0.35);
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(124, 179, 66, 0.45);
+    box-shadow: 0 8px 20px rgba(21, 101, 192, 0.45);
 }
 
 .btn-primary:active {
