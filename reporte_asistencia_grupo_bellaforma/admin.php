@@ -112,7 +112,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $cargosPermitidos = [
             "Producción",
             "Ventas",
-            "Administración"
+            "Administración",
+            "Temporales",
+            "Jefe de Maquinaria",
+            "Directora de Despachos"
         ];
 
         if (
@@ -133,6 +136,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if ($cargo === "Producción") {
             $horaEntrada = "07:30:00";
             $horaSalida = "17:05:00";
+        } elseif ($cargo === "Temporales") {
+            $horaEntrada = "08:00:00";
+            $horaSalida = "15:00:00";
+        } elseif ($cargo === "Jefe de Maquinaria") {
+            $horaEntrada = "07:30:00";
+            $horaSalida = "17:00:00";
+        } elseif ($cargo === "Directora de Despachos") {
+            $horaEntrada = "08:30:00";
+            $horaSalida = "18:15:00";
         }
 
         $sql = "
@@ -209,7 +221,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $cargosPermitidos = [
             "Producción",
             "Ventas",
-            "Administración"
+            "Administración",
+            "Temporales",
+            "Jefe de Maquinaria",
+            "Directora de Despachos"
         ];
 
         if (
@@ -231,6 +246,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if ($cargo === "Producción") {
             $horaEntrada = "07:30:00";
             $horaSalida = "17:05:00";
+        } elseif ($cargo === "Temporales") {
+            $horaEntrada = "08:00:00";
+            $horaSalida = "15:00:00";
+        } elseif ($cargo === "Jefe de Maquinaria") {
+            $horaEntrada = "07:30:00";
+            $horaSalida = "17:00:00";
+        } elseif ($cargo === "Directora de Despachos") {
+            $horaEntrada = "08:30:00";
+            $horaSalida = "18:15:00";
         }
 
         $sql = "
@@ -2534,6 +2558,18 @@ $resultadoEmpleados =
                         Administración
                     </option>
 
+                    <option value="Temporales">
+                        Temporales
+                    </option>
+
+                    <option value="Jefe de Maquinaria">
+                        Jefe de Maquinaria
+                    </option>
+
+                    <option value="Directora de Despachos">
+                        Directora de Despachos
+                    </option>
+
                 </select>
 
             </div>
@@ -2899,7 +2935,7 @@ $resultadoEmpleados =
         if (cargo === "Producción") {
 
             horario.textContent =
-                "Lunes a viernes: 7:30 AM - 5:05 PM. Sábado y domingo: no trabaja.";
+                "Lunes a viernes: 7:30 AM - 5:05 PM. Si lo citan un sábado: 7:30 AM en adelante cuenta 100% como horas extra. Domingo: no trabaja.";
 
         } else if (
             cargo === "Ventas" ||
@@ -2908,6 +2944,21 @@ $resultadoEmpleados =
 
             horario.textContent =
                 "Lunes a viernes: 8:30 AM - 5:15 PM. Sábado: 8:30 AM - 12:30 PM. Domingo: no trabaja.";
+
+        } else if (cargo === "Temporales") {
+
+            horario.textContent =
+                "Lunes a viernes: 8:00 AM - 3:00 PM. Si la citan un sábado: 7:30 AM en adelante cuenta 100% como horas extra. Domingo: no trabaja.";
+
+        } else if (cargo === "Jefe de Maquinaria") {
+
+            horario.textContent =
+                "Lunes a viernes: 7:30 AM - 5:00 PM (almuerzo 12:00 PM - 1:05 PM). Si lo citan un sábado: 7:30 AM en adelante cuenta 100% como horas extra. Domingo: no trabaja.";
+
+        } else if (cargo === "Directora de Despachos") {
+
+            horario.textContent =
+                "Lunes a jueves: 8:30 AM - 6:15 PM. Viernes: 8:30 AM - 5:45 PM. Sábado y domingo: no trabaja.";
 
         } else {
 
