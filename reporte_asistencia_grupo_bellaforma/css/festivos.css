@@ -31,7 +31,7 @@
 }
 
 .cerrar-sesion:hover {
-    background: #444;
+    background: #0D47A1;
 }
 
 /* ===== gestionar_festivos.php ===== */
@@ -45,14 +45,14 @@
 .tabla-festivos {
     width: 100%;
     border-collapse: collapse;
-    background: #F6FBF2;
+    background: #F5FAFF;
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .tabla-festivos thead {
-    background: #558B2F;
+    background: #1565C0;
     color: white;
 }
 
@@ -77,7 +77,7 @@
 
 .fecha-festivo {
     font-weight: 600;
-    color: #558B2F;
+    color: #1565C0;
 }
 
 .descripcion-festivo {
@@ -92,7 +92,7 @@
 .boton-agregar {
     display: inline-block;
     padding: 10px 20px;
-    background: #7CB342;
+    background: #1565C0;
     color: white;
     text-decoration: none;
     border-radius: 6px;
@@ -102,7 +102,7 @@
 }
 
 .boton-agregar:hover {
-    background: #33691E;
+    background: #0D47A1;
 }
 
 .btn-eliminar {
@@ -188,7 +188,7 @@
 
 .formulario-modal input:focus {
     outline: none;
-    border-color: #558B2F;
+    border-color: #1565C0;
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
 }
 
@@ -211,12 +211,12 @@
     transition: all 0.3s;
     text-decoration: none;
     text-align: center;
-    background: #7CB342;
+    background: #1565C0;
     color: white;
 }
 
 .boton:hover {
-    background: #33691E;
+    background: #0D47A1;
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
