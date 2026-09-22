@@ -468,8 +468,11 @@ if ($tipo === "salida") {
     $minutosExtra = 0;
     $minutosDeuda = 0;
 
-    // Regla especial temporada: Sábado para Producción cuenta 100% tiempo trabajado como extra
-    if ($cargo === 'Producción' && $diaSemana === 6) {
+    // Regla especial: si citan a estos cargos un sábado, todo el tiempo trabajado
+    // (desde la entrada real hasta la salida real) cuenta 100% como horas extra.
+    $cargosSabadoExtra = ['Producción', 'Temporales', 'Jefe de Maquinaria'];
+
+    if (in_array($cargo, $cargosSabadoExtra, true) && $diaSemana === 6) {
         $minutosEntradaReal = convertirMinutos($asistencia["hora_entrada"]);
         $minutosExtra = max(0, $minutosActuales - $minutosEntradaReal);
         $minutosDeuda = 0;
