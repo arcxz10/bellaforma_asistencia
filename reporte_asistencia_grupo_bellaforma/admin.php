@@ -326,7 +326,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         if (
             $id <= 0 ||
-            !in_array($nuevoEstado, true)
+            !in_array($nuevoEstado, [0, 1], true)
         ) {
             redireccionar(
                 "Estado inválido.",
