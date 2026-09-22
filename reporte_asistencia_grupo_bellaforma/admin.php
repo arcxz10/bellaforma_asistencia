@@ -1975,26 +1975,6 @@ $resultadoEmpleados =
                 }, $filasAcumulado);
                 ?>
 
-                <div class="tarjeta-grafico">
-                    <div class="tarjeta-grafico-cabecera">
-                        <h3 style="margin:0;">📊 Ranking de Empleados</h3>
-                        <div class="selector-metrica">
-                            <label for="metricaGraficoHistorial">Ver por:</label>
-                            <select id="metricaGraficoHistorial" onchange="actualizarGraficoAcumulado()">
-                                <option value="retraso">Minutos de retraso</option>
-                                <option value="extra">Minutos extra</option>
-                                <option value="deuda">Minutos que deben</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div style="position: relative; width: 100%;" id="contenedorGraficoAcumulado">
-                        <canvas id="graficoAcumuladoHistorial" height="90"></canvas>
-                    </div>
-                    <p id="sinDatosGrafico" style="display:none; text-align:center; color:#6c757d; margin-top: 10px;">
-                        No hay datos para graficar con los filtros actuales.
-                    </p>
-                </div>
-
                 <div class="tabla-contenedor">
                     <table class="tabla">
                         <thead>
@@ -2060,6 +2040,26 @@ $resultadoEmpleados =
                         <?php endif; ?>
                         </tbody>
                     </table>
+                </div>
+
+                <div class="tarjeta-grafico">
+                    <div class="tarjeta-grafico-cabecera">
+                        <h3 style="margin:0;">📊 Ranking de Empleados</h3>
+                        <div class="selector-metrica">
+                            <label for="metricaGraficoHistorial">Ver por:</label>
+                            <select id="metricaGraficoHistorial" onchange="actualizarGraficoAcumulado()">
+                                <option value="retraso">Minutos de retraso</option>
+                                <option value="extra">Minutos extra</option>
+                                <option value="deuda">Minutos que deben</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="position: relative; width: 100%;" id="contenedorGraficoAcumulado">
+                        <canvas id="graficoAcumuladoHistorial" height="90"></canvas>
+                    </div>
+                    <p id="sinDatosGrafico" style="display:none; text-align:center; color:#6c757d; margin-top: 10px;">
+                        No hay datos para graficar con los filtros actuales.
+                    </p>
                 </div>
 
                 <script>
