@@ -470,7 +470,7 @@ if ($tipo === "salida") {
 
     // Regla especial: si citan a estos cargos un sábado, todo el tiempo trabajado
     // (desde la entrada real hasta la salida real) cuenta 100% como horas extra.
-    $cargosSabadoExtra = ['Producción', 'Temporales', 'Jefe de Maquinaria'];
+    $cargosSabadoExtra = ['Producción', 'Temporales', 'Jefe de Maquinaria', 'Directora de Despachos'];
 
     if (in_array($cargo, $cargosSabadoExtra, true) && $diaSemana === 6) {
         $minutosEntradaReal = convertirMinutos($asistencia["hora_entrada"]);
@@ -673,6 +673,10 @@ function mostrarResultado(
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Registro | Grupo Bellaforma</title>
+
+    <link rel="icon" type="image/x-icon" href="img/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
         <link rel="stylesheet" href="css/registro.css">
     </head>
 
