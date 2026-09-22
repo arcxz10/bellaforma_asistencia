@@ -12,7 +12,7 @@
 .sidebar {
     width: 250px;
     flex-shrink: 0;
-    background: #222;
+    background: #14284B;
     color: white;
     display: flex;
     flex-direction: column;
@@ -23,12 +23,21 @@
 
 .sidebar-header {
     padding: 25px 20px;
-    border-bottom: 1px solid #383838;
+    border-bottom: 1px solid #234876;
+    text-align: center;
+}
+
+.logo-marca-sidebar {
+    width: 65px;
+    height: 65px;
+    margin: 0 auto 10px;
+    display: block;
 }
 
 .sidebar-header h2 {
     margin: 0 0 4px;
-    font-size: 19px;
+    font-size: 15px;
+    letter-spacing: 0.5px;
 }
 
 .sidebar-header p {
@@ -56,12 +65,12 @@
 }
 
 .nav-item:hover {
-    background: #2c2c2c;
+    background: #1B3A6B;
     color: white;
 }
 
 .nav-item.active {
-    background: #2c2c2c;
+    background: #1B3A6B;
     color: white;
     border-left-color: #ffa500;
     font-weight: bold;
@@ -69,7 +78,7 @@
 
 .sidebar-footer {
     padding: 18px 20px;
-    border-top: 1px solid #383838;
+    border-top: 1px solid #234876;
 }
 
 .sidebar-footer p {
@@ -83,7 +92,7 @@
     text-align: center;
     color: white;
     text-decoration: none;
-    border: 1px solid #555;
+    border: 1px solid #3A5A8C;
     padding: 8px 14px;
     border-radius: 6px;
     font-size: 13px;
@@ -91,7 +100,7 @@
 }
 
 .btn-logout-admin:hover {
-    background: #383838;
+    background: #1B3A6B;
 }
 
 /* ===== CONTENIDO PRINCIPAL ===== */
@@ -104,7 +113,7 @@
 }
 
 .top-header {
-    background: #F6FBF2;
+    background: #F5FAFF;
     padding: 20px 30px;
     display: flex;
     justify-content: space-between;
@@ -159,11 +168,11 @@
 }
 
 .card-stat {
-    background: #F6FBF2;
+    background: #F5FAFF;
     padding: 22px;
     border-radius: 10px;
     box-shadow: 0 3px 12px rgba(0, 0, 0, .06);
-    border-left: 5px solid #222;
+    border-left: 5px solid #1565C0;
 }
 
 .card-stat h3 {
@@ -203,7 +212,7 @@
 
 .btn-nuevo {
     padding: 11px 18px;
-    background: #222;
+    background: #1565C0;
     color: white;
     border: none;
     border-radius: 6px;
@@ -213,7 +222,7 @@
 }
 
 .btn-nuevo:hover {
-    background: #444;
+    background: #0D47A1;
 }
 
 /* ===== FILTROS (campos sin envoltorio .campo) ===== */
@@ -237,7 +246,7 @@
 
 .btn-filtrar {
     padding: 11px 18px;
-    background: #222;
+    background: #1565C0;
     color: white;
     border: none;
     border-radius: 6px;
@@ -246,7 +255,7 @@
 }
 
 .btn-filtrar:hover {
-    background: #444;
+    background: #0D47A1;
 }
 
 /* ===== BOTONES DE ACCIÓN EN TABLAS DE EMPLEADOS ===== */
@@ -310,7 +319,7 @@
 body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background: #EAF6E1;
+    background: #E9F3FC;
     color: #222;
 }
 
@@ -319,7 +328,7 @@ body {
    ============================================ */
 
 .barra {
-    background: #222;
+    background: #1565C0;
     color: white;
     padding: 18px 30px;
     display: flex;
@@ -353,7 +362,7 @@ body {
 }
 
 .cerrar:hover {
-    background: #444;
+    background: #0D47A1;
 }
 
 /* ============================================
@@ -413,7 +422,7 @@ body {
 }
 
 .tarjeta {
-    background: #F6FBF2;
+    background: #F5FAFF;
     padding: 22px;
     border-radius: 10px;
     box-shadow: 0 3px 12px rgba(0, 0, 0, .06);
@@ -431,7 +440,7 @@ body {
 }
 
 .borde-total {
-    border-left: 5px solid #222;
+    border-left: 5px solid #1565C0;
 }
 
 .borde-registrados {
@@ -451,7 +460,7 @@ body {
    ============================================ */
 
 .panel {
-    background: #F6FBF2;
+    background: #F5FAFF;
     border-radius: 10px;
     padding: 25px;
     margin-bottom: 25px;
@@ -497,7 +506,7 @@ body {
 
 .boton {
     padding: 11px 18px;
-    background: #222;
+    background: #1565C0;
     color: white;
     border: none;
     border-radius: 6px;
@@ -506,7 +515,7 @@ body {
 }
 
 .boton:hover {
-    background: #444;
+    background: #0D47A1;
 }
 
 .boton-secundario {
@@ -718,7 +727,7 @@ td {
 .modal-contenido {
     width: 100%;
     max-width: 500px;
-    background: #F6FBF2;
+    background: #F5FAFF;
     padding: 30px;
     border-radius: 10px;
 }
