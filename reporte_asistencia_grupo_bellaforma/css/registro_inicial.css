@@ -8,8 +8,8 @@
 }
 
 :root {
-    --primary-color: #7CB342;
-    --primary-dark: #33691E;
+    --primary-color: #1565C0;
+    --primary-dark: #0D47A1;
     --secondary-color: #FFC93C;
     --dark-color: #1a1a1a;
     --light-color: #f8f9fa;
@@ -20,7 +20,7 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #DCEDC8 0%, #8BC34A 50%, #558B2F 100%);
+    background: linear-gradient(135deg, #BBDEFB 0%, #42A5F5 50%, #1565C0 100%);
     min-height: 100vh;
     padding: 20px;
 }
@@ -69,7 +69,7 @@ body {
     margin: 0 auto 20px;
     font-size: 40px;
     color: white;
-    box-shadow: 0 5px 15px rgba(124, 179, 66, 0.35);
+    box-shadow: 0 5px 15px rgba(21, 101, 192, 0.35);
 }
 
 .card-header h1 {
@@ -102,7 +102,7 @@ body {
 }
 
 .step.active {
-    background: linear-gradient(135deg, rgba(124, 179, 66, 0.12), rgba(255, 201, 60, 0.1));
+    background: linear-gradient(135deg, rgba(21, 101, 192, 0.12), rgba(255, 201, 60, 0.1));
     border: 2px solid var(--primary-color);
 }
 
@@ -180,7 +180,7 @@ select:focus,
 textarea:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 10px rgba(124, 179, 66, 0.25);
+    box-shadow: 0 0 10px rgba(21, 101, 192, 0.25);
 }
 
 input::placeholder {
@@ -276,12 +276,12 @@ input[type="radio"] {
 .btn-primary {
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     color: white;
-    box-shadow: 0 5px 15px rgba(124, 179, 66, 0.35);
+    box-shadow: 0 5px 15px rgba(21, 101, 192, 0.35);
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(124, 179, 66, 0.45);
+    box-shadow: 0 8px 20px rgba(21, 101, 192, 0.45);
 }
 
 .btn-primary:disabled {
