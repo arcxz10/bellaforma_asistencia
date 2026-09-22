@@ -1032,8 +1032,10 @@ $resultadoEmpleados =
 
         <div class="sidebar-header">
 
+            <img src="img/logo-blanco.png" alt="Grupo Bella Forma S.A.S." class="logo-marca-sidebar">
+
             <h2>
-                🏢 BELLAFORMA
+                GRUPO BELLA FORMA
             </h2>
 
             <p>
