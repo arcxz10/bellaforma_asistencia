@@ -22,7 +22,7 @@ if (!isset($_SESSION["admin_id"])) {
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #DCEDC8 0%, #8BC34A 50%, #558B2F 100%);
+            background: linear-gradient(135deg, #BBDEFB 0%, #42A5F5 50%, #1565C0 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -41,7 +41,7 @@ if (!isset($_SESSION["admin_id"])) {
         }
 
         .tarjeta-qr h1 {
-            color: #33691E;
+            color: #0D47A1;
             font-size: 24px;
             margin-bottom: 6px;
         }
@@ -80,7 +80,7 @@ if (!isset($_SESSION["admin_id"])) {
             padding: 12px;
             border: none;
             border-radius: 8px;
-            background: linear-gradient(135deg, #7CB342, #33691E);
+            background: linear-gradient(135deg, #1565C0, #0D47A1);
             color: white;
             font-size: 15px;
             font-weight: 600;
