@@ -9,11 +9,11 @@
 }
 
 :root {
-    --primary-color: #7CB342;
-    --primary-dark: #33691E;
+    --primary-color: #1565C0;
+    --primary-dark: #0D47A1;
     --secondary-color: #FFC93C;
     --dark-color: #1a1a1a;
-    --light-color: #F1F8E9;
+    --light-color: #E3F2FD;
     --success-color: #28a745;
     --danger-color: #dc3545;
     --info-color: #17a2b8;
@@ -21,7 +21,7 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #DCEDC8 0%, #8BC34A 50%, #558B2F 100%);
+    background: linear-gradient(135deg, #BBDEFB 0%, #42A5F5 50%, #1565C0 100%);
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -48,6 +48,14 @@ body {
 
 .form-container {
     width: 100%;
+}
+
+/* ===== LOGO DE MARCA ===== */
+.logo-marca {
+    display: block;
+    width: 90px;
+    height: 90px;
+    margin: 0 auto 12px;
 }
 
 /* ===== HEADER ===== */
@@ -83,7 +91,7 @@ body {
 }
 
 .login-description {
-    color: #558B2F;
+    color: #1565C0;
     font-size: 14px;
     margin-bottom: 25px;
 }
@@ -120,7 +128,7 @@ body {
 .form-group input {
     width: 100%;
     padding: 12px 15px;
-    border: 2px solid #dcedc8;
+    border: 2px solid #bbdefb;
     border-radius: 8px;
     font-size: 14px;
     transition: all 0.3s ease;
@@ -131,7 +139,7 @@ body {
 .form-group input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 10px rgba(124, 179, 66, 0.25);
+    box-shadow: 0 0 10px rgba(21, 101, 192, 0.25);
 }
 
 .form-group input::placeholder {
@@ -152,13 +160,13 @@ body {
     letter-spacing: 0.5px;
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     color: white;
-    box-shadow: 0 5px 15px rgba(124, 179, 66, 0.35);
+    box-shadow: 0 5px 15px rgba(21, 101, 192, 0.35);
     margin-top: 10px;
 }
 
 .btn-submit:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(124, 179, 66, 0.45);
+    box-shadow: 0 8px 20px rgba(21, 101, 192, 0.45);
 }
 
 .btn-submit:active {
@@ -170,11 +178,11 @@ body {
     text-align: center;
     margin-top: 25px;
     padding-top: 20px;
-    border-top: 1px solid #dcedc8;
+    border-top: 1px solid #bbdefb;
 }
 
 .registro-asistencia p {
-    color: #558B2F;
+    color: #1565C0;
     font-size: 14px;
     margin-bottom: 12px;
 }
