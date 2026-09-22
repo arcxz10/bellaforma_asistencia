@@ -6,7 +6,7 @@
 
 body {
     font-family: Arial, sans-serif;
-    background: linear-gradient(135deg, #DCEDC8 0%, #8BC34A 50%, #558B2F 100%);
+    background: linear-gradient(135deg, #BBDEFB 0%, #42A5F5 50%, #1565C0 100%);
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -17,6 +17,13 @@ body {
 .contenedor {
     width: 100%;
     max-width: 500px;
+}
+
+.logo-marca {
+    display: block;
+    width: 110px;
+    height: 110px;
+    margin: 0 auto 15px;
 }
 
 .encabezado {
@@ -32,12 +39,12 @@ body {
 }
 
 .encabezado p {
-    color: #F1F8E9;
+    color: #E3F2FD;
     font-size: 16px;
 }
 
 .tarjeta {
-    background: #F1F8E9;
+    background: #E3F2FD;
     padding: 35px;
     border-radius: 12px;
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
@@ -47,12 +54,12 @@ body {
     text-align: center;
     font-size: 22px;
     margin-bottom: 10px;
-    color: #33691E;
+    color: #0D47A1;
 }
 
 .descripcion {
     text-align: center;
-    color: #558B2F;
+    color: #1565C0;
     line-height: 1.5;
     margin-bottom: 30px;
 }
@@ -85,19 +92,19 @@ body {
 }
 
 .boton-admin {
-    background: #F1F8E9;
-    color: #33691E;
-    border: 2px solid #558B2F;
+    background: #E3F2FD;
+    color: #0D47A1;
+    border: 2px solid #1565C0;
 }
 
 .boton-admin:hover {
-    background: #DCEDC8;
+    background: #BBDEFB;
 }
 
 .pie {
     text-align: center;
     margin-top: 25px;
-    color: #F1F8E9;
+    color: #E3F2FD;
     font-size: 13px;
 }
 
