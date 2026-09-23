@@ -2501,14 +2501,16 @@ $resultadoEmpleados =
                                     <td><?= escapar($rowP['motivo']) ?></td>
                                     <td>
                                         <?php if (!empty($rowP['soporte_datos'])): ?>
-                                            <a
-                                                href="data:<?= escapar($rowP['soporte_tipo']) ?>;base64,<?= $rowP['soporte_datos'] ?>"
-                                                target="_blank"
-                                                rel="noopener"
-                                                style="font-size:11px;"
+                                            <button
+                                                type="button"
+                                                class="btn-activar"
+                                                style="padding:5px 10px; font-size:11px; border:none; cursor:pointer;"
+                                                data-tipo="<?= escapar($rowP['soporte_tipo']) ?>"
+                                                data-datos="<?= $rowP['soporte_datos'] ?>"
+                                                onclick="verSoporte(this)"
                                             >
                                                 📎 Ver
-                                            </a>
+                                            </button>
                                         <?php else: ?>
                                             <span style="color:#aaa;">—</span>
                                         <?php endif; ?>
@@ -2916,6 +2918,25 @@ $resultadoEmpleados =
 </div>
 
 
+<!-- Modal para Ver Soporte de Permiso -->
+<div
+    class="modal"
+    id="modalSoporte"
+    style="display:none;"
+>
+    <div class="modal-contenido" style="max-width: 700px; width: 90%; text-align: center;">
+        <h3>Soporte adjunto</h3>
+        <div style="margin-top: 15px;">
+            <img id="imgSoporte" style="display:none; max-width: 100%; max-height: 70vh; border-radius: 6px;">
+            <iframe id="pdfSoporte" style="display:none; width: 100%; height: 70vh; border: none;"></iframe>
+        </div>
+        <div class="botones-modal" style="display: flex; justify-content: flex-end; margin-top: 15px;">
+            <button type="button" class="boton boton-secundario" onclick="cerrarModalSoporte()">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+
 <script>
 
     function mostrarSeccion(seccion)
@@ -3260,6 +3281,35 @@ $resultadoEmpleados =
         document.getElementById("modalTodasJustificaciones").style.display = "none";
     }
 
+    function verSoporte(btn) {
+        const tipo = btn.getAttribute("data-tipo");
+        const datos = btn.getAttribute("data-datos");
+        const src = "data:" + tipo + ";base64," + datos;
+
+        const imgEl = document.getElementById("imgSoporte");
+        const pdfEl = document.getElementById("pdfSoporte");
+
+        if (tipo === "application/pdf") {
+            pdfEl.src = src;
+            pdfEl.style.display = "block";
+            imgEl.style.display = "none";
+            imgEl.src = "";
+        } else {
+            imgEl.src = src;
+            imgEl.style.display = "block";
+            pdfEl.style.display = "none";
+            pdfEl.src = "";
+        }
+
+        document.getElementById("modalSoporte").style.display = "flex";
+    }
+
+    function cerrarModalSoporte() {
+        document.getElementById("modalSoporte").style.display = "none";
+        document.getElementById("pdfSoporte").src = "";
+        document.getElementById("imgSoporte").src = "";
+    }
+
 
     document
         .querySelectorAll(".nav-item[href^=\"#\"]")
@@ -3326,6 +3376,15 @@ $resultadoEmpleados =
 
             if (event.target === modalTodasJustificaciones) {
                 cerrarModalTodasJustificaciones();
+            }
+
+            const modalSoporte =
+                document.getElementById(
+                    "modalSoporte"
+                );
+
+            if (event.target === modalSoporte) {
+                cerrarModalSoporte();
             }
         }
     );
