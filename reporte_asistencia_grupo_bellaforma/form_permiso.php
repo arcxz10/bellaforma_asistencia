@@ -21,29 +21,54 @@ if (!$empleado_id) {
     exit();
 }
 
+// Tipos de archivo de soporte permitidos y tamaño máximo (5 MB)
+$tiposPermitidos = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+$tamanoMaximo = 5 * 1024 * 1024;
+
 $mensaje = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tipo_permiso = trim($_POST['tipo_permiso'] ?? '');
     $motivo = trim($_POST['motivo'] ?? '');
-    $fecha_seleccionada = '';
+    $fecha_seleccionada = trim($_POST['fecha_cita'] ?? '');
 
-    // Mapear tipo a los valores que ya usas en la BD (ej. 'ausencia' para faltar día, o el mismo)
-    $tipo_db = $tipo_permiso;
-    if ($tipo_permiso === 'dia_completo') {
-        $tipo_db = 'ausencia';
-        $fecha_seleccionada = trim($_POST['dia_faltar'] ?? '');
-    } elseif ($tipo_permiso === 'llegada_tarde') {
-        $fecha_seleccionada = trim($_POST['fecha_llegada'] ?? '');
-    } elseif ($tipo_permiso === 'salida_temprano') {
-        $fecha_seleccionada = trim($_POST['fecha_salida'] ?? '');
+    $soporte_datos = null;
+    $soporte_tipo = null;
+    $soporte_nombre = null;
+    $errorArchivo = '';
+
+    if (isset($_FILES['soporte']) && $_FILES['soporte']['error'] !== UPLOAD_ERR_NO_FILE) {
+        if ($_FILES['soporte']['error'] !== UPLOAD_ERR_OK) {
+            $errorArchivo = "Ocurrió un error al subir el archivo.";
+        } elseif ($_FILES['soporte']['size'] > $tamanoMaximo) {
+            $errorArchivo = "El archivo supera el tamaño máximo permitido (5 MB).";
+        } else {
+            $mimeReal = mime_content_type($_FILES['soporte']['tmp_name']);
+            if (!in_array($mimeReal, $tiposPermitidos, true)) {
+                $errorArchivo = "Formato no permitido. Solo se aceptan imágenes (JPG, PNG, WEBP) o PDF.";
+            } else {
+                $soporte_datos = base64_encode(file_get_contents($_FILES['soporte']['tmp_name']));
+                $soporte_tipo = $mimeReal;
+                $soporte_nombre = basename($_FILES['soporte']['name']);
+            }
+        }
     }
 
-    if (!empty($tipo_permiso) && !empty($motivo) && !empty($fecha_seleccionada)) {
-        // Apuntando exacto a columnas reales: empleado_id, tipo, fecha, motivo
-        $sql = "INSERT INTO permisos (empleado_id, tipo, fecha, motivo) VALUES (?, ?, ?, ?)";
+    if (!empty($errorArchivo)) {
+        $mensaje = $errorArchivo;
+    } elseif ($tipo_permiso === 'cita_medica' && !empty($motivo) && !empty($fecha_seleccionada)) {
+        $sql = "INSERT INTO permisos (empleado_id, tipo, fecha, motivo, soporte_datos, soporte_tipo, soporte_nombre) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conexion->prepare($sql);
-        $stmt->bind_param("isss", $empleado_id, $tipo_db, $fecha_seleccionada, $motivo);
-        
+        $stmt->bind_param(
+            "issssss",
+            $empleado_id,
+            $tipo_permiso,
+            $fecha_seleccionada,
+            $motivo,
+            $soporte_datos,
+            $soporte_tipo,
+            $soporte_nombre
+        );
+
         if ($stmt->execute()) {
             $url_retorno = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . $empleado_id : "registro.php";
             header("Location: " . $url_retorno);
@@ -52,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mensaje = "Error DB: " . $stmt->error;
         }
     } else {
-        $mensaje = "Por favor selecciona el tipo de novedad, la fecha/hora y escribe el motivo.";
+        $mensaje = "Por favor selecciona la fecha de la cita y escribe el motivo.";
     }
 }
 $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmlspecialchars($empleado_id) : "registro.php";
@@ -69,65 +94,52 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
     <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
     <link rel="stylesheet" href="css/registro_inicial.css">
     <style>
-        .tipo-grid { display: flex; gap: 8px; margin-bottom: 15px; }
-        .tipo-btn { flex: 1; padding: 10px 4px; border: 1px solid #ccc; background: #f8f9fa; border-radius: 6px; cursor: pointer; font-size: 0.72rem; font-weight: 600; text-align: center; transition: all 0.2s; color: #333; }
-        .tipo-btn.active { background: #4caf50; color: white; border-color: #4caf50; box-shadow: 0 2px 5px rgba(76,175,80,0.3); }
-        .dinamico-block { display: none; margin-bottom: 15px; text-align: left; background: #f1f8e9; padding: 12px; border-radius: 6px; border: 1px solid #dedede; }
-        .form-group { margin-bottom: 12px; text-align: left; }
+        .form-group { margin-bottom: 15px; text-align: left; }
         .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.85rem; color: #444; }
         .form-group input, .form-group textarea { width: 100%; padding: 9px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; font-size: 0.9rem; box-sizing: border-box; }
+        .archivo-ayuda { font-size: 0.78rem; color: #777; margin-top: 4px; }
+        .archivo-preview { margin-top: 8px; font-size: 0.85rem; color: #2e7d32; font-weight: 600; }
     </style>
 </head>
 <body>
     <div class="container-inicial">
         <div class="card-inicial">
             <div class="card-header">
-                <div class="logo-circle">📝</div>
+                <div class="logo-circle">🩺</div>
                 <h1>Pedir Permiso</h1>
                 <p>Grupo Bellaforma</p>
             </div>
-            
+
             <?php if (!empty($mensaje)): ?>
                 <div class="alert alert-danger" style="margin-bottom:15px; padding:10px; background:#f2dede; color:#a94442; border-radius:6px; font-size:0.85rem;"><?= htmlspecialchars($mensaje) ?></div>
             <?php endif; ?>
 
-            <form method="POST" id="formPermiso">
+            <form method="POST" id="formPermiso" enctype="multipart/form-data">
                 <input type="hidden" name="empleado_id" value="<?= htmlspecialchars($empleado_id) ?>">
-                <input type="hidden" name="tipo_permiso" id="tipo_permiso_input" value="">
+                <input type="hidden" name="tipo_permiso" value="cita_medica">
 
                 <div class="form-group">
-                    <label>Selecciona el tipo de novedad:</label>
-                    <div class="tipo-grid">
-                        <button type="button" class="tipo-btn" onclick="selTipo('dia_completo', this)">📅 Faltar día</button>
-                        <button type="button" class="tipo-btn" onclick="selTipo('llegada_tarde', this)">⏰ Llegada tarde</button>
-                        <button type="button" class="tipo-btn" onclick="selTipo('salida_temprano', this)">🚪 Salida temprano</button>
-                    </div>
+                    <label>🩺 Cita médica</label>
+                    <p style="font-size:0.85rem; color:#666; margin:0 0 10px;">
+                        Usa este formulario para solicitar permiso por una cita médica.
+                    </p>
                 </div>
 
-                <div id="block_dia_completo" class="dinamico-block" style="display:none;">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>¿Qué día vas a faltar?</label>
-                        <input type="date" name="dia_faltar" id="input_dia_faltar">
-                    </div>
-                </div>
-
-                <div id="block_llegada_tarde" class="dinamico-block" style="display:none;">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Fecha y hora estimada de llegada:</label>
-                        <input type="datetime-local" name="fecha_llegada" id="input_llegada">
-                    </div>
-                </div>
-
-                <div id="block_salida_temprano" class="dinamico-block" style="display:none;">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Fecha y hora de salida:</label>
-                        <input type="datetime-local" name="fecha_salida" id="input_salida">
-                    </div>
+                <div class="form-group">
+                    <label>Fecha de la cita:</label>
+                    <input type="date" name="fecha_cita" required>
                 </div>
 
                 <div class="form-group">
                     <label>Motivo:</label>
-                    <textarea name="motivo" rows="3" required placeholder="Explica brevemente el motivo..."></textarea>
+                    <textarea name="motivo" rows="3" required placeholder="Explica brevemente el motivo de la cita..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Soporte (opcional):</label>
+                    <input type="file" name="soporte" id="input_soporte" accept="image/jpeg,image/png,image/webp,application/pdf" onchange="mostrarNombreArchivo()">
+                    <div class="archivo-ayuda">Puedes adjuntar una foto o PDF de la orden, incapacidad o comprobante de la cita (máx. 5 MB).</div>
+                    <div class="archivo-preview" id="nombreArchivo"></div>
                 </div>
 
                 <button type="submit" style="width:100%; padding:12px; background:#4caf50; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer; font-size: 0.95rem;">Enviar Solicitud</button>
@@ -137,25 +149,13 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
     </div>
 
     <script>
-        function selTipo(tipo, btn) {
-            document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById('tipo_permiso_input').value = tipo;
-
-            document.querySelectorAll('.dinamico-block').forEach(b => b.style.display = 'none');
-            document.getElementById('input_dia_faltar').required = false;
-            document.getElementById('input_llegada').required = false;
-            document.getElementById('input_salida').required = false;
-
-            if (tipo === 'dia_completo') {
-                document.getElementById('block_dia_completo').style.display = 'block';
-                document.getElementById('input_dia_faltar').required = true;
-            } else if (tipo === 'llegada_tarde') {
-                document.getElementById('block_llegada_tarde').style.display = 'block';
-                document.getElementById('input_llegada').required = true;
-            } else if (tipo === 'salida_temprano') {
-                document.getElementById('block_salida_temprano').style.display = 'block';
-                document.getElementById('input_salida').required = true;
+        function mostrarNombreArchivo() {
+            const input = document.getElementById('input_soporte');
+            const etiqueta = document.getElementById('nombreArchivo');
+            if (input.files && input.files.length > 0) {
+                etiqueta.textContent = "📎 " + input.files[0].name;
+            } else {
+                etiqueta.textContent = "";
             }
         }
     </script>
