@@ -2479,6 +2479,7 @@ $resultadoEmpleados =
                                 <th>Tipo</th>
                                 <th>Fecha</th>
                                 <th>Motivo</th>
+                                <th>Soporte</th>
                                 <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
@@ -2489,7 +2490,7 @@ $resultadoEmpleados =
                             if (!$q_permisos || $q_permisos->num_rows === 0):
                             ?>
                                 <tr>
-                                    <td colspan="6" class="sin-resultados">No hay solicitudes de permisos.</td>
+                                    <td colspan="7" class="sin-resultados">No hay solicitudes de permisos.</td>
                                 </tr>
                             <?php else: ?>
                                 <?php while($rowP = $q_permisos->fetch_assoc()): ?>
@@ -2498,6 +2499,20 @@ $resultadoEmpleados =
                                     <td><?= escapar($rowP['tipo']) ?></td>
                                     <td><?= escapar($rowP['fecha']) ?></td>
                                     <td><?= escapar($rowP['motivo']) ?></td>
+                                    <td>
+                                        <?php if (!empty($rowP['soporte_datos'])): ?>
+                                            <a
+                                                href="data:<?= escapar($rowP['soporte_tipo']) ?>;base64,<?= $rowP['soporte_datos'] ?>"
+                                                target="_blank"
+                                                rel="noopener"
+                                                style="font-size:11px;"
+                                            >
+                                                📎 Ver
+                                            </a>
+                                        <?php else: ?>
+                                            <span style="color:#aaa;">—</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td><strong><?= ucfirst(escapar($rowP['estado'])) ?></strong></td>
                                     <td>
                                         <?php if($rowP['estado'] === 'pendiente'): ?>
