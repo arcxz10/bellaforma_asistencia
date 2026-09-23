@@ -311,6 +311,43 @@ input[type="radio"] {
     background: #5a6268;
 }
 
+/* ===== BOTONES DE PIE (Pedir Permiso / Pedir Material) ===== */
+.action-links-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.action-links-footer .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.btn-link-permiso {
+    background: linear-gradient(135deg, #6f42c1, #4d2f8f);
+    color: white;
+    box-shadow: 0 5px 15px rgba(111, 66, 193, 0.35);
+}
+
+.btn-link-permiso:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(111, 66, 193, 0.45);
+}
+
+.btn-link-material {
+    background: linear-gradient(135deg, #fd7e14, #c85f0a);
+    color: white;
+    box-shadow: 0 5px 15px rgba(253, 126, 20, 0.35);
+}
+
+.btn-link-material:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(253, 126, 20, 0.45);
+}
+
 /* ===== ALERTAS ===== */
 .alert {
     padding: 15px;
