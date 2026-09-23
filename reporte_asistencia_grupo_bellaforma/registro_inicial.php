@@ -199,8 +199,8 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
 
                 <!-- NUEVOS BOTONES DE PERMISOS Y MATERIALES -->
                 <div class="action-links-footer">
-                    <a href="form_permiso.php" class="action-link-permiso">📝 Pedir Permiso</a>
-                    <a href="form_material.php" class="action-link-material">📦 Pedir Material</a>
+                    <a href="form_permiso.php" class="btn btn-link-permiso">📝 Pedir Permiso</a>
+                    <a href="form_material.php" class="btn btn-link-material">📦 Pedir Material</a>
                 </div>
 
                 <script>
