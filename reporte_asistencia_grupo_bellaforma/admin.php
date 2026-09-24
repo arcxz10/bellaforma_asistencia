@@ -1020,7 +1020,7 @@ $resultadoEmpleados =
     >
 
     <title>
-        Panel Administrativo - Bellaforma
+        Panel Administrativo - Grupo Bella Forma S.A.S.
     </title>
 
     <link
@@ -1083,11 +1083,7 @@ $resultadoEmpleados =
 
         <div class="sidebar-header">
 
-            <img src="img/logo-blanco.png" alt="Bellaforma" class="logo-marca-sidebar">
-
-            <h2>
-                Bellaforma
-            </h2>
+            <img src="img/logo-blanco.png" alt="Grupo Bella Forma S.A.S." class="logo-marca-sidebar">
 
             <p>
                 Administrador
