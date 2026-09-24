@@ -28,8 +28,9 @@
 }
 
 .logo-marca-sidebar {
-    width: 65px;
-    height: 65px;
+    width: 100%;
+    max-width: 170px;
+    height: auto;
     margin: 0 auto 10px;
     display: block;
 }
