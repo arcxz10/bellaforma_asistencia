@@ -53,8 +53,9 @@ body {
 /* ===== LOGO DE MARCA ===== */
 .logo-marca {
     display: block;
-    width: 90px;
-    height: 90px;
+    width: 100%;
+    max-width: 220px;
+    height: auto;
     margin: 0 auto 12px;
 }
 
