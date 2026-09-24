@@ -55,7 +55,7 @@ $empleadoId = $empleado["id"];
 </head>
 <body>
     <div class="registro-header">
-        <div class="header-title">💅 Bellaforma</div>
+        <div class="header-title"><img src="img/logo-azul.png" alt="Grupo Bella Forma S.A.S." class="logo-marca-chica"></div>
     </div>
 
     <div class="container-registro">
