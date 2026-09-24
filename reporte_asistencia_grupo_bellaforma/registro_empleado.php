@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
     <div class="registro-header">
-        <div class="header-title"><img src="img/logo-azul.png" alt="Grupo Bella Forma S.A.S." class="logo-marca-chica"></div>
+        <div class="header-title"><img src="img/apple-touch-icon.png" alt="Grupo Bella Forma S.A.S." class="logo-marca-chica"></div>
     </div>
 
     <div class="container-registro">
