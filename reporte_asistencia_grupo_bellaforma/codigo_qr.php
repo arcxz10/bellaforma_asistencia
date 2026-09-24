@@ -115,7 +115,7 @@ if (!isset($_SESSION["admin_id"])) {
 <body>
 
     <div class="tarjeta-qr">
-        <h1>💅 Bellaforma</h1>
+        <img src="img/logo-azul.png" alt="Grupo Bella Forma S.A.S." style="max-width:220px; width:100%; height:auto; margin-bottom:10px;">
         <p>Escanea para registrar tu asistencia</p>
 
         <div id="qrcode"></div>
