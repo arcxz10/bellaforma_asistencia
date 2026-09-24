@@ -21,8 +21,9 @@ body {
 
 .logo-marca {
     display: block;
-    width: 110px;
-    height: 110px;
+    width: 100%;
+    max-width: 260px;
+    height: auto;
     margin: 0 auto 15px;
 }
 
