@@ -168,7 +168,7 @@ if ($stmt) {
     >
 
     <title>
-        Liquidación de Nómina - Bellaforma
+        Liquidación de Nómina - Grupo Bella Forma S.A.S.
     </title>
 
     <link rel="icon" type="image/x-icon" href="img/favicon.ico">
