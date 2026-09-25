@@ -2477,7 +2477,6 @@ $resultadoEmpleados =
                                 <th>Motivo</th>
                                 <th>Soporte</th>
                                 <th>Estado</th>
-                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2486,7 +2485,7 @@ $resultadoEmpleados =
                             if (!$q_permisos || $q_permisos->num_rows === 0):
                             ?>
                                 <tr>
-                                    <td colspan="7" class="sin-resultados">No hay solicitudes de permisos.</td>
+                                    <td colspan="6" class="sin-resultados">No hay solicitudes de permisos.</td>
                                 </tr>
                             <?php else: ?>
                                 <?php while($rowP = $q_permisos->fetch_assoc()): ?>
@@ -2512,14 +2511,6 @@ $resultadoEmpleados =
                                         <?php endif; ?>
                                     </td>
                                     <td><strong><?= ucfirst(escapar($rowP['estado'])) ?></strong></td>
-                                    <td>
-                                        <?php if($rowP['estado'] === 'pendiente'): ?>
-                                            <a href="admin.php?accion_solicitud=aprobado&id_solicitud=<?= $rowP['id'] ?>&tipo_solicitud=permiso" class="btn-activar" style="padding:5px 10px; text-decoration:none; font-size:11px;">Aprobar</a>
-                                            <a href="admin.php?accion_solicitud=rechazado&id_solicitud=<?= $rowP['id'] ?>&tipo_solicitud=permiso" class="btn-eliminar" style="padding:5px 10px; text-decoration:none; font-size:11px;">Rechazar</a>
-                                        <?php else: ?>
-                                            <span style="color:#78909c;">Gestionado</span>
-                                        <?php endif; ?>
-                                    </td>
                                 </tr>
                                 <?php endwhile; ?>
                             <?php endif; ?>
