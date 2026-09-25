@@ -2476,7 +2476,6 @@ $resultadoEmpleados =
                                 <th>Fecha</th>
                                 <th>Motivo</th>
                                 <th>Soporte</th>
-                                <th>Estado</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2485,7 +2484,7 @@ $resultadoEmpleados =
                             if (!$q_permisos || $q_permisos->num_rows === 0):
                             ?>
                                 <tr>
-                                    <td colspan="6" class="sin-resultados">No hay solicitudes de permisos.</td>
+                                    <td colspan="5" class="sin-resultados">No hay solicitudes de permisos.</td>
                                 </tr>
                             <?php else: ?>
                                 <?php while($rowP = $q_permisos->fetch_assoc()): ?>
@@ -2510,7 +2509,6 @@ $resultadoEmpleados =
                                             <span style="color:#aaa;">—</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td><strong><?= ucfirst(escapar($rowP['estado'])) ?></strong></td>
                                 </tr>
                                 <?php endwhile; ?>
                             <?php endif; ?>
