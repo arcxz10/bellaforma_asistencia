@@ -41,6 +41,12 @@ define("VALOR_DIA_PRODUCCION", 60000);
 define("MINUTOS_JORNADA_PRODUCCION", 575); // 7:30am a 5:05pm = 9h35
 define("VALOR_MINUTO_PRODUCCION", VALOR_DIA_PRODUCCION / MINUTOS_JORNADA_PRODUCCION);
 
+// --- Descuento de ley al empleado: salud 4% + pensión 4% = 8% sobre el salario base ---
+define("PORC_SALUD_PENSION", 0.08);
+
+// --- Si a esta hora no hay entrada registrada, el día se guarda como "no asistió" ---
+define("HORA_CORTE_NO_ASISTIO", "17:00:00");
+
 function escapar($valor)
 {
     return htmlspecialchars((string) $valor, ENT_QUOTES, "UTF-8");
@@ -66,12 +72,256 @@ function pesos($valor)
 }
 
 /**
+ * Descuento de salud y pensión (8%) sobre el salario base.
+ * Se muestra justo debajo de la línea del salario base.
+ */
+function lineaDescuentoSaludPension($base)
+{
+    $valor = round($base * PORC_SALUD_PENSION);
+
+    return [
+        "label" => "- Descuento salud y pensión (" . (PORC_SALUD_PENSION * 100) . "% del salario base)",
+        "valor" => -$valor,
+    ];
+}
+
+// ==========================================================================
+// DÍAS NO ASISTIDOS
+// ==========================================================================
+
+function nombreDiaCorto($fecha)
+{
+    $nombres = [1 => "lun", 2 => "mar", 3 => "mié", 4 => "jue", 5 => "vie", 6 => "sáb", 7 => "dom"];
+    $n = (int) date("N", strtotime($fecha));
+
+    return $nombres[$n] . " " . date("d/m/Y", strtotime($fecha));
+}
+
+function cargarMapaHorarios($conexion)
+{
+    $mapa = [];
+    $res = $conexion->query("SELECT cargo, dia_semana, trabaja FROM horarios");
+
+    if ($res) {
+        while ($h = $res->fetch_assoc()) {
+            $mapa[$h["cargo"]][(int) $h["dia_semana"]] = (int) $h["trabaja"];
+        }
+    }
+
+    return $mapa;
+}
+
+// Un día es laboral según la tabla horarios (domingo = 7 normalmente trabaja = 0).
+// Si no hay horario configurado para ese día, solo el domingo se considera no laboral.
+function esDiaLaboral($mapaHorarios, $cargo, $diaN)
+{
+    if (isset($mapaHorarios[$cargo][$diaN])) {
+        return $mapaHorarios[$cargo][$diaN] === 1;
+    }
+
+    return $diaN !== 7;
+}
+
+function cargarFestivosSet($conexion, $ini, $fin)
+{
+    $set = [];
+    $stmt = $conexion->prepare("SELECT fecha FROM festivos WHERE fecha BETWEEN ? AND ?");
+
+    if ($stmt) {
+        $stmt->bind_param("ss", $ini, $fin);
+        $stmt->execute();
+        $res = $stmt->get_result();
+
+        while ($f = $res->fetch_assoc()) {
+            $set[substr($f["fecha"], 0, 10)] = true;
+        }
+
+        $stmt->close();
+    }
+
+    return $set;
+}
+
+// Cuenta los días laborales (sin domingos, sin festivos) entre dos fechas.
+function contarDiasLaborables($mapaHorarios, $festivosSet, $cargo, $desde, $hasta)
+{
+    $total = 0;
+    $actual = strtotime($desde);
+    $limite = strtotime($hasta);
+
+    while ($actual <= $limite) {
+        $fecha = date("Y-m-d", $actual);
+        $diaN = (int) date("N", $actual);
+
+        if (esDiaLaboral($mapaHorarios, $cargo, $diaN) && !isset($festivosSet[$fecha])) {
+            $total++;
+        }
+
+        $actual = strtotime("+1 day", $actual);
+    }
+
+    return $total;
+}
+
+/**
+ * Guarda en la tabla dias_no_asistidos cada día laboral en que el empleado
+ * no registró entrada. Un día cuenta como "no asistió" cuando:
+ *   - ya pasó (fecha anterior a hoy), o
+ *   - es hoy y ya son las 5:00 pm (HORA_CORTE_NO_ASISTIO) sin entrada.
+ * No cuenta: domingos / días no laborales del cargo, festivos, ni días con
+ * un permiso aprobado. Es seguro llamarla varias veces (no duplica).
+ */
+function sincronizarInasistencias($conexion, $desde, $hasta, $soloEmpleadoId = 0)
+{
+    try {
+        $conexion->query("
+            CREATE TABLE IF NOT EXISTS dias_no_asistidos (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                empleado_id INT NOT NULL,
+                fecha DATE NOT NULL,
+                liquidado TINYINT(1) NOT NULL DEFAULT 0,
+                fecha_liquidacion DATETIME NULL,
+                creado_en DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_empleado_fecha (empleado_id, fecha)
+            ) DEFAULT CHARSET=utf8
+        ");
+
+        $hoy = date("Y-m-d");
+        $ultimoDiaCerrado = (date("H:i:s") >= HORA_CORTE_NO_ASISTIO)
+            ? $hoy
+            : date("Y-m-d", strtotime("-1 day"));
+
+        $fin = (!empty($hasta) && $hasta < $ultimoDiaCerrado) ? $hasta : $ultimoDiaCerrado;
+
+        // Cada empleado se evalúa desde su primer registro de asistencia (antes no existía)
+        // y después de su última liquidación (para no reabrir periodos ya pagados).
+        $sqlEmp = "
+            SELECT
+                e.id,
+                e.cargo,
+                (SELECT MIN(a.fecha) FROM asistencias a WHERE a.empleado_id = e.id) AS primera,
+                (SELECT MAX(a.fecha) FROM asistencias a WHERE a.empleado_id = e.id AND a.liquidado = 1) AS ultima_liq
+            FROM empleados e
+            WHERE e.activo = 1
+        ";
+
+        if ($soloEmpleadoId > 0) {
+            $sqlEmp .= " AND e.id = " . (int) $soloEmpleadoId;
+        }
+
+        $resEmp = $conexion->query($sqlEmp);
+        if (!$resEmp) {
+            return;
+        }
+
+        $empleados = [];
+        $minIni = null;
+
+        while ($e = $resEmp->fetch_assoc()) {
+            if (empty($e["primera"])) {
+                continue;
+            }
+
+            $ini = substr($e["primera"], 0, 10);
+
+            if (!empty($desde) && $desde > $ini) {
+                $ini = $desde;
+            }
+
+            if (!empty($e["ultima_liq"])) {
+                $diaSig = date("Y-m-d", strtotime(substr($e["ultima_liq"], 0, 10) . " +1 day"));
+                if ($diaSig > $ini) {
+                    $ini = $diaSig;
+                }
+            }
+
+            if ($ini > $fin) {
+                continue;
+            }
+
+            $empleados[] = ["id" => (int) $e["id"], "cargo" => $e["cargo"], "ini" => $ini];
+
+            if ($minIni === null || $ini < $minIni) {
+                $minIni = $ini;
+            }
+        }
+
+        if (empty($empleados)) {
+            return;
+        }
+
+        $mapaHorarios = cargarMapaHorarios($conexion);
+        $festivos = cargarFestivosSet($conexion, $minIni, $fin);
+
+        // Días con asistencia registrada
+        $conAsistencia = [];
+        $stmtA = $conexion->prepare("SELECT empleado_id, fecha FROM asistencias WHERE fecha BETWEEN ? AND ?");
+        if ($stmtA) {
+            $stmtA->bind_param("ss", $minIni, $fin);
+            $stmtA->execute();
+            $resA = $stmtA->get_result();
+            while ($a = $resA->fetch_assoc()) {
+                $conAsistencia[$a["empleado_id"] . "|" . substr($a["fecha"], 0, 10)] = true;
+            }
+            $stmtA->close();
+        }
+
+        // Días con permiso aprobado (no cuentan como inasistencia)
+        $conPermiso = [];
+        $stmtP = $conexion->prepare("SELECT empleado_id, fecha FROM permisos WHERE estado = 'aprobado' AND fecha BETWEEN ? AND ?");
+        if ($stmtP) {
+            $stmtP->bind_param("ss", $minIni, $fin);
+            $stmtP->execute();
+            $resP = $stmtP->get_result();
+            while ($p = $resP->fetch_assoc()) {
+                $conPermiso[$p["empleado_id"] . "|" . substr($p["fecha"], 0, 10)] = true;
+            }
+            $stmtP->close();
+        }
+
+        $stmtIns = $conexion->prepare("INSERT IGNORE INTO dias_no_asistidos (empleado_id, fecha) VALUES (?, ?)");
+        if (!$stmtIns) {
+            return;
+        }
+
+        foreach ($empleados as $emp) {
+            $actual = strtotime($emp["ini"]);
+            $limite = strtotime($fin);
+
+            while ($actual <= $limite) {
+                $fecha = date("Y-m-d", $actual);
+                $diaN = (int) date("N", $actual);
+                $clave = $emp["id"] . "|" . $fecha;
+
+                if (
+                    esDiaLaboral($mapaHorarios, $emp["cargo"], $diaN)
+                    && !isset($festivos[$fecha])
+                    && !isset($conAsistencia[$clave])
+                    && !isset($conPermiso[$clave])
+                ) {
+                    $empId = $emp["id"];
+                    $stmtIns->bind_param("is", $empId, $fecha);
+                    $stmtIns->execute();
+                }
+
+                $actual = strtotime("+1 day", $actual);
+            }
+        }
+
+        $stmtIns->close();
+
+    } catch (Throwable $e) {
+        error_log("sincronizarInasistencias: " . $e->getMessage());
+    }
+}
+
+/**
  * Calcula el valor a pagar de un empleado en el periodo, según su cargo.
  * Devuelve null cuando falta información necesaria (p. ej. un empleado de
  * salario mensual sin un rango de fechas seleccionado, ya que sin eso no
  * se puede prorratear el salario).
  */
-function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $extraNeto, $deudaNeta, $extraBruto, $minutosTrabajados)
+function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $extraNeto, $deudaNeta, $extraBruto, $minutosTrabajados, $diasNoAsistidos = 0)
 {
     $detalle = [];
     $total = 0;
@@ -81,6 +331,10 @@ function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $ext
         $base = $diasConRegistro * VALOR_DIA_PRODUCCION;
         $detalle[] = ["label" => "Días trabajados ({$diasConRegistro} x " . pesos(VALOR_DIA_PRODUCCION) . ")", "valor" => $base];
         $total += $base;
+
+        $descSP = lineaDescuentoSaludPension($base);
+        $detalle[] = $descSP;
+        $total += $descSP["valor"];
 
         if ($extraNeto > 0) {
             $valorExtra = round($extraNeto * VALOR_MINUTO_PRODUCCION * RECARGO_HORA_EXTRA);
@@ -105,6 +359,10 @@ function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $ext
         $detalle[] = ["label" => "Horas laboradas (" . minutosAHoras($minutosOrdinarios) . ")", "valor" => $pagoOrdinario];
         $total += $pagoOrdinario;
 
+        $descSP = lineaDescuentoSaludPension($pagoOrdinario);
+        $detalle[] = $descSP;
+        $total += $descSP["valor"];
+
         if ($extraBruto > 0) {
             $valorExtra = round($extraBruto * VALOR_MINUTO_SMMLV * RECARGO_HORA_EXTRA);
             $detalle[] = ["label" => "+ Horas extra (" . minutosAHoras($extraBruto) . ", recargo 25%)", "valor" => $valorExtra];
@@ -126,8 +384,21 @@ function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $ext
         $base = round((SMMLV_2026 / DIAS_MES) * $diasPeriodo);
         $auxilio = round((AUX_TRANSPORTE_2026 / DIAS_MES) * $diasPeriodo);
         $detalle[] = ["label" => "Salario base ({$diasPeriodo} días del periodo)", "valor" => $base];
+
+        // Justo debajo del salario base: descuento de salud y pensión (8%)
+        $descSP = lineaDescuentoSaludPension($base);
+        $detalle[] = $descSP;
+
         $detalle[] = ["label" => "+ Auxilio de transporte", "valor" => $auxilio];
-        $total += $base + $auxilio;
+        $total += $base + $auxilio + $descSP["valor"];
+
+        // Cada día no asistido se descuenta del salario mensual (salario / 30)
+        if ($diasNoAsistidos > 0) {
+            $valorDiaSalario = SMMLV_2026 / DIAS_MES;
+            $descNoAsistidos = min($base, round($valorDiaSalario * $diasNoAsistidos));
+            $detalle[] = ["label" => "- Días no asistidos ({$diasNoAsistidos} x " . pesos($valorDiaSalario) . ")", "valor" => -$descNoAsistidos];
+            $total -= $descNoAsistidos;
+        }
 
         if ($extraNeto > 0) {
             $valorExtra = round($extraNeto * VALOR_MINUTO_SMMLV * RECARGO_HORA_EXTRA);
@@ -158,6 +429,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["accion"]) && $_POST["
 
     if ($empleadoId > 0) {
 
+        // Antes de liquidar nos aseguramos de que todos los días no asistidos
+        // del periodo estén guardados, para que queden liquidados junto con el resto.
+        sincronizarInasistencias($conexion, $desdeForm, $hastaForm, $empleadoId);
+
         $sqlLiquidar = "
             UPDATE asistencias
             SET liquidado = 1,
@@ -182,6 +457,31 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["accion"]) && $_POST["
             $stmtL->bind_param($tiposL, ...$paramsL);
             $stmtL->execute();
             $stmtL->close();
+
+            // Marcar también como liquidados los días no asistidos del mismo rango
+            $sqlLiqNA = "
+                UPDATE dias_no_asistidos
+                SET liquidado = 1,
+                    fecha_liquidacion = NOW()
+                WHERE empleado_id = ?
+                  AND liquidado = 0
+            ";
+            $paramsNA = [$empleadoId];
+            $tiposNA = "i";
+
+            if (!empty($desdeForm) && !empty($hastaForm)) {
+                $sqlLiqNA .= " AND fecha BETWEEN ? AND ?";
+                $paramsNA[] = $desdeForm;
+                $paramsNA[] = $hastaForm;
+                $tiposNA .= "ss";
+            }
+
+            $stmtNA = $conexion->prepare($sqlLiqNA);
+            if ($stmtNA) {
+                $stmtNA->bind_param($tiposNA, ...$paramsNA);
+                $stmtNA->execute();
+                $stmtNA->close();
+            }
 
             $mensaje = "Se liquidó correctamente el periodo de ese empleado. Sus contadores de retraso, extra y deuda vuelven a cero para el próximo periodo (sin borrar nada del Historial Completo).";
         } else {
@@ -223,6 +523,9 @@ $diasPeriodo = null;
 if (!empty($desde) && !empty($hasta)) {
     $diasPeriodo = (int) ((strtotime($hasta) - strtotime($desde)) / 86400) + 1;
 }
+
+// Guarda en la base de datos los días no asistidos (sin entrada hasta las 5:00 pm)
+sincronizarInasistencias($conexion, $desde, $hasta);
 
 $sql = "
     SELECT
@@ -284,66 +587,186 @@ if ($stmt) {
     $resultado = null;
 }
 
+// ---- Datos base (empleados con asistencias pendientes) ----
+$empleadosBase = [];
+if ($resultado) {
+    while ($f = $resultado->fetch_assoc()) {
+        $empleadosBase[(int) $f["id"]] = $f;
+    }
+}
+
+// ---- Fechas asistidas y no asistidas pendientes por empleado ----
+$fechasAsistidas = [];
+$fechasNoAsistidas = [];
+
+$sqlFA = "SELECT empleado_id, fecha FROM asistencias WHERE liquidado = 0";
+$sqlFN = "
+    SELECT d.empleado_id, d.fecha
+    FROM dias_no_asistidos d
+    WHERE d.liquidado = 0
+      AND NOT EXISTS (SELECT 1 FROM asistencias a WHERE a.empleado_id = d.empleado_id AND a.fecha = d.fecha)
+      AND NOT EXISTS (SELECT 1 FROM festivos fe WHERE fe.fecha = d.fecha)
+      AND NOT EXISTS (SELECT 1 FROM permisos p WHERE p.empleado_id = d.empleado_id AND p.fecha = d.fecha AND p.estado = 'aprobado')
+";
+$tiposF = "";
+$paramsF = [];
+
+if (!empty($desde) && !empty($hasta)) {
+    $sqlFA .= " AND fecha BETWEEN ? AND ?";
+    $sqlFN .= " AND d.fecha BETWEEN ? AND ?";
+    $tiposF = "ss";
+    $paramsF = [$desde, $hasta];
+}
+
+$sqlFA .= " ORDER BY fecha ASC";
+$sqlFN .= " ORDER BY d.fecha ASC";
+
+try {
+    $stmtFA = $conexion->prepare($sqlFA);
+    if ($stmtFA) {
+        if (!empty($paramsF)) {
+            $stmtFA->bind_param($tiposF, ...$paramsF);
+        }
+        $stmtFA->execute();
+        $resFA = $stmtFA->get_result();
+        while ($r = $resFA->fetch_assoc()) {
+            $fechasAsistidas[(int) $r["empleado_id"]][] = substr($r["fecha"], 0, 10);
+        }
+        $stmtFA->close();
+    }
+
+    $stmtFN = $conexion->prepare($sqlFN);
+    if ($stmtFN) {
+        if (!empty($paramsF)) {
+            $stmtFN->bind_param($tiposF, ...$paramsF);
+        }
+        $stmtFN->execute();
+        $resFN = $stmtFN->get_result();
+        while ($r = $resFN->fetch_assoc()) {
+            $fechasNoAsistidas[(int) $r["empleado_id"]][] = substr($r["fecha"], 0, 10);
+        }
+        $stmtFN->close();
+    }
+} catch (Throwable $e) {
+    error_log("liquidacion fechas: " . $e->getMessage());
+}
+
+// ---- Empleados activos que solo tienen días no asistidos (sin ninguna asistencia) ----
+$idsSoloAusencias = array_diff(array_keys($fechasNoAsistidas), array_keys($empleadosBase));
+
+if (!empty($idsSoloAusencias)) {
+    $sqlSoloAus = "SELECT id, nombre, identificacion, cargo FROM empleados WHERE activo = 1 AND id IN (" . implode(",", array_map("intval", $idsSoloAusencias)) . ")";
+    $paramsSA = [];
+    $tiposSA = "";
+
+    if (!empty($buscar)) {
+        $sqlSoloAus .= " AND (nombre LIKE ? OR identificacion LIKE ?)";
+        $paramsSA = ["%" . $buscar . "%", "%" . $buscar . "%"];
+        $tiposSA = "ss";
+    }
+
+    $stmtSA = $conexion->prepare($sqlSoloAus);
+    if ($stmtSA) {
+        if (!empty($paramsSA)) {
+            $stmtSA->bind_param($tiposSA, ...$paramsSA);
+        }
+        $stmtSA->execute();
+        $resSA = $stmtSA->get_result();
+        while ($r = $resSA->fetch_assoc()) {
+            $r["total_dias"] = 0;
+            $r["total_retraso"] = 0;
+            $r["total_extra"] = 0;
+            $r["total_deuda"] = 0;
+            $r["total_minutos_trabajados"] = 0;
+            $empleadosBase[(int) $r["id"]] = $r;
+        }
+        $stmtSA->close();
+    }
+}
+
+uasort($empleadosBase, function ($a, $b) {
+    return strcasecmp($a["nombre"], $b["nombre"]);
+});
+
+// ---- Para contar los días laborables del periodo (sin domingos ni festivos) ----
+$mapaHorarios = cargarMapaHorarios($conexion);
+$festivosPeriodo = [];
+if (!empty($desde) && !empty($hasta)) {
+    $festivosPeriodo = cargarFestivosSet($conexion, $desde, $hasta);
+}
+
 // Procesamos todas las filas de una vez (las necesitamos para la tabla Y
 // para el total general de nómina al final).
 $filasProcesadas = [];
 $totalNomina = 0;
 $faltaRangoParaAlguno = false;
 
-if ($resultado) {
-    while ($fila = $resultado->fetch_assoc()) {
+foreach ($empleadosBase as $fila) {
 
-        $retrasoBruto = (int) $fila["total_retraso"];
-        $extraBruto = (int) $fila["total_extra"];
-        $deudaBruta = (int) $fila["total_deuda"];
-        $diasConRegistro = (int) $fila["total_dias"];
-        $minutosTrabajados = (int) $fila["total_minutos_trabajados"];
+    $idEmp = (int) $fila["id"];
 
-        // El tiempo extra primero recupera el retraso, y lo que sobre recupera la deuda.
-        $extraDisponible = $extraBruto;
+    $retrasoBruto = (int) $fila["total_retraso"];
+    $extraBruto = (int) $fila["total_extra"];
+    $deudaBruta = (int) $fila["total_deuda"];
+    $diasConRegistro = (int) $fila["total_dias"];
+    $minutosTrabajados = (int) $fila["total_minutos_trabajados"];
 
-        if ($extraDisponible >= $retrasoBruto) {
-            $extraDisponible -= $retrasoBruto;
-            $retrasoNeto = 0;
-        } else {
-            $retrasoNeto = $retrasoBruto - $extraDisponible;
-            $extraDisponible = 0;
-        }
+    // El tiempo extra primero recupera el retraso, y lo que sobre recupera la deuda.
+    $extraDisponible = $extraBruto;
 
-        if ($extraDisponible >= $deudaBruta) {
-            $extraDisponible -= $deudaBruta;
-            $deudaNeta = 0;
-        } else {
-            $deudaNeta = $deudaBruta - $extraDisponible;
-            $extraDisponible = 0;
-        }
-
-        $extraNeto = $extraDisponible;
-
-        $pago = calcularPago(
-            $fila["cargo"],
-            $diasConRegistro,
-            $diasPeriodo,
-            $retrasoNeto,
-            $extraNeto,
-            $deudaNeta,
-            $extraBruto,
-            $minutosTrabajados
-        );
-
-        if ($pago === null) {
-            $faltaRangoParaAlguno = true;
-        } else {
-            $totalNomina += $pago["total"];
-        }
-
-        $fila["retrasoNeto"] = $retrasoNeto;
-        $fila["extraNeto"] = $extraNeto;
-        $fila["deudaNeta"] = $deudaNeta;
-        $fila["pago"] = $pago;
-
-        $filasProcesadas[] = $fila;
+    if ($extraDisponible >= $retrasoBruto) {
+        $extraDisponible -= $retrasoBruto;
+        $retrasoNeto = 0;
+    } else {
+        $retrasoNeto = $retrasoBruto - $extraDisponible;
+        $extraDisponible = 0;
     }
+
+    if ($extraDisponible >= $deudaBruta) {
+        $extraDisponible -= $deudaBruta;
+        $deudaNeta = 0;
+    } else {
+        $deudaNeta = $deudaBruta - $extraDisponible;
+        $extraDisponible = 0;
+    }
+
+    $extraNeto = $extraDisponible;
+
+    $asistidas = $fechasAsistidas[$idEmp] ?? [];
+    $noAsistidas = $fechasNoAsistidas[$idEmp] ?? [];
+
+    $pago = calcularPago(
+        $fila["cargo"],
+        $diasConRegistro,
+        $diasPeriodo,
+        $retrasoNeto,
+        $extraNeto,
+        $deudaNeta,
+        $extraBruto,
+        $minutosTrabajados,
+        count($noAsistidas)
+    );
+
+    if ($pago === null) {
+        $faltaRangoParaAlguno = true;
+    } else {
+        $totalNomina += $pago["total"];
+    }
+
+    $fila["diasAsistidos"] = count($asistidas);
+    $fila["diasNoAsistidos"] = count($noAsistidas);
+    $fila["fechasAsistidas"] = array_map("nombreDiaCorto", $asistidas);
+    $fila["fechasNoAsistidas"] = array_map("nombreDiaCorto", $noAsistidas);
+    $fila["diasLaborables"] = (!empty($desde) && !empty($hasta))
+        ? contarDiasLaborables($mapaHorarios, $festivosPeriodo, $fila["cargo"], $desde, $hasta)
+        : null;
+
+    $fila["retrasoNeto"] = $retrasoNeto;
+    $fila["extraNeto"] = $extraNeto;
+    $fila["deudaNeta"] = $deudaNeta;
+    $fila["pago"] = $pago;
+
+    $filasProcesadas[] = $fila;
 }
 
 ?>
@@ -729,6 +1152,64 @@ if ($resultado) {
             font-weight: 700;
         }
 
+        .color-asistido {
+            color: var(--success) !important;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .color-noasistio {
+            color: var(--danger) !important;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .texto-mini {
+            display: block;
+            font-size: 11.5px;
+            color: var(--ink-soft);
+            margin-top: 2px;
+        }
+
+        .fechas-no-asistio {
+            display: block;
+            margin-top: 4px;
+            font-size: 11.5px;
+            line-height: 1.5;
+            color: var(--danger);
+            max-width: 190px;
+        }
+
+        .lista-fechas {
+            list-style: none;
+            margin: 6px 0 14px;
+            padding: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .lista-fechas li {
+            font-size: 12.5px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: var(--success-light);
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .lista-fechas.rojo li {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+
+        .subtitulo-fechas {
+            font-size: 12.5px;
+            font-weight: 700;
+            color: var(--ink);
+            margin-top: 10px;
+        }
+
         .valor-pagar {
             font-weight: 700;
             color: var(--success);
@@ -918,13 +1399,15 @@ if ($resultado) {
                     <span class="icono-nota">ℹ️</span>
                     <span>
                         Aquí solo se cuentan los minutos <strong>pendientes por liquidar</strong> (los que aún no has pagado/descontado). El tiempo extra ya compensa primero el retraso y luego la deuda pendiente — por ejemplo, 30 min de retraso con 45 min de extra quedan mostrados como 15 min de extra y 0 de retraso. Si filtras por fechas (ej. del 1 al 15), el botón "Liquidar" solo marca como pagados los registros de <strong>ese rango de fechas</strong> para ese empleado. Nada se borra: en <strong>Historial Completo</strong> siempre vas a seguir viendo todo (sin compensar), liquidado o no.
+                        <br><br>
+                        <strong>Días asistidos / no asistidos:</strong> los domingos, festivos y días no laborales del cargo no se cuentan. Si un empleado no registra entrada hasta las <strong>5:00 pm</strong> de un día laboral, ese día se guarda como <strong>no asistió</strong> (los días con permiso aprobado no cuentan). Al liquidar, se muestran las fechas exactas antes de confirmar.
                     </span>
                 </div>
 
                 <div class="nota-legal">
                     <span class="icono-nota">⚠️</span>
                     <span>
-                        El valor a pagar es una <strong>ayuda de cálculo</strong>, no un reemplazo de tu contador(a). Usa el SMMLV y auxilio de transporte 2026 ($<?= number_format(SMMLV_2026, 0, ",", ".") ?> y $<?= number_format(AUX_TRANSPORTE_2026, 0, ",", ".") ?>, Decretos 1469 y 1470 de 2025) y el recargo legal de hora extra diurna (25%). <strong>No incluye</strong> seguridad social, parafiscales, cesantías, prima, vacaciones, retención en la fuente ni recargos nocturnos/dominicales. Para el salario mensual (Ventas, Administración, y demás cargos que no sean Producción o Temporales) necesitas seleccionar un rango de fechas "Desde/Hasta" para poder prorratear el mes.
+                        El valor a pagar es una <strong>ayuda de cálculo</strong>, no un reemplazo de tu contador(a). Usa el SMMLV y auxilio de transporte 2026 ($<?= number_format(SMMLV_2026, 0, ",", ".") ?> y $<?= number_format(AUX_TRANSPORTE_2026, 0, ",", ".") ?>, Decretos 1469 y 1470 de 2025) y el recargo legal de hora extra diurna (25%). Descuenta <strong>salud y pensión (8%)</strong> sobre el salario base y, en salarios mensuales, resta cada <strong>día no asistido</strong> (salario ÷ 30). <strong>No incluye</strong> parafiscales, cesantías, prima, vacaciones, retención en la fuente ni recargos nocturnos/dominicales. Para el salario mensual (Ventas, Administración, y demás cargos que no sean Producción o Temporales) necesitas seleccionar un rango de fechas "Desde/Hasta" para poder prorratear el mes.
                     </span>
                 </div>
 
@@ -963,7 +1446,8 @@ if ($resultado) {
                                 <th>Empleado</th>
                                 <th>Identificación</th>
                                 <th>Cargo</th>
-                                <th>Días pendientes</th>
+                                <th>Días asistidos</th>
+                                <th>Días no asistidos</th>
                                 <th>Retraso</th>
                                 <th>Extra</th>
                                 <th>Deuda</th>
@@ -974,7 +1458,7 @@ if ($resultado) {
                         <tbody>
                         <?php if (empty($filasProcesadas)): ?>
                             <tr>
-                                <td colspan="9" class="sin-resultados">
+                                <td colspan="10" class="sin-resultados">
                                     Aquí van a aparecer los empleados con minutos pendientes por liquidar.<br>
                                     Por ahora no hay ninguno en este rango.
                                 </td>
@@ -985,7 +1469,23 @@ if ($resultado) {
                                     <td><?= escapar($fila["nombre"]) ?></td>
                                     <td><?= escapar($fila["identificacion"]) ?></td>
                                     <td><span class="pill-cargo"><?= escapar($fila["cargo"]) ?></span></td>
-                                    <td><?= (int) $fila["total_dias"] ?></td>
+                                    <td>
+                                        <span class="color-asistido"><?= (int) $fila["diasAsistidos"] ?></span>
+                                        <?php if ($fila["diasLaborables"] !== null): ?>
+                                            <span class="texto-mini">de <?= (int) $fila["diasLaborables"] ?> laborables (sin domingos)</span>
+                                        <?php endif; ?>
+                                        <?php if ($fila["diasAsistidos"] > 0 || $fila["diasNoAsistidos"] > 0): ?>
+                                            <button type="button" class="btn-detalle" onclick="abrirDias(<?= $i ?>)">Ver fechas</button>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($fila["diasNoAsistidos"] > 0): ?>
+                                            <span class="color-noasistio"><?= (int) $fila["diasNoAsistidos"] ?></span>
+                                            <span class="fechas-no-asistio"><?= escapar(implode(" · ", $fila["fechasNoAsistidas"])) ?></span>
+                                        <?php else: ?>
+                                            —
+                                        <?php endif; ?>
+                                    </td>
                                     <td>
                                         <?php if ($fila["retrasoNeto"] > 0): ?>
                                             <span class="color-retraso"><?= minutosAHoras($fila["retrasoNeto"]) ?></span>
@@ -1021,7 +1521,7 @@ if ($resultado) {
                                             <input type="hidden" name="empleado_id" value="<?= (int) $fila["id"] ?>">
                                             <input type="hidden" name="desde" value="<?= escapar($desde) ?>">
                                             <input type="hidden" name="hasta" value="<?= escapar($hasta) ?>">
-                                            <button type="submit" class="btn-liquidar" data-nombre="<?= escapar($fila["nombre"]) ?>">💰 Liquidar</button>
+                                            <button type="submit" class="btn-liquidar" data-nombre="<?= escapar($fila["nombre"]) ?>" data-noasistidos="<?= escapar(json_encode($fila["fechasNoAsistidas"], JSON_UNESCAPED_UNICODE)) ?>" data-asistidos="<?= (int) $fila["diasAsistidos"] ?>">💰 Liquidar</button>
                                         </form>
                                     </td>
                                 </tr>
@@ -1063,7 +1563,76 @@ if ($resultado) {
         </div>
     </div>
 
+    <!-- Modal de días asistidos / no asistidos -->
+    <div class="modal" id="modalDiasPeriodo" style="display:none;">
+        <div class="modal-contenido" style="max-width:520px;">
+            <h3 id="diasNombreEmpleado">Días del periodo</h3>
+            <div id="diasContenido"></div>
+            <div class="botones-modal" style="display:flex; justify-content:flex-end; margin-top:15px;">
+                <button type="button" class="boton boton-secundario" onclick="cerrarDias()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        const detallesDias = <?= json_encode(array_map(function ($f) {
+            return [
+                "nombre" => $f["nombre"],
+                "asistidas" => $f["fechasAsistidas"],
+                "noAsistidas" => $f["fechasNoAsistidas"],
+            ];
+        }, $filasProcesadas), JSON_UNESCAPED_UNICODE) ?>;
+
+        function abrirDias(indice) {
+            const info = detallesDias[indice];
+            if (!info) return;
+
+            document.getElementById("diasNombreEmpleado").textContent = "Días del periodo — " + info.nombre;
+
+            const cont = document.getElementById("diasContenido");
+            cont.innerHTML = "";
+
+            function bloque(titulo, fechas, clase) {
+                const t = document.createElement("div");
+                t.className = "subtitulo-fechas";
+                t.textContent = titulo + " (" + fechas.length + ")";
+                cont.appendChild(t);
+
+                const ul = document.createElement("ul");
+                ul.className = "lista-fechas " + clase;
+
+                if (fechas.length === 0) {
+                    const li = document.createElement("li");
+                    li.textContent = "Ninguno";
+                    ul.appendChild(li);
+                } else {
+                    fechas.forEach(f => {
+                        const li = document.createElement("li");
+                        li.textContent = f;
+                        ul.appendChild(li);
+                    });
+                }
+
+                cont.appendChild(ul);
+            }
+
+            bloque("Días asistidos", info.asistidas, "verde");
+            bloque("Días no asistidos", info.noAsistidas, "rojo");
+
+            document.getElementById("modalDiasPeriodo").style.display = "flex";
+        }
+
+        function cerrarDias() {
+            document.getElementById("modalDiasPeriodo").style.display = "none";
+        }
+
+        window.addEventListener("click", function (event) {
+            const modal = document.getElementById("modalDiasPeriodo");
+            if (event.target === modal) {
+                cerrarDias();
+            }
+        });
+
         const detallesPago = <?= json_encode(array_map(function ($f) {
             return [
                 "nombre" => $f["nombre"],
@@ -1126,8 +1695,25 @@ if ($resultado) {
                 const boton = formulario.querySelector(".btn-liquidar");
                 const nombre = boton.getAttribute("data-nombre");
 
+                let noAsistidos = [];
+                try {
+                    noAsistidos = JSON.parse(boton.getAttribute("data-noasistidos") || "[]");
+                } catch (e) {
+                    noAsistidos = [];
+                }
+
+                let textoDias = "Días asistidos: " + boton.getAttribute("data-asistidos") + "\n";
+
+                if (noAsistidos.length > 0) {
+                    textoDias += "⚠️ " + nombre + " NO asistió estos " + noAsistidos.length + " día(s):\n" +
+                        noAsistidos.map(function (f) { return "   • " + f; }).join("\n") + "\n";
+                } else {
+                    textoDias += "No tiene días no asistidos.\n";
+                }
+
                 const confirmado = confirm(
-                    "¿Liquidar el periodo pendiente de " + nombre + "? " +
+                    "¿Liquidar el periodo pendiente de " + nombre + "?\n\n" +
+                    textoDias + "\n" +
                     "Sus minutos pendientes quedarán en cero para el próximo periodo. " +
                     "Esto no borra nada de Historial Completo."
                 );
