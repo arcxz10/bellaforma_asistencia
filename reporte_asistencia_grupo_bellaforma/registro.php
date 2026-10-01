@@ -90,6 +90,10 @@ $fecha = date("Y-m-d");
 $horaActual = date("H:i:s");
 $diaSemana = (int) date("N");
 
+// Si citan a estos cargos un sábado, todo el tiempo trabajado cuenta 100% como horas extra.
+$cargosSabadoExtra = ['Producción', 'Temporales', 'Jefe de Maquinaria', 'Directora de Despachos'];
+$esSabadoCitado = ($diaSemana === 6 && in_array($cargo, $cargosSabadoExtra, true));
+
 $sqlFestivo = "
     SELECT descripcion
     FROM festivos
@@ -154,7 +158,7 @@ $stmtHorario->bind_param("si", $cargo, $diaSemana);
 $stmtHorario->execute();
 $resultadoHorario = $stmtHorario->get_result();
 
-if ($resultadoHorario->num_rows !== 1) {
+if ($resultadoHorario->num_rows !== 1 && !$esSabadoCitado) {
     $stmtHorario->close();
     $conexion->close();
 
@@ -167,6 +171,15 @@ if ($resultadoHorario->num_rows !== 1) {
 
 $horario = $resultadoHorario->fetch_assoc();
 $stmtHorario->close();
+
+if ($esSabadoCitado) {
+    // Sábado citado: se puede registrar aunque la tabla horarios diga que no se trabaja.
+    $horario = [
+        "hora_entrada" => $horario["hora_entrada"] ?? "07:30:00",
+        "hora_salida" => $horario["hora_salida"] ?? "07:30:00",
+        "trabaja" => 1,
+    ];
+}
 
 if ((int) $horario["trabaja"] !== 1) {
     $conexion->close();
@@ -263,7 +276,7 @@ if ($tipo === "entrada") {
                 $stmtPerm->close();
             }
 
-            if (!$tienePermiso) {
+            if (!$tienePermiso && !$esSabadoCitado) {
                 $stmtNA = $conexion->prepare("INSERT IGNORE INTO dias_no_asistidos (empleado_id, fecha) VALUES (?, ?)");
                 if ($stmtNA) {
                     $stmtNA->bind_param("is", $empleadoId, $fecha);
@@ -280,7 +293,7 @@ if ($tipo === "entrada") {
         mostrarResultado(
             "error",
             "Jornada laboral terminada",
-            $tienePermiso
+            ($tienePermiso || $esSabadoCitado)
                 ? "La jornada laboral ha terminado (5:00 pm). Ya no es posible registrar la entrada de hoy."
                 : "La jornada laboral ha terminado (5:00 pm). No registraste tu entrada a tiempo, por lo que <strong>se te marcó inasistencia el día de hoy</strong>."
         );
@@ -292,7 +305,7 @@ if ($tipo === "entrada") {
     $partesHorario = explode(":", $horaEntradaProgramada);
     $minutosEntrada = ((int)($partesHorario[0] ?? 0) * 60) + (int)($partesHorario[1] ?? 0);
 
-    if ($minutosActuales > $minutosEntrada) {
+    if ($minutosActuales > $minutosEntrada && !$esSabadoCitado) {
         $estadoEntrada = "tarde";
         $minutosRetraso = $minutosActuales - $minutosEntrada;
 
@@ -520,9 +533,7 @@ if ($tipo === "salida") {
 
     // Regla especial: si citan a estos cargos un sábado, todo el tiempo trabajado
     // (desde la entrada real hasta la salida real) cuenta 100% como horas extra.
-    $cargosSabadoExtra = ['Producción', 'Temporales', 'Jefe de Maquinaria', 'Directora de Despachos'];
-
-    if (in_array($cargo, $cargosSabadoExtra, true) && $diaSemana === 6) {
+    if ($esSabadoCitado) {
         $minutosEntradaReal = convertirMinutos($asistencia["hora_entrada"]);
         $minutosExtra = max(0, $minutosActuales - $minutosEntradaReal);
         $minutosDeuda = 0;
@@ -554,7 +565,8 @@ if ($tipo === "salida") {
     }
 
     // Descontar minutos de deuda de días anteriores si hoy hizo horas extra
-    if ($minutosExtra > 0) {
+    // (el sábado citado NO se usa para esto: se guarda completo como extra)
+    if ($minutosExtra > 0 && !$esSabadoCitado) {
         $sqlDeudas = "SELECT id, minutos_deuda FROM asistencias WHERE empleado_id = ? AND minutos_deuda > 0 AND fecha < ? ORDER BY fecha ASC";
         $stmtDeudas = $conexion->prepare($sqlDeudas);
         $stmtDeudas->bind_param("is", $empleadoId, $fecha);
