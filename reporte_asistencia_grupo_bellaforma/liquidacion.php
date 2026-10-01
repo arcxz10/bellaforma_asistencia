@@ -1631,9 +1631,9 @@ foreach ($empleadosBase as $fila) {
                                         <?php elseif (empty($fila["extraDetalle"])): ?>
                                             —
                                         <?php endif; ?>
-                                        <?php foreach ($fila["extraDetalle"] as $lineaExtra): ?>
-                                            <span class="fechas-extra"><?= escapar($lineaExtra) ?></span>
-                                        <?php endforeach; ?>
+                                        <?php if (!empty($fila["extraDetalle"])): ?>
+                                            <button type="button" class="btn-detalle" onclick="abrirDias(<?= $i ?>)">Ver fechas</button>
+                                        <?php endif; ?>
                                         <?php if ($fila["extraCompensado"] > 0): ?>
                                             <span class="texto-mini">Se compensaron <?= minutosAHoras($fila["extraCompensado"]) ?> con retraso/deuda</span>
                                         <?php endif; ?>
