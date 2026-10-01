@@ -54,6 +54,14 @@ if ($tipoAccion === "salida") {
     exit;
 }
 
+// Sábado citado (Producción, Temporales, Jefe de Maquinaria, Directora de Despachos):
+// no hay hora de entrada que cumplir, todo cuenta como extra.
+$cargosSabadoExtra = ['Producción', 'Temporales', 'Jefe de Maquinaria', 'Directora de Despachos'];
+if ($diaSemana === 6 && in_array($cargo, $cargosSabadoExtra, true)) {
+    echo json_encode(["tipo" => "entrada", "tarde" => false]);
+    exit;
+}
+
 // 3. Consultar horario para ver si llegó tarde a la ENTRADA
 $sqlHorario = "SELECT hora_entrada, trabaja FROM horarios WHERE cargo = ? AND dia_semana = ? LIMIT 1";
 $stmtHorario = $conexion->prepare($sqlHorario);
