@@ -36,6 +36,10 @@ define("VALOR_MINUTO_SMMLV", VALOR_HORA_SMMLV / 60);
 
 define("RECARGO_HORA_EXTRA", 1.25); // 25% de recargo legal, hora extra diurna
 
+// Cargos a los que, si los citan un sábado, TODO el tiempo trabajado ese día cuenta
+// como horas extra. Debe ser la misma lista que $cargosSabadoExtra en registro.php.
+define("CARGOS_SABADO_EXTRA", ["Producción", "Temporales", "Jefe de Maquinaria", "Directora de Despachos"]);
+
 // --- Producción: tarifa fija diaria (no por SMMLV) ---
 define("VALOR_DIA_PRODUCCION", 60000);
 define("MINUTOS_JORNADA_PRODUCCION", 575); // 7:30am a 5:05pm = 9h35
@@ -115,6 +119,11 @@ function cargarMapaHorarios($conexion)
 // Si no hay horario configurado para ese día, solo el domingo se considera no laboral.
 function esDiaLaboral($mapaHorarios, $cargo, $diaN)
 {
+    // Sábado de estos cargos = solo si los citan; nunca cuenta como inasistencia.
+    if ($diaN === 6 && in_array($cargo, CARGOS_SABADO_EXTRA, true)) {
+        return false;
+    }
+
     if (isset($mapaHorarios[$cargo][$diaN])) {
         return $mapaHorarios[$cargo][$diaN] === 1;
     }
@@ -316,12 +325,40 @@ function sincronizarInasistencias($conexion, $desde, $hasta, $soloEmpleadoId = 0
 }
 
 /**
+ * Líneas de "Horas extra" para el detalle de pago. Separa las horas del sábado
+ * citado (100% del tiempo trabajado) de las horas extra de lunes a viernes.
+ * Devuelve [lineas, totalPesos].
+ */
+function lineasHorasExtra($extraTotal, $extraSabado, $valorMinuto)
+{
+    $lineas = [];
+    $total = 0;
+
+    $extraSab = min((int) $extraSabado, (int) $extraTotal);
+    $extraDia = (int) $extraTotal - $extraSab;
+
+    if ($extraDia > 0) {
+        $v = round($extraDia * $valorMinuto * RECARGO_HORA_EXTRA);
+        $lineas[] = ["label" => "+ Horas extra (" . minutosAHoras($extraDia) . ", recargo 25%)", "valor" => $v];
+        $total += $v;
+    }
+
+    if ($extraSab > 0) {
+        $v = round($extraSab * $valorMinuto * RECARGO_HORA_EXTRA);
+        $lineas[] = ["label" => "+ Horas extra sábado citado (" . minutosAHoras($extraSab) . ", 100% extra, recargo 25%)", "valor" => $v];
+        $total += $v;
+    }
+
+    return [$lineas, $total];
+}
+
+/**
  * Calcula el valor a pagar de un empleado en el periodo, según su cargo.
  * Devuelve null cuando falta información necesaria (p. ej. un empleado de
  * salario mensual sin un rango de fechas seleccionado, ya que sin eso no
  * se puede prorratear el salario).
  */
-function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $extraNeto, $deudaNeta, $extraBruto, $minutosTrabajados, $diasNoAsistidos = 0)
+function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $extraNeto, $deudaNeta, $extraBruto, $minutosTrabajados, $diasNoAsistidos = 0, $extraSabado = 0)
 {
     $detalle = [];
     $total = 0;
@@ -337,8 +374,10 @@ function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $ext
         $total += $descSP["valor"];
 
         if ($extraNeto > 0) {
-            $valorExtra = round($extraNeto * VALOR_MINUTO_PRODUCCION * RECARGO_HORA_EXTRA);
-            $detalle[] = ["label" => "+ Horas extra (" . minutosAHoras($extraNeto) . ", recargo 25%)", "valor" => $valorExtra];
+            [$lineasExtra, $valorExtra] = lineasHorasExtra($extraNeto, $extraSabado, VALOR_MINUTO_PRODUCCION);
+            foreach ($lineasExtra as $l) {
+                $detalle[] = $l;
+            }
             $total += $valorExtra;
         }
 
@@ -364,8 +403,10 @@ function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $ext
         $total += $descSP["valor"];
 
         if ($extraBruto > 0) {
-            $valorExtra = round($extraBruto * VALOR_MINUTO_SMMLV * RECARGO_HORA_EXTRA);
-            $detalle[] = ["label" => "+ Horas extra (" . minutosAHoras($extraBruto) . ", recargo 25%)", "valor" => $valorExtra];
+            [$lineasExtra, $valorExtra] = lineasHorasExtra($extraBruto, $extraSabado, VALOR_MINUTO_SMMLV);
+            foreach ($lineasExtra as $l) {
+                $detalle[] = $l;
+            }
             $total += $valorExtra;
         }
 
@@ -401,8 +442,10 @@ function calcularPago($cargo, $diasConRegistro, $diasPeriodo, $retrasoNeto, $ext
         }
 
         if ($extraNeto > 0) {
-            $valorExtra = round($extraNeto * VALOR_MINUTO_SMMLV * RECARGO_HORA_EXTRA);
-            $detalle[] = ["label" => "+ Horas extra (" . minutosAHoras($extraNeto) . ", recargo 25%)", "valor" => $valorExtra];
+            [$lineasExtra, $valorExtra] = lineasHorasExtra($extraNeto, $extraSabado, VALOR_MINUTO_SMMLV);
+            foreach ($lineasExtra as $l) {
+                $detalle[] = $l;
+            }
             $total += $valorExtra;
         }
 
@@ -651,6 +694,41 @@ try {
     error_log("liquidacion fechas: " . $e->getMessage());
 }
 
+// ---- Horas extra pendientes por fecha (para ver qué día hizo cuántos minutos) ----
+$extraPorDia = [];
+
+$sqlEX = "SELECT empleado_id, fecha, minutos_extra FROM asistencias WHERE liquidado = 0 AND minutos_extra > 0";
+$tiposEX = "";
+$paramsEX = [];
+
+if (!empty($desde) && !empty($hasta)) {
+    $sqlEX .= " AND fecha BETWEEN ? AND ?";
+    $tiposEX = "ss";
+    $paramsEX = [$desde, $hasta];
+}
+
+$sqlEX .= " ORDER BY fecha ASC";
+
+try {
+    $stmtEX = $conexion->prepare($sqlEX);
+    if ($stmtEX) {
+        if (!empty($paramsEX)) {
+            $stmtEX->bind_param($tiposEX, ...$paramsEX);
+        }
+        $stmtEX->execute();
+        $resEX = $stmtEX->get_result();
+        while ($r = $resEX->fetch_assoc()) {
+            $extraPorDia[(int) $r["empleado_id"]][] = [
+                "fecha" => substr($r["fecha"], 0, 10),
+                "minutos" => (int) $r["minutos_extra"],
+            ];
+        }
+        $stmtEX->close();
+    }
+} catch (Throwable $e) {
+    error_log("liquidacion extra por dia: " . $e->getMessage());
+}
+
 // ---- Empleados activos que solo tienen días no asistidos (sin ninguna asistencia) ----
 $idsSoloAusencias = array_diff(array_keys($fechasNoAsistidas), array_keys($empleadosBase));
 
@@ -711,6 +789,35 @@ foreach ($empleadosBase as $fila) {
     $diasConRegistro = (int) $fila["total_dias"];
     $minutosTrabajados = (int) $fila["total_minutos_trabajados"];
 
+    // Sábado citado: sus minutos cuentan 100% como extra. No se usan para tapar
+    // retraso/deuda de otros días y el día no se paga además como "día trabajado".
+    $esCargoSabado = in_array($fila["cargo"], CARGOS_SABADO_EXTRA, true);
+    $extraSabado = 0;
+    $sabadosConRegistro = 0;
+    $extraDetalle = [];
+
+    foreach (($extraPorDia[$idEmp] ?? []) as $d) {
+        $esSab = $esCargoSabado && (int) date("N", strtotime($d["fecha"])) === 6;
+
+        if ($esSab) {
+            $extraSabado += $d["minutos"];
+        }
+
+        $extraDetalle[] = nombreDiaCorto($d["fecha"]) . ": " . minutosAHoras($d["minutos"]) . ($esSab ? " (sábado citado, 100% extra)" : "");
+    }
+
+    if ($esCargoSabado) {
+        foreach (($fechasAsistidas[$idEmp] ?? []) as $fAs) {
+            if ((int) date("N", strtotime($fAs)) === 6) {
+                $sabadosConRegistro++;
+            }
+        }
+    }
+
+    // Extra de lunes a viernes (lo único que compensa retraso y deuda)
+    $extraBrutoTotal = $extraBruto;
+    $extraBruto = max(0, $extraBrutoTotal - $extraSabado);
+
     // El tiempo extra primero recupera el retraso, y lo que sobre recupera la deuda.
     $extraDisponible = $extraBruto;
 
@@ -730,7 +837,14 @@ foreach ($empleadosBase as $fila) {
         $extraDisponible = 0;
     }
 
-    $extraNeto = $extraDisponible;
+    $compensado = $extraBruto - $extraDisponible; // extra de L-V usado para tapar retraso/deuda
+    $extraNeto = $extraDisponible + $extraSabado;
+
+    // Producción cobra tarifa fija por día: el sábado citado NO se paga como día
+    // trabajado (ya se paga completo como horas extra).
+    if ($fila["cargo"] === "Producción") {
+        $diasConRegistro = max(0, $diasConRegistro - $sabadosConRegistro);
+    }
 
     $asistidas = $fechasAsistidas[$idEmp] ?? [];
     $noAsistidas = $fechasNoAsistidas[$idEmp] ?? [];
@@ -742,9 +856,10 @@ foreach ($empleadosBase as $fila) {
         $retrasoNeto,
         $extraNeto,
         $deudaNeta,
-        $extraBruto,
+        $extraBrutoTotal,
         $minutosTrabajados,
-        count($noAsistidas)
+        count($noAsistidas),
+        $extraSabado
     );
 
     if ($pago === null) {
@@ -763,6 +878,9 @@ foreach ($empleadosBase as $fila) {
 
     $fila["retrasoNeto"] = $retrasoNeto;
     $fila["extraNeto"] = $extraNeto;
+    $fila["extraSabado"] = $extraSabado;
+    $fila["extraCompensado"] = $compensado;
+    $fila["extraDetalle"] = $extraDetalle;
     $fila["deudaNeta"] = $deudaNeta;
     $fila["pago"] = $pago;
 
@@ -1180,6 +1298,20 @@ foreach ($empleadosBase as $fila) {
             max-width: 190px;
         }
 
+        .fechas-extra {
+            display: block;
+            margin-top: 4px;
+            font-size: 11.5px;
+            line-height: 1.5;
+            color: var(--extra);
+            max-width: 230px;
+        }
+
+        .lista-fechas.ambar li {
+            background: #FFF4DB;
+            color: var(--extra);
+        }
+
         .lista-fechas {
             list-style: none;
             margin: 6px 0 14px;
@@ -1474,7 +1606,7 @@ foreach ($empleadosBase as $fila) {
                                         <?php if ($fila["diasLaborables"] !== null): ?>
                                             <span class="texto-mini">de <?= (int) $fila["diasLaborables"] ?> laborables (sin domingos)</span>
                                         <?php endif; ?>
-                                        <?php if ($fila["diasAsistidos"] > 0 || $fila["diasNoAsistidos"] > 0): ?>
+                                        <?php if ($fila["diasAsistidos"] > 0 || $fila["diasNoAsistidos"] > 0 || !empty($fila["extraDetalle"])): ?>
                                             <button type="button" class="btn-detalle" onclick="abrirDias(<?= $i ?>)">Ver fechas</button>
                                         <?php endif; ?>
                                     </td>
@@ -1496,8 +1628,14 @@ foreach ($empleadosBase as $fila) {
                                     <td>
                                         <?php if ($fila["extraNeto"] > 0): ?>
                                             <span class="color-extra"><?= minutosAHoras($fila["extraNeto"]) ?></span>
-                                        <?php else: ?>
+                                        <?php elseif (empty($fila["extraDetalle"])): ?>
                                             —
+                                        <?php endif; ?>
+                                        <?php foreach ($fila["extraDetalle"] as $lineaExtra): ?>
+                                            <span class="fechas-extra"><?= escapar($lineaExtra) ?></span>
+                                        <?php endforeach; ?>
+                                        <?php if ($fila["extraCompensado"] > 0): ?>
+                                            <span class="texto-mini">Se compensaron <?= minutosAHoras($fila["extraCompensado"]) ?> con retraso/deuda</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
@@ -1580,6 +1718,7 @@ foreach ($empleadosBase as $fila) {
                 "nombre" => $f["nombre"],
                 "asistidas" => $f["fechasAsistidas"],
                 "noAsistidas" => $f["fechasNoAsistidas"],
+                "extras" => $f["extraDetalle"],
             ];
         }, $filasProcesadas), JSON_UNESCAPED_UNICODE) ?>;
 
@@ -1618,6 +1757,7 @@ foreach ($empleadosBase as $fila) {
 
             bloque("Días asistidos", info.asistidas, "verde");
             bloque("Días no asistidos", info.noAsistidas, "rojo");
+            bloque("Horas extra por fecha", info.extras || [], "ambar");
 
             document.getElementById("modalDiasPeriodo").style.display = "flex";
         }
