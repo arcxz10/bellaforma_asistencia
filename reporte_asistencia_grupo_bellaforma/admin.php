@@ -987,7 +987,12 @@ $sqlEmpleados = "
             h.hora_salida,
             e.hora_salida
         ) AS hora_salida,
-        e.activo
+        e.activo,
+        (
+            SELECT MIN(a.fecha)
+            FROM asistencias a
+            WHERE a.empleado_id = e.id
+        ) AS primer_registro
     FROM empleados e
 
     LEFT JOIN horarios h
@@ -2195,6 +2200,10 @@ $resultadoEmpleados =
                                 </th>
 
                                 <th>
+                                    Primer registro
+                                </th>
+
+                                <th>
                                     Documento
                                 </th>
 
@@ -2229,7 +2238,7 @@ $resultadoEmpleados =
                             <tr>
 
                                 <td
-                                    colspan="6"
+                                    colspan="7"
                                     class="sin-resultados"
                                 >
                                     No hay empleados registrados.
@@ -2250,6 +2259,12 @@ $resultadoEmpleados =
                                         <?= escapar(
                                             $empleado["nombre"]
                                         ) ?>
+                                    </td>
+
+                                    <td>
+                                        <?= !empty($empleado["primer_registro"])
+                                            ? date("d/m/Y", strtotime($empleado["primer_registro"]))
+                                            : "—" ?>
                                     </td>
 
                                     <td>
