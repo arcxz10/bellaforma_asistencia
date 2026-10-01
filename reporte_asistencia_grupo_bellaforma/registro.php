@@ -236,6 +236,56 @@ if ($tipo === "entrada") {
         mostrarResultado("error", "Ya registrado", "Ya registraste tu entrada el día de hoy.");
     }
 
+    // Jornada terminada: desde las 5:00 pm ya no se puede registrar entrada.
+    // Ese día queda guardado como "no asistió" (salvo que tenga un permiso aprobado).
+    if ($horaActual >= "17:00:00") {
+
+        $tienePermiso = false;
+
+        try {
+            $conexion->query("
+                CREATE TABLE IF NOT EXISTS dias_no_asistidos (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    empleado_id INT NOT NULL,
+                    fecha DATE NOT NULL,
+                    liquidado TINYINT(1) NOT NULL DEFAULT 0,
+                    fecha_liquidacion DATETIME NULL,
+                    creado_en DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_empleado_fecha (empleado_id, fecha)
+                ) DEFAULT CHARSET=utf8
+            ");
+
+            $stmtPerm = $conexion->prepare("SELECT id FROM permisos WHERE empleado_id = ? AND fecha = ? AND estado = 'aprobado' LIMIT 1");
+            if ($stmtPerm) {
+                $stmtPerm->bind_param("is", $empleadoId, $fecha);
+                $stmtPerm->execute();
+                $tienePermiso = $stmtPerm->get_result()->num_rows > 0;
+                $stmtPerm->close();
+            }
+
+            if (!$tienePermiso) {
+                $stmtNA = $conexion->prepare("INSERT IGNORE INTO dias_no_asistidos (empleado_id, fecha) VALUES (?, ?)");
+                if ($stmtNA) {
+                    $stmtNA->bind_param("is", $empleadoId, $fecha);
+                    $stmtNA->execute();
+                    $stmtNA->close();
+                }
+            }
+        } catch (Throwable $e) {
+            error_log("registro inasistencia: " . $e->getMessage());
+        }
+
+        $conexion->close();
+
+        mostrarResultado(
+            "error",
+            "Jornada laboral terminada",
+            $tienePermiso
+                ? "La jornada laboral ha terminado (5:00 pm). Ya no es posible registrar la entrada de hoy."
+                : "La jornada laboral ha terminado (5:00 pm). No registraste tu entrada a tiempo, por lo que <strong>se te marcó inasistencia el día de hoy</strong>."
+        );
+    }
+
     // Validación de entrada corregida por minutos independientes del formato de hora
     $minutosActuales = (int)date("H") * 60 + (int)date("i");
     
