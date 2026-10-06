@@ -40,43 +40,38 @@ if (!isset($_SESSION["admin_id"])) {
             padding: 40px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
             text-align: center;
-            max-width: 420px;
+            max-width: 600px;
             width: 100%;
         }
 
-        .tarjeta-qr h1 {
-            color: #0D47A1;
-            font-size: 24px;
-            margin-bottom: 6px;
+        .logo {
+            max-width: 280px;
+            width: 100%;
+            height: auto;
+            margin-bottom: 10px;
         }
 
         .tarjeta-qr p {
-            color: #666;
-            font-size: 14px;
+            color: #444;
+            font-size: 18px;
+            font-weight: 600;
             margin-bottom: 25px;
         }
 
+        /* El QR se genera en alta resolución (900px) y se escala con CSS,
+           así se ve nítido tanto en pantalla como impreso. */
         #qrcode {
             display: flex;
             justify-content: center;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
 
         #qrcode img,
         #qrcode canvas {
-            border: 10px solid white;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .url-destino {
-            word-break: break-all;
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 12px;
-            font-size: 13px;
-            color: #444;
-            margin-bottom: 20px;
+            width: 100% !important;
+            max-width: 480px;
+            height: auto !important;
+            image-rendering: pixelated;
         }
 
         .btn-imprimir {
@@ -98,8 +93,15 @@ if (!isset($_SESSION["admin_id"])) {
         }
 
         @media print {
+            @page {
+                margin: 1cm;
+            }
+
             body {
                 background: white;
+                padding: 0;
+                min-height: auto;
+                display: block;
             }
 
             .btn-imprimir {
@@ -108,6 +110,25 @@ if (!isset($_SESSION["admin_id"])) {
 
             .tarjeta-qr {
                 box-shadow: none;
+                max-width: 100%;
+                padding: 0;
+                border-radius: 0;
+            }
+
+            .logo {
+                max-width: 9cm;
+            }
+
+            .tarjeta-qr p {
+                font-size: 22pt;
+                margin-bottom: 0.6cm;
+            }
+
+            /* Tamaño del QR al imprimir (se ajusta bien en hoja carta/A4) */
+            #qrcode img,
+            #qrcode canvas {
+                width: 15cm !important;
+                max-width: 15cm;
             }
         }
     </style>
@@ -115,12 +136,10 @@ if (!isset($_SESSION["admin_id"])) {
 <body>
 
     <div class="tarjeta-qr">
-        <img src="img/logo-verde.png" alt="Grupo Bella Forma S.A.S." style="max-width:280px; width:100%; height:auto; margin-bottom:10px;">
+        <img class="logo" src="img/logo-verde.png" alt="Grupo Bella Forma S.A.S.">
         <p>Escanea para registrar tu asistencia</p>
 
         <div id="qrcode"></div>
-
-        <div class="url-destino" id="urlDestino"></div>
 
         <button class="btn-imprimir" onclick="window.print()">
             🖨️ Imprimir
@@ -129,18 +148,14 @@ if (!isset($_SESSION["admin_id"])) {
 
     <script>
         // La URL se arma sola a partir de dónde esté corriendo el sitio.
-        // En local apunta a localhost/tu-ip-local; cuando subas el
-        // proyecto a un servidor real, apuntará sola al dominio final.
         const urlRegistro =
             window.location.origin +
             window.location.pathname.replace('codigo_qr.php', 'registro.html');
 
-        document.getElementById('urlDestino').textContent = urlRegistro;
-
         new QRCode(document.getElementById('qrcode'), {
             text: urlRegistro,
-            width: 220,
-            height: 220,
+            width: 900,
+            height: 900,
             colorDark: '#1a1a1a',
             colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.M
