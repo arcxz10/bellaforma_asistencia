@@ -102,6 +102,15 @@ body {
     background: #BBDEFB;
 }
 
+.boton-vendedor {
+    background: #1565C0;
+    color: white;
+}
+
+.boton-vendedor:hover {
+    background: #0D47A1;
+}
+
 .pie {
     text-align: center;
     margin-top: 25px;
