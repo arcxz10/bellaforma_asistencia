@@ -51,7 +51,7 @@ body {
 
 /* Nombre de la empresa junto al logo (sin tocar el HTML de cada página) */
 .header-title::after {
-    content: "Grupo Bella Forma";
+    content: "Grupo Bellaforma";
     font-size: 19px;
     letter-spacing: -.005em;
 }
