@@ -17,6 +17,8 @@ if (!isset($_SESSION["admin_id"])) {
     <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
     <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="css/base.css">
     <style>
         * {
             box-sizing: border-box;
@@ -25,8 +27,9 @@ if (!isset($_SESSION["admin_id"])) {
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #BBDEFB 0%, #42A5F5 50%, #1565C0 100%);
+            font-family: var(--fuente-texto);
+            background: var(--fondo-auth);
+            background-attachment: fixed;
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -36,9 +39,9 @@ if (!isset($_SESSION["admin_id"])) {
 
         .tarjeta-qr {
             background: white;
-            border-radius: 15px;
+            border-radius: 26px;
             padding: 40px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--sombra-md);
             text-align: center;
             max-width: 600px;
             width: 100%;
@@ -79,13 +82,12 @@ if (!isset($_SESSION["admin_id"])) {
             padding: 12px;
             border: none;
             border-radius: 8px;
-            background: linear-gradient(135deg, #1565C0, #0D47A1);
+            background: linear-gradient(180deg, #1E7BD8, #1565C0);
             color: white;
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            text-transform: none;
         }
 
         .btn-imprimir:hover {
@@ -162,5 +164,6 @@ if (!isset($_SESSION["admin_id"])) {
         });
     </script>
 
+    <script src="js/bellaforma-ui.js"></script>
 </body>
 </html>
