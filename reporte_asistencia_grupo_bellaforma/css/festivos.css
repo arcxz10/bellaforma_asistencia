@@ -1,165 +1,152 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+@import url("base.css");
+
 /* ======================================
-   ESTILOS FESTIVOS - BELLAFORMA
+   FESTIVOS · BELLAFORMA
    (gestionar_festivos.php + crear_festivo.php)
+   Se carga después de admin.css.
    ====================================== */
 
-/* Enlace para volver al panel (compartido) */
 .enlace-volver {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     margin-bottom: 20px;
-    padding: 10px 15px;
-    background: #eee;
-    color: #333;
+    padding: 10px 16px;
+    background: var(--superficie);
+    color: var(--azul-800);
     text-decoration: none;
-    border-radius: 6px;
+    border: 1px solid var(--linea);
+    border-radius: var(--radio-sm);
     font-size: 14px;
-    transition: background 0.3s;
+    font-weight: 600;
+    transition: background .18s ease, border-color .18s ease;
 }
 
 .enlace-volver:hover {
-    background: #ddd;
+    background: var(--azul-50);
+    border-color: var(--azul-300);
 }
 
-/* Botón cerrar sesión en la barra superior (usado por estas dos páginas) */
 .cerrar-sesion {
-    color: white;
+    color: #fff;
     text-decoration: none;
-    border: 1px solid #777;
+    border: 1px solid rgba(255, 255, 255, .35);
     padding: 8px 14px;
-    border-radius: 6px;
+    border-radius: var(--radio-sm);
     font-size: 13px;
+    font-weight: 600;
 }
 
-.cerrar-sesion:hover {
-    background: #0D47A1;
-}
+.cerrar-sesion:hover { background: rgba(255, 255, 255, .14); }
 
 /* ===== gestionar_festivos.php ===== */
 
 .contenedor-gestionar {
     max-width: 900px;
-    margin: 50px auto;
+    margin: 44px auto;
     padding: 0 20px;
 }
 
 .tabla-festivos {
     width: 100%;
-    border-collapse: collapse;
-    background: #F5FAFF;
-    border-radius: 8px;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--superficie);
+    border: 1px solid var(--linea);
+    border-radius: var(--radio-md);
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--sombra-sm);
 }
 
-.tabla-festivos thead {
-    background: #1565C0;
-    color: white;
-}
+.tabla-festivos thead { background: var(--azul-50); color: var(--azul-800); }
 
 .tabla-festivos th {
-    padding: 15px;
+    padding: 14px 16px;
     text-align: left;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--linea);
 }
 
 .tabla-festivos td {
-    padding: 12px 15px;
-    border-bottom: 1px solid #eee;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--linea);
 }
 
-.tabla-festivos tbody tr:hover {
-    background: #f9f9f9;
-}
+.tabla-festivos tbody tr { transition: background .15s ease; }
+.tabla-festivos tbody tr:hover { background: var(--azul-50); }
+.tabla-festivos tbody tr:last-child td { border-bottom: none; }
 
-.tabla-festivos tbody tr:last-child td {
-    border-bottom: none;
-}
-
-.fecha-festivo {
-    font-weight: 600;
-    color: #1565C0;
-}
-
-.descripcion-festivo {
-    color: #555;
-}
-
-.acciones-festivo {
-    display: flex;
-    gap: 10px;
-}
+.fecha-festivo { font-weight: 700; color: var(--azul-700); }
+.descripcion-festivo { color: var(--tinta-suave); }
+.acciones-festivo { display: flex; gap: 10px; }
 
 .boton-agregar {
-    display: inline-block;
-    padding: 10px 20px;
-    background: #1565C0;
-    color: white;
-    text-decoration: none;
-    border-radius: 6px;
-    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
     margin-bottom: 20px;
-    transition: background 0.3s;
+    padding: 11px 20px;
+    background: linear-gradient(180deg, var(--azul-500), var(--azul-600));
+    color: #fff;
+    text-decoration: none;
+    border-radius: var(--radio-sm);
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 10px 20px -12px rgba(21, 101, 192, .85);
+    transition: transform .18s ease, background .18s ease;
 }
 
 .boton-agregar:hover {
-    background: #0D47A1;
+    background: linear-gradient(180deg, #2A88E6, var(--azul-700));
+    transform: translateY(-1px);
 }
 
 .btn-eliminar {
-    padding: 6px 12px;
-    background: #dc3545;
-    color: white;
+    padding: 7px 12px;
+    background: var(--peligro-bg);
+    color: #A0192B;
     text-decoration: none;
-    border-radius: 5px;
+    border-radius: 8px;
     font-size: 13px;
+    font-weight: 600;
     border: none;
     cursor: pointer;
-    transition: background 0.3s;
+    transition: background .18s ease;
 }
 
-.btn-eliminar:hover {
-    background: #c82333;
-}
+.btn-eliminar:hover { background: #F9D3D8; }
 
 .mensaje-vacio {
+    padding: 44px 20px;
     text-align: center;
-    padding: 40px 20px;
-    color: #666;
+    color: var(--tinta-suave);
 }
 
 .mensaje-vacio svg {
-    width: 60px;
-    height: 60px;
-    margin-bottom: 20px;
-    opacity: 0.5;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 18px;
+    opacity: .45;
 }
 
 /* ===== crear_festivo.php ===== */
 
 .contenedor-crear {
     max-width: 600px;
-    margin: 50px auto;
+    margin: 44px auto;
     padding: 0 20px;
 }
 
 .mensaje {
-    padding: 12px 16px;
-    border-radius: 6px;
+    padding: 13px 16px;
     margin-bottom: 20px;
+    border-radius: var(--radio-sm);
     font-weight: 500;
+    border: 1px solid transparent;
 }
 
-.mensaje.exito {
-    background: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
-}
-
-.mensaje.error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-}
+.mensaje.exito { background: var(--verde-100); color: #14501A; border-color: #BFE5C5; }
+.mensaje.error { background: var(--peligro-bg); color: #8E1B29; border-color: #F5C6CC; }
 
 .formulario-modal {
     display: flex;
@@ -170,63 +157,49 @@
 .formulario-modal > div {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 7px;
 }
 
 .formulario-modal label {
+    margin: 0;
     font-weight: 600;
-    color: #333;
-}
-
-.formulario-modal input {
-    padding: 10px 12px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 14px;
-    font-family: inherit;
-}
-
-.formulario-modal input:focus {
-    outline: none;
-    border-color: #1565C0;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    color: var(--tinta);
 }
 
 .botones-modal {
     display: flex;
     gap: 10px;
     justify-content: flex-end;
-    margin-top: 25px;
+    margin-top: 24px;
 }
 
-/* Estas dos reglas pisan a propósito a .boton / .boton-secundario de admin.css,
-   porque en crear_festivo.php ese botón debía verse verde (acción de guardar),
-   no negro como en el panel principal. */
+/* En crear_festivo.php estos botones pisan a propósito a los de admin.css */
 .boton {
-    padding: 10px 20px;
+    padding: 11px 20px;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--radio-sm);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
     text-decoration: none;
     text-align: center;
-    background: #1565C0;
-    color: white;
+    background: linear-gradient(180deg, var(--azul-500), var(--azul-600));
+    color: #fff;
 }
 
 .boton:hover {
-    background: #0D47A1;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(180deg, #2A88E6, var(--azul-700));
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px -12px rgba(21, 101, 192, .85);
 }
 
 .boton-secundario {
-    background: #6c757d;
-    color: white;
+    background: #EDF1F7;
+    color: var(--tinta);
     text-decoration: none;
 }
 
 .boton-secundario:hover {
-    background: #5a6268;
+    background: #E1E8F2;
+    box-shadow: none;
 }
