@@ -1,0 +1,595 @@
+/* ==========================================================
+   BELLAFORMA · BASE COMPARTIDA
+   Tokens de diseño, tipografía, componentes comunes y loader.
+   Se importa desde cada hoja de estilos de la carpeta css/.
+   ========================================================== */
+
+:root {
+    /* ---- Azules (identidad actual del sistema) ---- */
+    --azul-900: #071B40;
+    --azul-800: #0B2A63;
+    --azul-700: #0D47A1;
+    --azul-600: #1565C0;
+    --azul-500: #1E7BD8;
+    --azul-300: #8CC1F2;
+    --azul-100: #DCEBFB;
+    --azul-50:  #F1F7FE;
+
+    /* ---- Verde de marca (tomado de logo-verde.png) ---- */
+    --verde-700: #1D6821;
+    --verde-600: #27983A;
+    --verde-500: #33B540;
+    --verde-100: #E4F5E7;
+
+    /* ---- Neutros ---- */
+    --tinta:        #0E1B33;
+    --tinta-suave:  #55627A;
+    --tinta-tenue:  #8793A8;
+    --linea:        #E1E8F2;
+    --lienzo:       #F2F6FB;
+    --superficie:   #FFFFFF;
+
+    /* ---- Estados ---- */
+    --peligro:    #C62839;
+    --peligro-bg: #FDEBED;
+    --aviso:      #8A5F00;
+    --aviso-bg:   #FFF4D6;
+    --info:       #0E7C93;
+    --info-bg:    #E0F4F8;
+
+    /* ---- Forma y profundidad ---- */
+    --radio-lg: 22px;
+    --radio-md: 14px;
+    --radio-sm: 10px;
+    --sombra-sm: 0 1px 2px rgba(10, 34, 80, .06), 0 6px 16px -8px rgba(10, 34, 80, .14);
+    --sombra-md: 0 2px 4px rgba(7, 27, 64, .06), 0 18px 40px -18px rgba(7, 27, 64, .35);
+    --sombra-lg: 0 40px 80px -30px rgba(4, 16, 40, .6);
+
+    /* ---- Tipografía ---- */
+    --fuente-titulo: "Fraunces", Georgia, "Times New Roman", serif;
+    --fuente-texto:  "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    /* ---- Fondo de las pantallas de acceso ---- */
+    --fondo-auth:
+        radial-gradient(55rem 38rem at 88% -8%, rgba(51, 181, 64, .22), transparent 60%),
+        radial-gradient(48rem 38rem at -8% 108%, rgba(30, 123, 216, .45), transparent 60%),
+        linear-gradient(165deg, #0A2557 0%, #1257B0 55%, #1B73CC 100%);
+
+    /* ---- Alias heredados (por si alguna página inline los usa) ---- */
+    --primary-color: var(--azul-600);
+    --primary-dark: var(--azul-700);
+    --secondary-color: var(--verde-500);
+    --dark-color: var(--tinta);
+    --light-color: var(--azul-50);
+    --success-color: var(--verde-600);
+    --danger-color: var(--peligro);
+    --warning-color: #E0A100;
+    --info-color: var(--info);
+}
+
+/* ---------- Reset y base ---------- */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: var(--fuente-texto);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--tinta);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+h1, h2 {
+    font-family: var(--fuente-titulo);
+    font-weight: 600;
+    letter-spacing: -.012em;
+    line-height: 1.15;
+}
+
+h3, h4 {
+    font-family: var(--fuente-texto);
+    font-weight: 700;
+    letter-spacing: -.01em;
+}
+
+img { max-width: 100%; }
+
+table,
+.clock,
+.numero,
+.total {
+    font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+    outline: 3px solid rgba(30, 123, 216, .55);
+    outline-offset: 2px;
+}
+
+::selection {
+    background: var(--azul-100);
+    color: var(--azul-900);
+}
+
+/* Solo para lectores de pantalla */
+.bf-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- Campos de formulario (especificidad 0: cualquier clase los sobrescribe) ---------- */
+
+:where(input[type="text"], input[type="password"], input[type="email"], input[type="number"],
+       input[type="date"], input[type="time"], input[type="tel"], input[type="search"],
+       select, textarea) {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 15px;
+    background: var(--superficie);
+    border: 1.5px solid var(--linea);
+    border-radius: var(--radio-md);
+    font-size: 15px;
+    line-height: 1.4;
+    transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+
+:where(textarea) {
+    min-height: 96px;
+    resize: vertical;
+}
+
+:where(input, select, textarea):hover {
+    border-color: #C9D6E8;
+}
+
+:where(input, select, textarea):focus {
+    outline: none;
+    border-color: var(--azul-500);
+    box-shadow: 0 0 0 4px rgba(30, 123, 216, .16);
+}
+
+:where(input, textarea)::placeholder {
+    color: var(--tinta-tenue);
+}
+
+:where(input[type="checkbox"], input[type="radio"]) {
+    accent-color: var(--azul-600);
+}
+
+:where(label) {
+    font-weight: 600;
+}
+
+/* ---------- Grupo de formulario ---------- */
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label,
+label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--tinta);
+}
+
+.form-required {
+    color: var(--peligro);
+}
+
+/* ---------- Botones ---------- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 50px;
+    padding: 13px 20px;
+    border: 1.5px solid transparent;
+    border-radius: var(--radio-md);
+    font-family: var(--fuente-texto);
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-align: center;
+    text-decoration: none;
+    text-transform: none;
+    cursor: pointer;
+    transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.btn:active {
+    transform: translateY(1px) scale(.995);
+}
+
+.btn:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, var(--azul-500) 0%, var(--azul-600) 100%);
+    color: #fff;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset, 0 10px 22px -10px rgba(21, 101, 192, .75);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: linear-gradient(180deg, #2A88E6 0%, var(--azul-700) 100%);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset, 0 14px 26px -10px rgba(21, 101, 192, .85);
+    transform: translateY(-1px);
+}
+
+.btn-success {
+    background: linear-gradient(180deg, var(--verde-500) 0%, var(--verde-600) 100%);
+    color: #fff;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .3) inset, 0 10px 22px -10px rgba(39, 152, 58, .8);
+}
+
+.btn-success:hover:not(:disabled) {
+    background: linear-gradient(180deg, #3DC44A 0%, var(--verde-700) 100%);
+    transform: translateY(-1px);
+}
+
+.btn-warning {
+    background: #FFF1CC;
+    color: #6B4A00;
+    border-color: #F2D88A;
+}
+
+.btn-warning:hover:not(:disabled) {
+    background: #FFE8A8;
+    border-color: #E8C65E;
+}
+
+.btn-info {
+    background: var(--info-bg);
+    color: #0A5E70;
+    border-color: #A9DCE7;
+}
+
+.btn-info:hover:not(:disabled) {
+    background: #CBEDF4;
+    border-color: #7CC8D8;
+}
+
+.btn-secondary {
+    background: var(--superficie);
+    color: var(--azul-800);
+    border-color: var(--linea);
+    text-decoration: none;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--azul-50);
+    border-color: var(--azul-300);
+}
+
+.btn-back {
+    background: transparent;
+    color: var(--tinta-suave);
+    border-color: transparent;
+    min-height: 44px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.btn-back:hover {
+    color: var(--azul-700);
+    background: var(--azul-50);
+}
+
+/* ---------- Alertas y resultados ---------- */
+
+.alert,
+.resultado {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 15px 17px;
+    margin-bottom: 20px;
+    border-radius: var(--radio-md);
+    border: 1px solid transparent;
+    border-left-width: 4px;
+    font-size: 14px;
+    line-height: 1.55;
+    animation: bf-entrar .35s ease-out both;
+}
+
+.alert-icon,
+.resultado-icon {
+    flex-shrink: 0;
+    font-size: 20px;
+    line-height: 1.2;
+}
+
+.resultado-icon { font-size: 26px; }
+
+.resultado h3 {
+    margin: 0 0 4px;
+    font-size: 17px;
+}
+
+.resultado p { margin: 0; }
+
+.alert-success,
+.resultado.success {
+    background: var(--verde-100);
+    color: #14501A;
+    border-color: #BFE5C5;
+    border-left-color: var(--verde-500);
+}
+
+.alert-danger,
+.resultado.error {
+    background: var(--peligro-bg);
+    color: #8E1B29;
+    border-color: #F5C6CC;
+    border-left-color: var(--peligro);
+}
+
+.alert-warning,
+.alert-warning-box,
+.resultado.warning {
+    background: var(--aviso-bg);
+    color: #6B4A00;
+    border-color: #F2DE9E;
+    border-left-color: #E0A100;
+}
+
+.alert-info,
+.resultado.info {
+    background: var(--info-bg);
+    color: #0A5E70;
+    border-color: #B5E0EA;
+    border-left-color: var(--info);
+}
+
+.alert-warning-box {
+    display: block;
+    margin-bottom: 16px;
+    padding: 13px 16px;
+    border-radius: var(--radio-md);
+    border: 1px solid #F2DE9E;
+    border-left: 4px solid #E0A100;
+    font-size: 14px;
+}
+
+/* Justificación de tardanza / salida anticipada (registro_inicial.php) */
+.justificacion-container {
+    margin-bottom: 18px;
+    padding: 16px;
+    background: var(--aviso-bg);
+    border: 1px solid #F2DE9E;
+    border-radius: var(--radio-md);
+}
+
+.justificacion-warning-text {
+    margin-bottom: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #6B4A00;
+}
+
+.justificacion-textarea {
+    width: 100%;
+    min-height: 84px;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1.5px solid #E8D28A;
+    border-radius: var(--radio-sm);
+    resize: vertical;
+}
+
+/* ---------- Spinner genérico ---------- */
+
+.spinner {
+    width: 38px;
+    height: 38px;
+    margin: 20px auto;
+    border: 3px solid var(--azul-100);
+    border-top-color: var(--azul-600);
+    border-radius: 50%;
+    animation: bf-girar .8s linear infinite;
+}
+
+@keyframes bf-girar { to { transform: rotate(360deg); } }
+
+@keyframes bf-entrar {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================
+   ANIMACIÓN DE CARGA · "FLORECER"
+   Los 8 pétalos del logo se abren uno tras otro alrededor
+   del monograma GB. Se usa como pantalla de bienvenida
+   (index, login, registro) y como transición entre páginas.
+   ========================================================== */
+
+html.bf-bloqueado,
+html.bf-bloqueado body {
+    overflow: hidden;
+}
+
+.bf-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: grid;
+    place-items: center;
+    background: var(--fondo-auth);
+    color: #fff;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity .6s ease, visibility 0s linear 0s;
+}
+
+.bf-splash.is-leaving {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .6s ease, visibility 0s linear .6s;
+}
+
+.bf-splash__centro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+    padding: 24px;
+}
+
+.bf-flor {
+    width: min(52vw, 190px);
+    height: auto;
+    overflow: visible;
+    filter: drop-shadow(0 12px 30px rgba(3, 14, 38, .35));
+}
+
+.bf-flor .petalo {
+    fill: rgba(255, 255, 255, .94);
+    transform-origin: 0 0;
+    transform: scale(0);
+    animation: bf-florecer 3s cubic-bezier(.3, .7, .2, 1) infinite;
+    animation-delay: calc(var(--i) * .16s);
+}
+
+.bf-flor .petalo.verde { fill: #8BE596; }
+
+.bf-flor .nervio {
+    fill: none;
+    stroke: rgba(11, 42, 99, .35);
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    transform-origin: 0 0;
+    transform: scale(0);
+    animation: bf-florecer 3s cubic-bezier(.3, .7, .2, 1) infinite;
+    animation-delay: calc(var(--i) * .16s);
+}
+
+.bf-flor .punto {
+    fill: rgba(255, 255, 255, .85);
+    opacity: 0;
+    animation: bf-punto 3s ease-in-out infinite;
+    animation-delay: calc(var(--i) * .16s + .35s);
+}
+
+.bf-flor .aro {
+    fill: none;
+    stroke: rgba(255, 255, 255, .9);
+    stroke-width: 1.6;
+    transform-origin: 0 0;
+    animation: bf-aro 3s ease-in-out infinite;
+}
+
+.bf-flor .monograma {
+    fill: #fff;
+    font-family: var(--fuente-titulo);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: .02em;
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+
+@keyframes bf-florecer {
+    0%   { transform: scale(0);   opacity: 0; }
+    22%  { transform: scale(1.06); opacity: 1; }
+    30%  { transform: scale(1);   opacity: 1; }
+    72%  { transform: scale(1);   opacity: 1; }
+    92%, 100% { transform: scale(.0); opacity: 0; }
+}
+
+@keyframes bf-punto {
+    0%, 15%   { opacity: 0; transform: scale(.4); }
+    35%, 72%  { opacity: 1; transform: scale(1); }
+    90%, 100% { opacity: 0; transform: scale(.4); }
+}
+
+@keyframes bf-aro {
+    0%, 100% { transform: scale(1);    opacity: .9; }
+    50%      { transform: scale(1.12); opacity: .55; }
+}
+
+.bf-splash__marca {
+    margin: 0;
+    font-family: var(--fuente-texto);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: .38em;
+    text-indent: .38em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .82);
+}
+
+/* Versión compacta entre páginas: aparece solo si la carga tarda */
+.bf-splash.bf-nav {
+    background: rgba(7, 27, 64, .72);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .25s ease .22s, visibility 0s linear .47s;
+}
+
+.bf-splash.bf-nav.is-on {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity .25s ease .22s, visibility 0s linear .22s;
+}
+
+.bf-splash.bf-nav .bf-flor { width: 110px; }
+.bf-splash.bf-nav .bf-splash__marca { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .bf-flor .petalo,
+    .bf-flor .nervio,
+    .bf-flor .punto,
+    .bf-flor .aro {
+        animation: none;
+        transform: none;
+        opacity: 1;
+    }
+
+    .alert,
+    .resultado { animation: none; }
+
+    .btn,
+    .btn:hover,
+    .btn:active { transition: none; transform: none; }
+}
