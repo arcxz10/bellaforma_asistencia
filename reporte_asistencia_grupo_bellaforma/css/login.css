@@ -153,16 +153,16 @@ body {
 /* ---- Volver ---- */
 .volver {
     display: block;
-    margin-top: 22px;
+    margin-top: 20px;
     text-align: center;
-    color: rgba(255, 255, 255, .85);
+    color: var(--azul-700);
     text-decoration: none;
-    font-size: 13.5px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .volver:hover {
-    color: #fff;
+    color: var(--azul-900);
     text-decoration: underline;
     text-underline-offset: 4px;
 }
