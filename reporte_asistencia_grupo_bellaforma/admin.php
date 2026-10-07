@@ -11,6 +11,8 @@ if (!isset($_SESSION["admin_id"])) {
 }
 
 require_once "conexion.php";
+require_once "vendedores_db.php";
+asegurarTablasVendedores($conexion);
 
 date_default_timezone_set("America/Bogota");
 
@@ -102,6 +104,9 @@ function redireccionar($mensaje, $tipo = "exito", $seccion = "")
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $accion = $_POST["accion"] ?? "";
+
+    // Vendedores / productos al por mayor / pedidos
+    require __DIR__ . "/admin_acciones_vendedores.php";
 
     if ($accion === "agregar_empleado") {
 
@@ -1161,6 +1166,27 @@ $resultadoEmpleados =
                 class="nav-item"
             >
                 📦 Materiales
+            </a>
+
+            <a
+                href="#vendedores"
+                class="nav-item"
+            >
+                🧳 Vendedores
+            </a>
+
+            <a
+                href="#pedidos"
+                class="nav-item"
+            >
+                🧾 Pedidos Vendedores
+            </a>
+
+            <a
+                href="#productos_mayoristas"
+                class="nav-item"
+            >
+                🏷️ Productos al por mayor
             </a>
 
         </nav>
@@ -2531,6 +2557,12 @@ $resultadoEmpleados =
                     </table>
                 </div>
             </section>
+
+            <?php
+            include __DIR__ . "/admin_seccion_vendedores.php";
+            include __DIR__ . "/admin_seccion_pedidos.php";
+            include __DIR__ . "/admin_seccion_productos.php";
+            ?>
 
             <!-- SECCIÓN MATERIALES INTEGRADA -->
             <section
