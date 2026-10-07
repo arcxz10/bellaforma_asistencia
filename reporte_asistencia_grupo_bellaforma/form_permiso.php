@@ -95,8 +95,7 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
     <link rel="stylesheet" href="css/registro_inicial.css">
     <style>
         .form-group { margin-bottom: 15px; text-align: left; }
-        .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.85rem; color: #444; }
-        .form-group input, .form-group textarea { width: 100%; padding: 9px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; font-size: 0.9rem; box-sizing: border-box; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.85rem; }
         .archivo-ayuda { font-size: 0.78rem; color: #777; margin-top: 4px; }
         .archivo-preview { margin-top: 8px; font-size: 0.85rem; color: #2e7d32; font-weight: 600; }
     </style>
@@ -159,5 +158,6 @@ $link_volver = isset($_GET['empleado_id']) ? "registro.php?empleado_id=" . htmls
             }
         }
     </script>
+    <script src="js/bellaforma-ui.js"></script>
 </body>
 </html>
