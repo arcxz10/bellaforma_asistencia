@@ -203,6 +203,18 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         <button type="button" class="pf-btn-prim" id="pfPrincipal">Siguiente →</button>
     </div>
 
+    <div class="pf-dialogo" id="pfDialogo" hidden>
+        <div class="pf-dialogo-caja" role="dialog" aria-modal="true" aria-labelledby="pfDialogoTitulo">
+            <div class="pf-dialogo-icono" id="pfDialogoIcono">🛒</div>
+            <h3 id="pfDialogoTitulo">¿Confirmar?</h3>
+            <p id="pfDialogoTexto"></p>
+            <div class="pf-dialogo-botones">
+                <button type="button" class="pf-dialogo-no" id="pfDialogoNo">Cancelar</button>
+                <button type="button" class="pf-dialogo-si" id="pfDialogoSi">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
     <div class="pf-lightbox" id="pfLightbox" hidden><img alt=""></div>
 </div>
 
@@ -541,20 +553,30 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             var el = $(v[2]); if (el) { setTimeout(function () { el.focus(); }, 150); }
             return;
         }
-        var pregunta = S.pedidoId && CFG.estadoPedido !== "borrador" && CFG.estadoPedido !== "nuevo"
-            ? "¿Guardar los cambios del pedido?" : "¿Enviar el pedido por " + $("pfTotal").textContent + "?";
-        if (!confirm(pregunta)) { return; }
-        clearTimeout(S.timer);
-        $("pfPrincipal").disabled = true;
-        var intentar = function () {
-            guardar("enviar").then(function (r) {
-                if (r && r.ok) { S.sucio = false; window.location.href = CFG.volver; return; }
-                if (r === null) { setTimeout(intentar, 400); return; }
-                $("pfPrincipal").disabled = false;
-                toast((r && r.error) || "No se pudo enviar el pedido.", "error");
-            });
-        };
-        intentar();
+        var edicion = S.pedidoId && CFG.estadoPedido !== "borrador" && CFG.estadoPedido !== "nuevo";
+        var total = $("pfTotal").textContent;
+        var texto = edicion
+            ? "Se guardarán los cambios del pedido. Total: " + total + "."
+            : "Se enviará el pedido por " + total + "." + (CFG.rol === "vendedor" ? " Podrás editarlo hasta que la oficina lo suba a Syscafe." : "");
+        pfConfirmar({
+            titulo: edicion ? "¿Guardar los cambios?" : "¿Enviar el pedido?",
+            texto: texto,
+            icono: edicion ? "✏️" : "🛒",
+            si: edicion ? "Guardar cambios" : "Sí, enviar",
+            onSi: function () {
+                clearTimeout(S.timer);
+                $("pfPrincipal").disabled = true;
+                var intentar = function () {
+                    guardar("enviar").then(function (r) {
+                        if (r && r.ok) { S.sucio = false; window.location.href = CFG.volver; return; }
+                        if (r === null) { setTimeout(intentar, 400); return; }
+                        $("pfPrincipal").disabled = false;
+                        toast((r && r.error) || "No se pudo enviar el pedido.", "error");
+                    });
+                };
+                intentar();
+            }
+        });
     }
 
     if ($("pfBorrador")) {
@@ -567,6 +589,29 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             });
         });
     }
+
+    /* ---------- Diálogo de confirmación (reemplaza al confirm() del navegador) ---------- */
+    var dialogoSi = null;
+    function cerrarDialogo() { $("pfDialogo").hidden = true; dialogoSi = null; }
+    window.pfConfirmar = function (o) {
+        $("pfDialogoIcono").textContent = o.icono || "❔";
+        $("pfDialogoTitulo").textContent = o.titulo || "¿Confirmar?";
+        $("pfDialogoTexto").textContent = o.texto || "";
+        $("pfDialogoSi").textContent = o.si || "Aceptar";
+        $("pfDialogoSi").classList.toggle("peligro", !!o.peligro);
+        dialogoSi = o.onSi || null;
+        $("pfDialogo").hidden = false;
+        $("pfDialogoSi").focus();
+    };
+    window.pfConfirmarForm = function (form, texto, titulo) {
+        pfConfirmar({ titulo: titulo || "¿Eliminar?", texto: texto, icono: "🗑️", si: "Sí, eliminar", peligro: true,
+                      onSi: function () { form.submit(); } });
+        return false;
+    };
+    $("pfDialogoNo").addEventListener("click", cerrarDialogo);
+    $("pfDialogoSi").addEventListener("click", function () { var f = dialogoSi; cerrarDialogo(); if (f) { f(); } });
+    $("pfDialogo").addEventListener("click", function (e) { if (e.target === this) { cerrarDialogo(); } });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("pfDialogo").hidden) { cerrarDialogo(); } });
 
     /* ---------- Foto ampliada ---------- */
     document.addEventListener("click", function (e) {
