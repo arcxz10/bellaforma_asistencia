@@ -206,7 +206,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     <div class="pf-lightbox" id="pfLightbox" hidden><img alt=""></div>
 </div>
 
-<script src="js/colombia.js"></script>
+<script src="colombia.php?js=1"></script>
 <script>
     window.PF_CFG = <?= json_encode($cfgJs, $flagsJson) ?>;
 </script>
