@@ -1,0 +1,123 @@
+<?php
+/**
+ * API JSON del formulario de pedido (usada por vendedor.php y admin_pedido_editar.php).
+ * Acciones: buscar_cliente | guardar | eliminar_borrador
+ */
+session_start();
+header("Content-Type: application/json; charset=utf-8");
+
+require_once "conexion.php";
+require_once "vendedores_db.php";
+require_once "pedidos_lib.php";
+date_default_timezone_set("America/Bogota");
+
+function responder(array $d, int $codigo = 200): void
+{
+    http_response_code($codigo);
+    echo json_encode($d, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    responder(["ok" => false, "error" => "Método no permitido."], 405);
+}
+
+$in = json_decode(file_get_contents("php://input"), true);
+if (!is_array($in)) {
+    responder(["ok" => false, "error" => "Solicitud no válida."], 400);
+}
+
+if (empty($_SESSION["csrf_pedido"]) || !hash_equals($_SESSION["csrf_pedido"], (string) ($in["csrf"] ?? ""))) {
+    responder(["ok" => false, "error" => "La sesión expiró. Recargue la página."], 403);
+}
+
+try {
+    asegurarTablasVendedores($conexion);
+
+    $rol = ($in["rol"] ?? "") === "admin" ? "admin" : "vendedor";
+    $vendedorId = 0;
+
+    if ($rol === "admin") {
+        if (empty($_SESSION["admin_id"])) {
+            responder(["ok" => false, "error" => "Sesión de administrador no válida."], 401);
+        }
+    } else {
+        $vendedorId = (int) ($_SESSION["vendedor_id"] ?? 0);
+        $st = $conexion->prepare("SELECT id FROM vendedores WHERE id = ? AND activo = 1");
+        $st->bind_param("i", $vendedorId);
+        $st->execute();
+        $ok = $st->get_result()->fetch_assoc();
+        $st->close();
+        if (!$vendedorId || !$ok) {
+            responder(["ok" => false, "error" => "Sesión no válida. Ingrese de nuevo."], 401);
+        }
+    }
+
+    $accion = $in["accion"] ?? "";
+
+    if ($accion === "buscar_cliente") {
+        $cli = buscarClientePorDocumento($conexion, (string) ($in["doc"] ?? ""));
+        if (!$cli) {
+            responder(["ok" => true, "encontrado" => false]);
+        }
+        $ident = $cli["identificacion"] . (($cli["dv"] ?? "") !== "" && $cli["tipo_persona"] === "juridica" ? "-" . $cli["dv"] : "");
+        responder(["ok" => true, "encontrado" => true, "cliente" => [
+            "id" => (int) $cli["id"],
+            "tipo_persona" => $cli["tipo_persona"],
+            "identificacion" => $ident,
+            "razon_social" => $cli["razon_social"],
+            "nombre_comercial" => $cli["nombre_comercial"],
+            "telefono" => $cli["telefono1"] ?: ($cli["movil"] ?: ""),
+            "email" => $cli["email"],
+            "email_fe" => $cli["email_fe"],
+            "departamento" => $cli["departamento"],
+            "municipio" => $cli["municipio"],
+            "barrio" => $cli["barrio"],
+            "direccion" => $cli["direccion"],
+            "puntos_referencia" => $cli["puntos_referencia"],
+            "condicion_pago" => $cli["condicion_pago"],
+            "dias_credito" => $cli["dias_credito"],
+            "inactivo" => (int) $cli["inactivo"],
+        ]]);
+    }
+
+    if ($accion === "guardar") {
+        $modo = ($in["modo"] ?? "") === "enviar" ? "enviar" : "borrador";
+        $pedidoId = (int) ($in["pedido_id"] ?? 0) ?: null;
+        $datos = is_array($in["datos"] ?? null) ? $in["datos"] : [];
+        $items = is_array($in["items"] ?? null) ? $in["items"] : [];
+
+        if ($rol === "admin" && !$pedidoId) {
+            responder(["ok" => false, "error" => "Falta el pedido a editar."], 400);
+        }
+
+        $r = guardarPedido($conexion, $vendedorId, $pedidoId, $datos, $items, $modo, $rol);
+        if (!$r["ok"]) {
+            responder($r, 422);
+        }
+
+        if ($modo === "enviar" && $rol === "vendedor") {
+            $_SESSION["msg_vendedor"] = ($pedidoId ? "Pedido #" : "Pedido #") . numeroPedido($r["id"]) .
+                ($pedidoId ? " actualizado" : " enviado") . " por " . formatoCOP($r["total"]) . ".";
+            $_SESSION["msg_vendedor_tipo"] = "exito";
+        }
+        if ($rol === "admin") {
+            $_SESSION["mensaje"] = "Pedido #" . numeroPedido($r["id"]) . " actualizado.";
+            $_SESSION["tipo_mensaje"] = "exito";
+        }
+        responder($r);
+    }
+
+    if ($accion === "eliminar_borrador" && $rol === "vendedor") {
+        $pid = (int) ($in["pedido_id"] ?? 0);
+        $st = $conexion->prepare("DELETE FROM pedidos_vendedores WHERE id = ? AND vendedor_id = ? AND estado = 'borrador'");
+        $st->bind_param("ii", $pid, $vendedorId);
+        $st->execute();
+        $st->close();
+        responder(["ok" => true]);
+    }
+
+    responder(["ok" => false, "error" => "Acción no válida."], 400);
+} catch (Throwable $e) {
+    responder(["ok" => false, "error" => "Error del servidor. Intente de nuevo."], 500);
+}
