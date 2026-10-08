@@ -8,6 +8,7 @@ if (empty($_SESSION["vendedor_id"])) {
 
 require_once "conexion.php";
 require_once "vendedores_db.php";
+require_once "pedidos_lib.php";
 date_default_timezone_set("America/Bogota");
 asegurarTablasVendedores($conexion);
 
@@ -18,7 +19,6 @@ function e($v)
 
 $vendedorId = (int) $_SESSION["vendedor_id"];
 
-// El vendedor debe seguir activo
 $stmt = $conexion->prepare("SELECT id, nombre, identificacion FROM vendedores WHERE id = ? AND activo = 1 LIMIT 1");
 $stmt->bind_param("i", $vendedorId);
 $stmt->execute();
@@ -32,146 +32,127 @@ if (!$vendedor) {
     exit;
 }
 
-if (empty($_SESSION["csrf_vendedor"])) {
-    $_SESSION["csrf_vendedor"] = bin2hex(random_bytes(16));
+if (empty($_SESSION["csrf_pedido"])) {
+    $_SESSION["csrf_pedido"] = bin2hex(random_bytes(16));
 }
 
 $mensaje = $_SESSION["msg_vendedor"] ?? "";
 $tipoMensaje = $_SESSION["msg_vendedor_tipo"] ?? "exito";
 unset($_SESSION["msg_vendedor"], $_SESSION["msg_vendedor_tipo"]);
 
-function volverConMensaje($texto, $tipo, $panel = "nuevo")
-{
-    $_SESSION["msg_vendedor"] = $texto;
-    $_SESSION["msg_vendedor_tipo"] = $tipo;
-    header("Location: vendedor.php#" . $panel);
+/* ===== Eliminar borrador ===== */
+if ($_SERVER["REQUEST_METHOD"] === "POST" && ($_POST["accion"] ?? "") === "eliminar_borrador") {
+    if (hash_equals($_SESSION["csrf_pedido"], $_POST["csrf"] ?? "")) {
+        $pid = (int) ($_POST["pedido_id"] ?? 0);
+        $del = $conexion->prepare("DELETE FROM pedidos_vendedores WHERE id = ? AND vendedor_id = ? AND estado = 'borrador'");
+        $del->bind_param("ii", $pid, $vendedorId);
+        $del->execute();
+        $del->close();
+        $_SESSION["msg_vendedor"] = "Borrador eliminado.";
+        $_SESSION["msg_vendedor_tipo"] = "exito";
+    }
+    header("Location: vendedor.php#mis-pedidos");
     exit;
 }
 
-/* ===== CREAR PEDIDO ===== */
-if ($_SERVER["REQUEST_METHOD"] === "POST" && ($_POST["accion"] ?? "") === "crear_pedido") {
-
-    if (!hash_equals($_SESSION["csrf_vendedor"], $_POST["csrf"] ?? "")) {
-        volverConMensaje("La sesión expiró. Intente de nuevo.", "error");
-    }
-
-    $cNombre = trim($_POST["cliente_nombre"] ?? "");
-    $cCiudad = trim($_POST["cliente_ciudad"] ?? "");
-    $cNit = trim($_POST["cliente_nit"] ?? "");
-    $cTelefono = trim($_POST["cliente_telefono"] ?? "");
-    $cBarrio = trim($_POST["cliente_barrio"] ?? "");
-    $cDirecciones = trim($_POST["cliente_direcciones"] ?? "");
-    $observaciones = trim($_POST["observaciones"] ?? "");
-
-    if ($cNombre === "" || $cCiudad === "" || $cNit === "" || $cTelefono === "") {
-        volverConMensaje("Complete nombre, ciudad, NIT y teléfono del cliente.", "error");
-    }
-
-    $itemsEntrada = json_decode($_POST["items_json"] ?? "{}", true);
-    $cantidades = [];
-    if (is_array($itemsEntrada)) {
-        foreach ($itemsEntrada as $pid => $cant) {
-            $pid = (int) $pid;
-            $cant = (int) $cant;
-            if ($pid > 0 && $cant > 0 && $cant <= 100000) {
-                $cantidades[$pid] = $cant;
-            }
+/* ===== Pedido que se está editando / continuando ===== */
+$pedidoEditar = null;
+$avisoEdicion = "";
+$idEditar = (int) ($_GET["pedido"] ?? 0);
+if ($idEditar > 0) {
+    $lista = obtenerPedidos($conexion, ["con_borradores" => true], null, $idEditar);
+    $p = $lista[0] ?? null;
+    if ($p && (int) $p["vendedor_id"] === $vendedorId) {
+        if (in_array($p["estado"], ["borrador", "pendiente"], true)) {
+            $pedidoEditar = $p;
+            $avisoEdicion = $p["estado"] === "borrador"
+                ? "Continúas el borrador #" . numeroPedido($p["id"]) . "."
+                : "Editando el pedido #" . numeroPedido($p["id"]) . ". Podrás cambiarlo hasta que la oficina lo suba a Syscafe.";
+        } else {
+            $_SESSION["msg_vendedor"] = "El pedido #" . numeroPedido($p["id"]) . " ya fue subido a Syscafe o anulado y no se puede editar.";
+            $_SESSION["msg_vendedor_tipo"] = "error";
+            header("Location: vendedor.php#mis-pedidos");
+            exit;
         }
     }
-
-    if (!$cantidades) {
-        volverConMensaje("Seleccione al menos un producto con cantidad.", "error");
-    }
-
-    // Los precios SIEMPRE se leen de la base de datos (no del navegador)
-    $idsLista = implode(",", array_map("intval", array_keys($cantidades)));
-    $resProd = $conexion->query(
-        "SELECT id, referencia, nombre, precio FROM productos_mayoristas WHERE activo = 1 AND id IN ($idsLista)"
-    );
-    $lineas = [];
-    $total = 0.0;
-    if ($resProd) {
-        while ($p = $resProd->fetch_assoc()) {
-            $cant = $cantidades[(int) $p["id"]];
-            $precio = (float) $p["precio"];
-            $sub = round($precio * $cant, 2);
-            $total += $sub;
-            $lineas[] = [
-                "id" => (int) $p["id"],
-                "referencia" => $p["referencia"],
-                "nombre" => $p["nombre"],
-                "precio" => $precio,
-                "cantidad" => $cant,
-                "subtotal" => $sub,
-            ];
-        }
-    }
-
-    if (!$lineas) {
-        volverConMensaje("Los productos seleccionados ya no están disponibles.", "error");
-    }
-
-    $total = round($total, 2);
-
-    try {
-        $conexion->begin_transaction();
-
-        $ins = $conexion->prepare(
-            "INSERT INTO pedidos_vendedores
-             (vendedor_id, cliente_nombre, cliente_ciudad, cliente_nit, cliente_telefono, cliente_barrio, cliente_direcciones, observaciones, total)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        );
-        $ins->bind_param(
-            "isssssssd",
-            $vendedorId, $cNombre, $cCiudad, $cNit, $cTelefono, $cBarrio, $cDirecciones, $observaciones, $total
-        );
-        $ins->execute();
-        $pedidoId = $conexion->insert_id;
-        $ins->close();
-
-        $insItem = $conexion->prepare(
-            "INSERT INTO pedido_vendedor_items (pedido_id, producto_id, referencia, nombre, precio_unitario, cantidad, subtotal)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
-        );
-        foreach ($lineas as $l) {
-            $insItem->bind_param(
-                "iissdid",
-                $pedidoId, $l["id"], $l["referencia"], $l["nombre"], $l["precio"], $l["cantidad"], $l["subtotal"]
-            );
-            $insItem->execute();
-        }
-        $insItem->close();
-
-        $conexion->commit();
-    } catch (Throwable $ex) {
-        $conexion->rollback();
-        volverConMensaje("No se pudo guardar el pedido. Intente de nuevo.", "error");
-    }
-
-    volverConMensaje(
-        "Pedido #" . numeroPedido($pedidoId) . " enviado por " . formatoCOP($total) . ".",
-        "exito",
-        "mis-pedidos"
-    );
 }
 
-/* ===== DATOS PARA MOSTRAR ===== */
-$productos = [];
-$resProductos = $conexion->query(
-    "SELECT id, referencia, nombre, precio FROM productos_mayoristas WHERE activo = 1 ORDER BY referencia ASC"
-);
-if ($resProductos) {
-    $productos = $resProductos->fetch_all(MYSQLI_ASSOC);
-}
+$misPedidos = obtenerPedidos($conexion, ["vendedor" => $vendedorId, "con_borradores" => true], 150);
+$borradores = array_values(array_filter($misPedidos, fn($p) => $p["estado"] === "borrador"));
+$enviados = array_values(array_filter($misPedidos, fn($p) => $p["estado"] !== "borrador"));
 
-$misPedidos = obtenerPedidos($conexion, ["vendedor" => $vendedorId], 100);
+$pf = [
+    "rol" => "vendedor",
+    "csrf" => $_SESSION["csrf_pedido"],
+    "pedido" => $pedidoEditar,
+    "productos" => productosParaFormulario($conexion, $pedidoEditar),
+    "volver" => "vendedor.php#mis-pedidos",
+    "autosave" => !$pedidoEditar || $pedidoEditar["estado"] === "borrador",
+    "url_base" => "vendedor.php",
+    "texto_enviar" => ($pedidoEditar && $pedidoEditar["estado"] === "pendiente") ? "Guardar cambios" : "Enviar pedido",
+];
+
+function tarjetaPedido(array $ped, string $csrf): void
+{
+    $esBorrador = $ped["estado"] === "borrador";
+    $nombre = $ped["cliente_nombre"] !== "" ? $ped["cliente_nombre"] : "(sin cliente todavía)";
+    ?>
+    <details class="pedido-item">
+        <summary>
+            <span class="p-num"><?= $esBorrador ? "Borrador" : "Pedido" ?> #<?= numeroPedido($ped["id"]) ?></span>
+            <span class="estado <?= claseEstadoPedido($ped["estado"]) ?>"><?= e(etiquetaEstadoPedido($ped["estado"])) ?></span>
+            <span class="p-cli"><?= e($nombre) ?></span>
+            <span class="p-fecha"><?= date("d/m/Y H:i", strtotime($ped["actualizado_en"] ?? $ped["creado_en"])) ?></span>
+            <span class="p-total"><?= formatoCOP($ped["total"]) ?></span>
+        </summary>
+        <div class="cuerpo">
+            <div class="datos">
+                <?php if ($ped["cliente_nit"] !== ""): ?><?= e(etiquetaDocumento($ped["cliente_tipo_persona"] ?? "juridica")) ?>: <?= e($ped["cliente_nit"]) ?><br><?php endif; ?>
+                <?php if (!empty($ped["cliente_nombre_comercial"])): ?>Nombre comercial: <?= e($ped["cliente_nombre_comercial"]) ?><br><?php endif; ?>
+                <?php if ($ped["cliente_telefono"] !== ""): ?>Tel: <?= e($ped["cliente_telefono"]) ?><br><?php endif; ?>
+                <?php if ($ped["cliente_ciudad"] !== ""): ?><?= e($ped["cliente_ciudad"]) ?><?= !empty($ped["cliente_departamento"]) ? ", " . e($ped["cliente_departamento"]) : "" ?><br><?php endif; ?>
+                <?php if (!empty($ped["cliente_direcciones"])): ?>Dirección: <?= e($ped["cliente_direcciones"]) ?><?= !empty($ped["cliente_barrio"]) ? " · " . e($ped["cliente_barrio"]) : "" ?><br><?php endif; ?>
+                <?php if (!empty($ped["cliente_puntos_referencia"])): ?>Referencia: <?= e($ped["cliente_puntos_referencia"]) ?><br><?php endif; ?>
+                Pago: <?= e(etiquetaCondicion($ped)) ?> · Factura electrónica: <?= !empty($ped["factura_electronica"]) ? "Sí" : "No" ?>
+                <?php if (!empty($ped["observaciones"])): ?><br>Obs.: <?= nl2br(e($ped["observaciones"])) ?><?php endif; ?>
+            </div>
+            <?php if ($ped["items"]): ?>
+                <table class="p-items">
+                    <?php foreach ($ped["items"] as $it): ?>
+                        <tr>
+                            <td><b><?= e($it["referencia"]) ?></b><br><?= e($it["nombre"]) ?></td>
+                            <td class="n"><?= (int) $it["cantidad"] ?> × <?= formatoCOP($it["precio_unitario"]) ?><br><b><?= formatoCOP($it["subtotal"]) ?></b></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </table>
+            <?php endif; ?>
+
+            <div class="acciones-ped">
+                <?php if ($esBorrador): ?>
+                    <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Continuar</a>
+                    <form method="POST" action="vendedor.php" onsubmit="return confirm('¿Eliminar este borrador?')">
+                        <input type="hidden" name="accion" value="eliminar_borrador">
+                        <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+                        <input type="hidden" name="pedido_id" value="<?= (int) $ped["id"] ?>">
+                        <button type="submit" class="btn btn-rojo">🗑️ Eliminar</button>
+                    </form>
+                <?php elseif ($ped["estado"] === "pendiente"): ?>
+                    <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Editar pedido</a>
+                <?php else: ?>
+                    <p class="bloqueado">🔒 <?= $ped["estado"] === "procesado" ? "Ya fue subido a Syscafe: no se puede editar." : "Pedido anulado." ?></p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </details>
+    <?php
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Pedidos | Grupo Bellaforma</title>
     <link rel="icon" type="image/x-icon" href="img/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
@@ -183,8 +164,8 @@ $misPedidos = obtenerPedidos($conexion, ["vendedor" => $vendedorId], 100);
     <div class="topbar">
         <img src="img/logo-blanco.png" alt="Grupo Bella Forma S.A.S.">
         <div class="quien">
-            <span>👤 <?= e($vendedor["nombre"]) ?> · ID <?= e($vendedor["identificacion"]) ?></span>
-            <a class="salir" href="logout_vendedor.php">Cerrar sesión</a>
+            <span><?= e($vendedor["nombre"]) ?><br>ID <?= e($vendedor["identificacion"]) ?></span>
+            <a class="salir" href="logout_vendedor.php">Salir</a>
         </div>
     </div>
 
@@ -195,254 +176,54 @@ $misPedidos = obtenerPedidos($conexion, ["vendedor" => $vendedorId], 100);
         <?php endif; ?>
 
         <div class="tabs">
-            <button type="button" class="tab-btn activo" data-panel="nuevo">🛒 Nuevo pedido</button>
-            <button type="button" class="tab-btn" data-panel="mis-pedidos">📋 Mis pedidos (<?= count($misPedidos) ?>)</button>
+            <button type="button" class="tab-btn activo" data-panel="nuevo"><?= $pedidoEditar ? "✏️ Pedido" : "🛒 Nuevo pedido" ?></button>
+            <button type="button" class="tab-btn" data-panel="mis-pedidos">📋 Mis pedidos<?= $borradores ? " (" . count($borradores) . " borrador" . (count($borradores) > 1 ? "es" : "") . ")" : "" ?></button>
         </div>
 
-        <!-- ================= NUEVO PEDIDO ================= -->
         <div id="panel-nuevo" class="panel activo">
-            <form method="POST" action="vendedor.php" id="formPedido">
-                <input type="hidden" name="accion" value="crear_pedido">
-                <input type="hidden" name="csrf" value="<?= e($_SESSION["csrf_vendedor"]) ?>">
-                <input type="hidden" name="items_json" id="items_json" value="{}">
-
-                <div class="card">
-                    <h2>1. Datos del cliente</h2>
-                    <p class="sub">Los campos con * son obligatorios.</p>
-                    <div class="grid-form">
-                        <div>
-                            <label for="cliente_nombre">Nombre del cliente *</label>
-                            <input type="text" id="cliente_nombre" name="cliente_nombre" maxlength="200" required>
-                        </div>
-                        <div>
-                            <label for="cliente_nit">NIT *</label>
-                            <input type="text" id="cliente_nit" name="cliente_nit" maxlength="40" required>
-                        </div>
-                        <div>
-                            <label for="cliente_ciudad">Ciudad *</label>
-                            <input type="text" id="cliente_ciudad" name="cliente_ciudad" maxlength="100" required>
-                        </div>
-                        <div>
-                            <label for="cliente_telefono">Teléfono *</label>
-                            <input type="text" id="cliente_telefono" name="cliente_telefono" maxlength="40" required>
-                        </div>
-                        <div>
-                            <label for="cliente_barrio">Barrio</label>
-                            <input type="text" id="cliente_barrio" name="cliente_barrio" maxlength="120">
-                        </div>
-                        <div class="ancho">
-                            <label for="cliente_direcciones">Dirección y otras direcciones de entrega</label>
-                            <textarea id="cliente_direcciones" name="cliente_direcciones"></textarea>
-                        </div>
-                        <div class="ancho">
-                            <label for="observaciones">Observaciones del pedido</label>
-                            <textarea id="observaciones" name="observaciones"></textarea>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h2>2. Productos</h2>
-                    <p class="sub">Busque por referencia o nombre e ingrese la cantidad. El total se calcula solo.</p>
-
-                    <div class="buscador">
-                        <input type="text" id="buscarCatalogo" placeholder="🔍 Buscar por referencia o nombre..." autocomplete="off">
-                    </div>
-
-                    <div class="tabla-wrap">
-                        <table id="tablaCatalogo">
-                            <thead>
-                                <tr>
-                                    <th>Referencia</th>
-                                    <th>Producto</th>
-                                    <th class="num">Precio</th>
-                                    <th class="num">Cantidad</th>
-                                    <th class="num">Subtotal</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (!$productos): ?>
-                                    <tr><td colspan="5" class="sin-resultados">Aún no hay productos cargados.</td></tr>
-                                <?php else: ?>
-                                    <?php foreach ($productos as $p): ?>
-                                        <tr data-id="<?= (int) $p["id"] ?>"
-                                            data-ref="<?= e($p["referencia"]) ?>"
-                                            data-nombre="<?= e($p["nombre"]) ?>"
-                                            data-precio="<?= e($p["precio"]) ?>">
-                                            <td class="ref"><?= e($p["referencia"]) ?></td>
-                                            <td><?= e($p["nombre"]) ?></td>
-                                            <td class="num"><?= formatoCOP($p["precio"]) ?></td>
-                                            <td class="num"><input type="number" class="qty" min="0" max="100000" step="1" placeholder="0" inputmode="numeric"></td>
-                                            <td class="num sub">—</td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                    <tr id="filaSinResultados" style="display:none;"><td colspan="5" class="sin-resultados">Ningún producto coincide con la búsqueda.</td></tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <details class="resumen">
-                        <summary>Ver resumen del pedido (<span id="resumenCantidad">0</span> productos)</summary>
-                        <ul id="listaResumen"></ul>
-                    </details>
-                </div>
-
-                <div class="barra-total">
-                    <div class="total">
-                        <small>Total del pedido</small>
-                        <span id="totalPedido">$ 0</span>
-                    </div>
-                    <button type="submit" class="btn-enviar">Enviar pedido</button>
-                </div>
-            </form>
+            <?php if ($avisoEdicion !== ""): ?>
+                <div class="aviso-edicion"><?= e($avisoEdicion) ?></div>
+            <?php endif; ?>
+            <?php include __DIR__ . "/pedido_form.php"; ?>
         </div>
 
-        <!-- ================= MIS PEDIDOS ================= -->
         <div id="panel-mis-pedidos" class="panel">
-            <div class="card">
-                <h2>Mis pedidos</h2>
-                <p class="sub">Se muestran sus últimos 100 pedidos.</p>
+            <?php if (!$misPedidos): ?>
+                <div class="card"><p class="sin-resultados">Todavía no ha creado pedidos.</p></div>
+            <?php endif; ?>
 
-                <?php if (!$misPedidos): ?>
-                    <p class="sin-resultados">Todavía no ha enviado pedidos.</p>
-                <?php else: ?>
-                    <?php foreach ($misPedidos as $ped): ?>
-                        <details class="pedido-item">
-                            <summary>
-                                <strong>#<?= numeroPedido($ped["id"]) ?></strong>
-                                <span><?= date("d/m/Y H:i", strtotime($ped["creado_en"])) ?></span>
-                                <span><?= e($ped["cliente_nombre"]) ?></span>
-                                <strong><?= formatoCOP($ped["total"]) ?></strong>
-                                <span class="estado <?= claseEstadoPedido($ped["estado"]) ?>"><?= e(etiquetaEstadoPedido($ped["estado"])) ?></span>
-                            </summary>
-                            <div class="cuerpo">
-                                <div class="datos">
-                                    NIT: <?= e($ped["cliente_nit"]) ?> · Tel: <?= e($ped["cliente_telefono"]) ?> ·
-                                    Ciudad: <?= e($ped["cliente_ciudad"]) ?>
-                                    <?php if ($ped["cliente_barrio"] !== null && $ped["cliente_barrio"] !== ""): ?> · Barrio: <?= e($ped["cliente_barrio"]) ?><?php endif; ?>
-                                    <?php if (!empty($ped["cliente_direcciones"])): ?><br>Direcciones: <?= nl2br(e($ped["cliente_direcciones"])) ?><?php endif; ?>
-                                    <?php if (!empty($ped["observaciones"])): ?><br>Observaciones: <?= nl2br(e($ped["observaciones"])) ?><?php endif; ?>
-                                </div>
-                                <div class="tabla-wrap">
-                                    <table>
-                                        <thead>
-                                            <tr><th>Ref.</th><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Subtotal</th></tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php foreach ($ped["items"] as $it): ?>
-                                                <tr>
-                                                    <td class="ref"><?= e($it["referencia"]) ?></td>
-                                                    <td><?= e($it["nombre"]) ?></td>
-                                                    <td class="num"><?= (int) $it["cantidad"] ?></td>
-                                                    <td class="num"><?= formatoCOP($it["precio_unitario"]) ?></td>
-                                                    <td class="num"><?= formatoCOP($it["subtotal"]) ?></td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </details>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
+            <?php if ($borradores): ?>
+                <div class="ped-grupo">Borradores (sin terminar)</div>
+                <?php foreach ($borradores as $ped) { tarjetaPedido($ped, $_SESSION["csrf_pedido"]); } ?>
+            <?php endif; ?>
+
+            <?php if ($enviados): ?>
+                <div class="ped-grupo">Pedidos enviados</div>
+                <?php foreach ($enviados as $ped) { tarjetaPedido($ped, $_SESSION["csrf_pedido"]); } ?>
+            <?php endif; ?>
         </div>
-
     </div>
 
     <script>
-        // ---------- Pestañas ----------
         function abrirPanel(nombre) {
-            document.querySelectorAll(".panel").forEach(function (p) { p.classList.remove("activo"); });
-            document.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.remove("activo"); });
             var panel = document.getElementById("panel-" + nombre);
             if (!panel) { nombre = "nuevo"; panel = document.getElementById("panel-nuevo"); }
+            document.querySelectorAll(".panel").forEach(function (p) { p.classList.remove("activo"); });
+            document.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.remove("activo"); });
             panel.classList.add("activo");
             var boton = document.querySelector('.tab-btn[data-panel="' + nombre + '"]');
             if (boton) { boton.classList.add("activo"); }
-            document.querySelector(".barra-total").style.display = (nombre === "nuevo") ? "flex" : "none";
+            var barra = document.getElementById("pfBarra");
+            if (barra) { barra.style.display = nombre === "nuevo" ? "" : "none"; }
         }
         document.querySelectorAll(".tab-btn").forEach(function (b) {
             b.addEventListener("click", function () {
-                history.replaceState(null, "", "#" + b.dataset.panel);
+                history.replaceState(null, "", location.pathname + location.search + "#" + b.dataset.panel);
                 abrirPanel(b.dataset.panel);
+                window.scrollTo(0, 0);
             });
         });
         abrirPanel(location.hash.replace("#", "") || "nuevo");
-
-        // ---------- Catálogo ----------
-        var filas = Array.prototype.slice.call(document.querySelectorAll("#tablaCatalogo tbody tr[data-id]"));
-
-        function normalizar(t) {
-            return (t || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        }
-        function dinero(n) {
-            return "$ " + Math.round(n).toLocaleString("es-CO");
-        }
-
-        filas.forEach(function (tr) {
-            tr.dataset.busq = normalizar(tr.dataset.ref + " " + tr.dataset.nombre);
-            tr.querySelector(".qty").addEventListener("input", recalcular);
-        });
-
-        document.getElementById("buscarCatalogo").addEventListener("input", function () {
-            var q = normalizar(this.value.trim());
-            var visibles = 0;
-            filas.forEach(function (tr) {
-                var ok = q === "" || tr.dataset.busq.indexOf(q) !== -1;
-                tr.style.display = ok ? "" : "none";
-                if (ok) { visibles++; }
-            });
-            var vacio = document.getElementById("filaSinResultados");
-            if (vacio) { vacio.style.display = visibles === 0 ? "" : "none"; }
-        });
-
-        function recalcular() {
-            var total = 0, cuantos = 0;
-            var lista = document.getElementById("listaResumen");
-            lista.innerHTML = "";
-
-            filas.forEach(function (tr) {
-                var cant = parseInt(tr.querySelector(".qty").value, 10) || 0;
-                var celda = tr.querySelector(".sub");
-                if (cant > 0) {
-                    var sub = cant * parseFloat(tr.dataset.precio);
-                    total += sub;
-                    cuantos++;
-                    celda.textContent = dinero(sub);
-                    tr.classList.add("con-cantidad");
-                    var li = document.createElement("li");
-                    li.textContent = tr.dataset.ref + " — " + tr.dataset.nombre + " × " + cant + " = " + dinero(sub);
-                    lista.appendChild(li);
-                } else {
-                    celda.textContent = "—";
-                    tr.classList.remove("con-cantidad");
-                }
-            });
-
-            document.getElementById("totalPedido").textContent = dinero(total);
-            document.getElementById("resumenCantidad").textContent = cuantos;
-        }
-
-        document.getElementById("formPedido").addEventListener("submit", function (ev) {
-            var items = {};
-            var cuantos = 0;
-            filas.forEach(function (tr) {
-                var cant = parseInt(tr.querySelector(".qty").value, 10) || 0;
-                if (cant > 0) { items[tr.dataset.id] = cant; cuantos++; }
-            });
-            if (cuantos === 0) {
-                ev.preventDefault();
-                alert("Seleccione al menos un producto con cantidad.");
-                return;
-            }
-            if (!confirm("¿Enviar el pedido por " + document.getElementById("totalPedido").textContent + "?")) {
-                ev.preventDefault();
-                return;
-            }
-            document.getElementById("items_json").value = JSON.stringify(items);
-        });
     </script>
 
 </body>
