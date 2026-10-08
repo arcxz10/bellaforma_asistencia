@@ -130,7 +130,7 @@ function tarjetaPedido(array $ped, string $csrf): void
             <div class="acciones-ped">
                 <?php if ($esBorrador): ?>
                     <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Continuar</a>
-                    <form method="POST" action="vendedor.php" onsubmit="return confirm('¿Eliminar este borrador?')">
+                    <form method="POST" action="vendedor.php" onsubmit="return pfConfirmarForm(this, 'Se eliminará este borrador y no se podrá recuperar.', '¿Eliminar borrador?')">
                         <input type="hidden" name="accion" value="eliminar_borrador">
                         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
                         <input type="hidden" name="pedido_id" value="<?= (int) $ped["id"] ?>">
