@@ -1172,14 +1172,14 @@ $resultadoEmpleados =
                 href="#vendedores"
                 class="nav-item"
             >
-                🧳 Vendedores
+                🧳 Ejecutivos de negocios
             </a>
 
             <a
                 href="#pedidos"
                 class="nav-item"
             >
-                🧾 Pedidos Vendedores
+                🧾 Pedidos de ejecutivos
             </a>
 
             <a
@@ -1187,6 +1187,13 @@ $resultadoEmpleados =
                 class="nav-item"
             >
                 🏷️ Productos al por mayor
+            </a>
+
+            <a
+                href="#clientes"
+                class="nav-item"
+            >
+                👥 Clientes
             </a>
 
         </nav>
@@ -2562,6 +2569,7 @@ $resultadoEmpleados =
             include __DIR__ . "/admin_seccion_vendedores.php";
             include __DIR__ . "/admin_seccion_pedidos.php";
             include __DIR__ . "/admin_seccion_productos.php";
+            include __DIR__ . "/admin_seccion_clientes.php";
             ?>
 
             <!-- SECCIÓN MATERIALES INTEGRADA -->
