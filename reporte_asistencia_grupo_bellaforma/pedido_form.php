@@ -285,7 +285,16 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         payload.csrf = CFG.csrf; payload.rol = CFG.rol;
         var o = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "same-origin" };
         if (opciones && opciones.keepalive) { o.keepalive = true; }
-        return fetch(CFG.api, o).then(function (r) { return r.json().catch(function () { return { ok: false, error: "Respuesta no válida." }; }); });
+        return fetch(CFG.api, o).then(function (r) {
+            return r.text().then(function (t) {
+                try { return JSON.parse(t); }
+                catch (e) {
+                    var det = "código " + r.status + (r.redirected ? ", redirigido a " + r.url : "");
+                    var ini = (t || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 140);
+                    return { ok: false, error: "El servidor no respondió bien (" + det + "). " + ini };
+                }
+            });
+        });
     }
 
     function msgCliente(texto, clase) {
