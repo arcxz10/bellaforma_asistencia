@@ -246,7 +246,7 @@ $qsPag = function (int $n) use ($buscarC) {
     .cli-grid input[type=text], .cli-grid input[type=email], .cli-grid input[type=number], .cli-grid select, .cli-grid textarea { width: 100%; padding: 9px; border: 1px solid #ccd; border-radius: 6px; font-size: 14px; }
 </style>
 
-<script src="js/colombia.js"></script>
+<script src="colombia.php?js=1"></script>
 <script>
     var CLI_CAMPOS = ["tipo_documento", "identificacion", "dv", "codigo", "razon_social", "nombre_comercial", "telefono1", "telefono2", "telefono3",
         "movil", "email", "email_fe", "codigo_municipio", "pais", "barrio", "codigo_postal", "direccion", "direccion2", "puntos_referencia",
