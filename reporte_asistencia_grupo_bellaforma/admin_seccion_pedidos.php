@@ -42,12 +42,13 @@ foreach ($pedidosAdmin as $pp) {
     <div class="cabecera-seccion">
         <div>
             <h2>🧾 Pedidos de ejecutivos</h2>
-            <p>Revise, edite y descargue los pedidos (PDF o Excel). Márquelos «Subido a Syscafe» cuando ya estén digitados: desde ese momento el ejecutivo ya no puede editarlos.</p>
+            <p>Revise, edite y descargue los pedidos (PDF, archivo para Syscafe o Excel detallado). Márquelos «Subido a Syscafe» cuando ya estén digitados: desde ese momento el ejecutivo ya no puede editarlos.</p>
         </div>
         <?php if ($pedidosAdmin): ?>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <a class="btn-nuevo" style="text-decoration:none;" href="pedido_pdf.php?<?= escapar($qsDescarga) ?>">⬇ PDF (<?= count($pedidosAdmin) ?>)</a>
-                <a class="btn-nuevo" style="text-decoration:none; background:#1D6F42;" href="pedido_excel.php?<?= escapar($qsDescarga) ?>">⬇ Excel (<?= count($pedidosAdmin) ?>)</a>
+                <a class="btn-nuevo" style="text-decoration:none; background:#00796B;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>">⬇ Syscafe .XLS (<?= count($pedidosAdmin) ?>)</a>
+                <a class="btn-nuevo" style="text-decoration:none; background:#1D6F42;" href="pedido_excel.php?<?= escapar($qsDescarga) ?>">⬇ Excel detallado</a>
             </div>
         <?php endif; ?>
     </div>
@@ -133,7 +134,7 @@ foreach ($pedidosAdmin as $pp) {
                                    <?= $ped["estado"] === "procesado" ? "onclick=\"return confirm('Este pedido ya está subido a Syscafe. ¿Editarlo de todos modos?')\"" : "" ?>>Editar</a>
                                 <?php if (!$esBorr): ?>
                                     <a class="btn-activar btn-fila" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>">PDF</a>
-                                    <a class="btn-activar btn-fila" style="background:#1D6F42;" href="pedido_excel.php?id=<?= (int) $ped["id"] ?>">Excel</a>
+                                    <a class="btn-activar btn-fila" style="background:#00796B;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>" title="Archivo .XLS para importar en Syscafe">Syscafe</a>
                                     <form method="POST" action="admin.php" class="form-inline">
                                         <input type="hidden" name="accion" value="ped_estado">
                                         <input type="hidden" name="id" value="<?= (int) $ped["id"] ?>">
