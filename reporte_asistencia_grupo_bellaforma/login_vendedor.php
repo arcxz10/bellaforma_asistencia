@@ -51,7 +51,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Acceso ejecutivos de negocios | Grupo Bellaforma</title>
+    <title>Acceso Ejecutivos de Negocios | Grupo Bellaforma</title>
 
     <link rel="icon" type="image/x-icon" href="img/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
@@ -70,7 +70,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </div>
 
             <div class="login-card">
-                <h2>Acceso ejecutivos de negocios</h2>
+                <h2>Acceso Ejecutivos de Negocios</h2>
                 <p class="login-description">
                     Ingrese el usuario y la contraseña que le entregó la empresa.
                 </p>
