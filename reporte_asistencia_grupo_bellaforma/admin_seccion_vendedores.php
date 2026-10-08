@@ -26,7 +26,7 @@ $sqlV = "SELECT v.id, v.nombre, v.identificacion, v.ciudad, v.telefono, v.usuari
                 COALESCE(SUM(p.total), 0) AS total_valor
          FROM vendedores v
          LEFT JOIN pedidos_vendedores p
-                ON p.vendedor_id = v.id AND p.estado <> 'anulado'" . $joinExtra;
+                ON p.vendedor_id = v.id AND p.estado NOT IN ('anulado','borrador')" . $joinExtra;
 
 if ($buscarV !== "") {
     $sqlV .= " WHERE (v.nombre LIKE ? OR v.identificacion LIKE ? OR v.usuario LIKE ?)";
@@ -73,7 +73,7 @@ $datosGraficoVend = array_map(function ($v) {
     <div class="cabecera-seccion">
         <div>
             <h2>🧳 Vendedores</h2>
-            <p>Vendedores externos con acceso para tomar pedidos. Los pedidos anulados no se cuentan.</p>
+            <p>Ejecutivos de negocios con acceso para tomar pedidos. No se cuentan los pedidos anulados ni los borradores.</p>
         </div>
         <button type="button" class="btn-nuevo" onclick="nuevoVendedor()">+ Nuevo Vendedor</button>
     </div>
