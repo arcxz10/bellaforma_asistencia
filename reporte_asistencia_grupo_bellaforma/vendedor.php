@@ -40,6 +40,11 @@ $mensaje = $_SESSION["msg_vendedor"] ?? "";
 $tipoMensaje = $_SESSION["msg_vendedor_tipo"] ?? "exito";
 unset($_SESSION["msg_vendedor"], $_SESSION["msg_vendedor_tipo"]);
 
+/* ===== API del formulario (vendedor.php?api=1) ===== */
+if (isset($_GET["api"])) {
+    manejarApiPedido($conexion);
+}
+
 /* ===== Eliminar borrador ===== */
 if ($_SERVER["REQUEST_METHOD"] === "POST" && ($_POST["accion"] ?? "") === "eliminar_borrador") {
     if (hash_equals($_SESSION["csrf_pedido"], $_POST["csrf"] ?? "")) {
@@ -68,6 +73,7 @@ if ($idEditar > 0) {
             $avisoEdicion = $p["estado"] === "borrador"
                 ? "Continúas el borrador #" . numeroPedido($p["id"]) . "."
                 : "Editando el pedido #" . numeroPedido($p["id"]) . ". Podrás cambiarlo hasta que la oficina lo suba a Syscafe.";
+            $avisoEdicion .= " (Productos guardados en este pedido: " . count($p["items"]) . ")";
         } else {
             $_SESSION["msg_vendedor"] = "El pedido #" . numeroPedido($p["id"]) . " ya fue subido a Syscafe o anulado y no se puede editar.";
             $_SESSION["msg_vendedor_tipo"] = "error";
@@ -89,6 +95,7 @@ $pf = [
     "volver" => "vendedor.php#mis-pedidos",
     "autosave" => !$pedidoEditar || $pedidoEditar["estado"] === "borrador",
     "url_base" => "vendedor.php",
+    "api" => "vendedor.php?api=1",
     "texto_enviar" => ($pedidoEditar && $pedidoEditar["estado"] === "pendiente") ? "Guardar cambios" : "Enviar pedido",
 ];
 
