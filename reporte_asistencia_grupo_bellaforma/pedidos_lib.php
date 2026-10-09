@@ -233,7 +233,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         if ($existente) {
             $sets = implode(", ", array_map(fn($k) => "`$k` = ?", array_keys($campos)));
             $tipos = implode("", array_map(fn($v) => $v[0], $campos)) . "i";
-            $valores = array_map(fn($v) => $v[1], $campos);
+            $valores = array_values(array_map(fn($v) => $v[1], $campos));
             $valores[] = (int) $existente["id"];
             $st = $c->prepare("UPDATE pedidos_vendedores SET $sets WHERE id = ?");
             $st->bind_param($tipos, ...$valores);
@@ -245,7 +245,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
             $cols = "vendedor_id, " . implode(", ", array_map(fn($k) => "`$k`", array_keys($campos)));
             $marcas = implode(", ", array_fill(0, count($campos) + 1, "?"));
             $tipos = "i" . implode("", array_map(fn($v) => $v[0], $campos));
-            $valores = array_merge([$vendedorId], array_map(fn($v) => $v[1], $campos));
+            $valores = array_merge([$vendedorId], array_values(array_map(fn($v) => $v[1], $campos)));
             $st = $c->prepare("INSERT INTO pedidos_vendedores ($cols) VALUES ($marcas)");
             $st->bind_param($tipos, ...$valores);
             $st->execute();
