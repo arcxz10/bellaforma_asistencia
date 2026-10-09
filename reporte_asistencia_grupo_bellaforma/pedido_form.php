@@ -29,14 +29,24 @@ $datosIniciales = [
 ];
 $itemsIniciales = [];
 if ($ped) {
+    $idsProductos = [];
+    $idPorRef = [];
+    foreach ($pf["productos"] as $pp) {
+        $idsProductos[(int) $pp["id"]] = true;
+        $idPorRef[$pp["referencia"]] = (int) $pp["id"];
+    }
     foreach ($ped["items"] as $it) {
-        $itemsIniciales[(int) $it["producto_id"]] = (int) $it["cantidad"];
+        $pid = (int) $it["producto_id"];
+        if (!isset($idsProductos[$pid]) && isset($idPorRef[$it["referencia"]])) {
+            $pid = $idPorRef[$it["referencia"]];   // respaldo: si el id no coincide, se une por referencia
+        }
+        $itemsIniciales[$pid] = (int) $it["cantidad"];
     }
 }
 $cfgJs = [
     "rol" => $pf["rol"],
     "csrf" => $pf["csrf"],
-    "api" => "pedido_api.php",
+    "api" => $pf["api"] ?? "pedido_api.php",
     "volver" => $pf["volver"],
     "autosave" => (bool) $pf["autosave"],
     "urlBase" => $pf["url_base"] ?? "",
