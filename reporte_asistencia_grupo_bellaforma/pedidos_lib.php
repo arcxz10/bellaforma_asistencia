@@ -286,6 +286,10 @@ function productosParaFormulario(mysqli $c, ?array $pedido): array
         }
     }
     $or = $extra ? " OR p.id IN (" . implode(",", $extra) . ")" : "";
+    if ($pedido && $pedido["items"]) {
+        $refs = array_map(fn($it) => "'" . $c->real_escape_string((string) $it["referencia"]) . "'", $pedido["items"]);
+        $or .= " OR p.referencia IN (" . implode(",", $refs) . ")";
+    }
     $res = $c->query(
         "SELECT p.id, p.referencia, p.nombre, p.precio, p.activo,
                 (SELECT UNIX_TIMESTAMP(f.actualizado_en) FROM producto_fotos f WHERE f.producto_id = p.id) AS foto_v
@@ -315,4 +319,126 @@ function pedidosParaExportar(mysqli $c): array
         "hasta"    => $_GET["hasta_p"] ?? "",
         "buscar"   => $_GET["buscar_p"] ?? "",
     ], 500);
+}
+
+
+/* ================= API JSON del formulario de pedido =================
+ * Se llama desde vendedor.php?api=1 (ejecutivos) y admin_pedido_editar.php?api=1 (administrador).
+ * Acciones: buscar_cliente | guardar | eliminar_borrador
+ */
+function api_responder(array $d, int $codigo = 200): void
+{
+    http_response_code($codigo);
+    header("Content-Type: application/json; charset=utf-8");
+    echo json_encode($d, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function manejarApiPedido(mysqli $conexion): void
+{
+    header("Content-Type: application/json; charset=utf-8");
+    date_default_timezone_set("America/Bogota");
+    if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+        api_responder(["ok" => false, "error" => "Método no permitido."], 405);
+    }
+
+    $in = json_decode(file_get_contents("php://input"), true);
+    if (!is_array($in)) {
+        api_responder(["ok" => false, "error" => "Solicitud no válida."], 400);
+    }
+
+    if (empty($_SESSION["csrf_pedido"]) || !hash_equals($_SESSION["csrf_pedido"], (string) ($in["csrf"] ?? ""))) {
+        api_responder(["ok" => false, "error" => "La sesión expiró. Recargue la página."], 403);
+    }
+
+    try {
+        asegurarTablasVendedores($conexion);
+
+        $rol = ($in["rol"] ?? "") === "admin" ? "admin" : "vendedor";
+        $vendedorId = 0;
+
+        if ($rol === "admin") {
+            if (empty($_SESSION["admin_id"])) {
+                api_responder(["ok" => false, "error" => "Sesión de administrador no válida."], 401);
+            }
+        } else {
+            $vendedorId = (int) ($_SESSION["vendedor_id"] ?? 0);
+            $st = $conexion->prepare("SELECT id FROM vendedores WHERE id = ? AND activo = 1");
+            $st->bind_param("i", $vendedorId);
+            $st->execute();
+            $ok = $st->get_result()->fetch_assoc();
+            $st->close();
+            if (!$vendedorId || !$ok) {
+                api_responder(["ok" => false, "error" => "Sesión no válida. Ingrese de nuevo."], 401);
+            }
+        }
+
+        $accion = $in["accion"] ?? "";
+
+        if ($accion === "buscar_cliente") {
+            $cli = buscarClientePorDocumento($conexion, (string) ($in["doc"] ?? ""));
+            if (!$cli) {
+                api_responder(["ok" => true, "encontrado" => false]);
+            }
+            $ident = $cli["identificacion"] . (($cli["dv"] ?? "") !== "" && $cli["tipo_persona"] === "juridica" ? "-" . $cli["dv"] : "");
+            api_responder(["ok" => true, "encontrado" => true, "cliente" => [
+                "id" => (int) $cli["id"],
+                "tipo_persona" => $cli["tipo_persona"],
+                "identificacion" => $ident,
+                "razon_social" => $cli["razon_social"],
+                "nombre_comercial" => $cli["nombre_comercial"],
+                "telefono" => $cli["telefono1"] ?: ($cli["movil"] ?: ""),
+                "email" => $cli["email"],
+                "email_fe" => $cli["email_fe"],
+                "departamento" => $cli["departamento"],
+                "municipio" => $cli["municipio"],
+                "barrio" => $cli["barrio"],
+                "direccion" => $cli["direccion"],
+                "puntos_referencia" => $cli["puntos_referencia"],
+                "condicion_pago" => $cli["condicion_pago"],
+                "dias_credito" => $cli["dias_credito"],
+                "inactivo" => (int) $cli["inactivo"],
+            ]]);
+        }
+
+        if ($accion === "guardar") {
+            $modo = ($in["modo"] ?? "") === "enviar" ? "enviar" : "borrador";
+            $pedidoId = (int) ($in["pedido_id"] ?? 0) ?: null;
+            $datos = is_array($in["datos"] ?? null) ? $in["datos"] : [];
+            $items = is_array($in["items"] ?? null) ? $in["items"] : [];
+
+            if ($rol === "admin" && !$pedidoId) {
+                api_responder(["ok" => false, "error" => "Falta el pedido a editar."], 400);
+            }
+
+            $r = guardarPedido($conexion, $vendedorId, $pedidoId, $datos, $items, $modo, $rol);
+            if (!$r["ok"]) {
+                api_responder($r, 422);
+            }
+
+            if ($modo === "enviar" && $rol === "vendedor") {
+                $_SESSION["msg_vendedor"] = ($pedidoId ? "Pedido #" : "Pedido #") . numeroPedido($r["id"]) .
+                    ($pedidoId ? " actualizado" : " enviado") . " por " . formatoCOP($r["total"]) . ".";
+                $_SESSION["msg_vendedor_tipo"] = "exito";
+            }
+            if ($rol === "admin") {
+                $_SESSION["mensaje"] = "Pedido #" . numeroPedido($r["id"]) . " actualizado.";
+                $_SESSION["tipo_mensaje"] = "exito";
+            }
+            api_responder($r);
+        }
+
+        if ($accion === "eliminar_borrador" && $rol === "vendedor") {
+            $pid = (int) ($in["pedido_id"] ?? 0);
+            $st = $conexion->prepare("DELETE FROM pedidos_vendedores WHERE id = ? AND vendedor_id = ? AND estado = 'borrador'");
+            $st->bind_param("ii", $pid, $vendedorId);
+            $st->execute();
+            $st->close();
+            api_responder(["ok" => true]);
+        }
+
+        api_responder(["ok" => false, "error" => "Acción no válida."], 400);
+    } catch (Throwable $e) {
+        api_responder(["ok" => false, "error" => "Error del servidor. Intente de nuevo."], 500);
+    }
 }
