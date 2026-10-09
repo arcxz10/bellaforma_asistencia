@@ -5,13 +5,18 @@
  * - Funciones de formato y consulta de pedidos (admin.php, pedido_pdf.php, pedido_excel.php, vendedor.php).
  */
 
-const ESQUEMA_VEND_VERSION = 4;
+const ESQUEMA_VEND_VERSION = 5;
 
-function agregarColumna(mysqli $c, string $tabla, string $col, string $def): void
+function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
 {
-    $r = $c->query("SHOW COLUMNS FROM `$tabla` LIKE '$col'");
-    if ($r && $r->num_rows === 0) {
-        $c->query("ALTER TABLE `$tabla` ADD COLUMN `$col` $def");
+    try {
+        $r = $c->query("SHOW COLUMNS FROM `$tabla` LIKE '$col'");
+        if ($r && $r->num_rows === 0) {
+            $c->query("ALTER TABLE `$tabla` ADD COLUMN `$col` $def");
+        }
+        return true;
+    } catch (Throwable $e) {
+        return false;
     }
 }
 
@@ -143,21 +148,29 @@ function asegurarTablasVendedores(mysqli $c): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     // Migración de pedidos (por si la tabla ya existía con la versión anterior)
-    $c->query("ALTER TABLE pedidos_vendedores MODIFY estado ENUM('borrador','pendiente','procesado','anulado') NOT NULL DEFAULT 'pendiente'");
-    agregarColumna($c, "pedidos_vendedores", "cliente_id", "INT NULL");
-    agregarColumna($c, "pedidos_vendedores", "cliente_tipo_persona", "VARCHAR(10) NOT NULL DEFAULT 'juridica'");
-    agregarColumna($c, "pedidos_vendedores", "cliente_tipo_documento", "VARCHAR(20) NOT NULL DEFAULT 'NIT'");
-    agregarColumna($c, "pedidos_vendedores", "cliente_nombre_comercial", "VARCHAR(200) NULL");
-    agregarColumna($c, "pedidos_vendedores", "cliente_departamento", "VARCHAR(80) NULL");
-    agregarColumna($c, "pedidos_vendedores", "cliente_puntos_referencia", "VARCHAR(255) NULL");
-    agregarColumna($c, "pedidos_vendedores", "cliente_email", "VARCHAR(150) NULL");
-    agregarColumna($c, "pedidos_vendedores", "factura_electronica", "TINYINT(1) NOT NULL DEFAULT 0");
-    agregarColumna($c, "pedidos_vendedores", "email_fe", "VARCHAR(150) NULL");
-    agregarColumna($c, "pedidos_vendedores", "condicion_pago", "VARCHAR(10) NOT NULL DEFAULT 'contado'");
-    agregarColumna($c, "pedidos_vendedores", "dias_credito", "INT NULL");
-    agregarColumna($c, "pedidos_vendedores", "actualizado_en", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+    $ok = true;
+    try {
+        $c->query("ALTER TABLE pedidos_vendedores MODIFY estado ENUM('borrador','pendiente','procesado','anulado') NOT NULL DEFAULT 'pendiente'");
+    } catch (Throwable $e) {
+        $ok = false;
+    }
+    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_id", "INT NULL") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_tipo_persona", "VARCHAR(10) NOT NULL DEFAULT 'juridica'") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_tipo_documento", "VARCHAR(20) NOT NULL DEFAULT 'NIT'") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_nombre_comercial", "VARCHAR(200) NULL") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_departamento", "VARCHAR(80) NULL") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_puntos_referencia", "VARCHAR(255) NULL") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_email", "VARCHAR(150) NULL") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "factura_electronica", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "email_fe", "VARCHAR(150) NULL") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "condicion_pago", "VARCHAR(10) NOT NULL DEFAULT 'contado'") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "dias_credito", "INT NULL") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "actualizado_en", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP") && $ok;
 
-    $c->query("REPLACE INTO esquema_modulo (clave, valor) VALUES ('vendedores', " . ESQUEMA_VEND_VERSION . ")");
+    // Solo se marca como terminado si TODO se aplicó; si no, se reintenta en la próxima visita
+    if ($ok) {
+        $c->query("REPLACE INTO esquema_modulo (clave, valor) VALUES ('vendedores', " . ESQUEMA_VEND_VERSION . ")");
+    }
 }
 
 /* ================= FORMATO ================= */
