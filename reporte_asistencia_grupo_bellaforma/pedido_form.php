@@ -339,10 +339,11 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     function buscarCliente() {
         var doc = $("pfDoc").value.trim();
         if (soloDig(doc).length < 5) { msgCliente(""); return; }
-        if (S.clienteId && soloDig(doc) === S.docOk) { return; }
+        if (soloDig(doc) === S.docOk) { return; }
+        S.docOk = soloDig(doc);
         msgCliente("Buscando cliente…", "");
         llamar({ accion: "buscar_cliente", doc: doc }).then(function (r) {
-            if (!r.ok) { msgCliente(r.error || "No se pudo buscar.", "alerta"); return; }
+            if (!r.ok) { S.docOk = ""; msgCliente(r.error || "No se pudo buscar.", "alerta"); return; }
             if (r.encontrado) { aplicarCliente(r.cliente); }
             else { S.clienteId = null; msgCliente("Cliente nuevo: complete sus datos para el pedido.", ""); }
         }).catch(function () { msgCliente("Sin conexión: no se pudo buscar el cliente.", "alerta"); });
@@ -537,8 +538,9 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (!soloDig(d.identificacion)) { return [1, nat ? "Ingrese la cédula del cliente." : "Ingrese el NIT del cliente.", "pfDoc"]; }
         if (!d.cliente_nombre) { return [1, nat ? "Ingrese el nombre completo del cliente." : "Ingrese la razón social.", "pfNombre"]; }
         if (!d.telefono) { return [1, "Ingrese un teléfono de contacto.", "pfTelefono"]; }
-        if (!d.departamento) { return [1, "Seleccione el departamento.", "pfDepto"]; }
-        if (!d.municipio) { return [1, "Seleccione el municipio.", "pfMuni"]; }
+        var ubicacionOpcional = S.pedidoId && !D.departamento && CFG.estadoPedido !== "borrador" && CFG.estadoPedido !== "nuevo";
+        if (!ubicacionOpcional && !d.departamento) { return [1, "Seleccione el departamento.", "pfDepto"]; }
+        if (!ubicacionOpcional && !d.municipio) { return [1, "Seleccione el municipio.", "pfMuni"]; }
         if (!d.direccion) { return [1, "Ingrese la dirección de entrega.", "pfDireccion"]; }
         if (S.fe && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email_fe || d.email)) { return [1, "Ingrese un correo válido para la factura electrónica.", "pfEmailFe"]; }
         if (!Object.keys(S.items).length) { return [2, "Elija al menos un producto.", "pfBuscarProd"]; }
@@ -655,7 +657,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     setFE(D.factura_electronica ? 1 : 0);
     setCond(D.condicion_pago);
     S.clienteId = D.cliente_id || null;
-    if (S.clienteId) { S.docOk = soloDig(D.identificacion); }
+    S.docOk = soloDig(D.identificacion);   // al editar, el NIT que ya tiene el pedido no se vuelve a buscar
     Object.keys(CFG.items).forEach(function (id) { if (PRECIO[id] !== undefined) { S.items[id] = CFG.items[id]; } });
     filas.forEach(pintarFila);
     totales();
