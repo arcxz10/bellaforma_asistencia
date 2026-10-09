@@ -112,7 +112,8 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         if ($nombre === "") {
             return $falla($tipo === "natural" ? "Ingrese el nombre completo del cliente." : "Ingrese la razón social del cliente.");
         }
-        if ($depto === "" || $muni === "") {
+        $ubicacionOpcional = $existente && $existente["estado"] !== "borrador" && trim((string) ($existente["cliente_departamento"] ?? "")) === "";
+        if (!$ubicacionOpcional && ($depto === "" || $muni === "")) {
             return $falla("Seleccione el departamento y el municipio.");
         }
         if ($direccion === "") {
