@@ -266,7 +266,8 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         $c->commit();
     } catch (Throwable $e) {
         $c->rollback();
-        return $falla("No se pudo guardar el pedido. Intente de nuevo.");
+        $detalle = trim(preg_replace('/\s+/', " ", $e->getMessage()) ?? "");
+        return $falla("No se pudo guardar el pedido. Detalle técnico: " . substr($detalle, 0, 180));
     }
 
     return ["ok" => true, "id" => $idFinal, "total" => $total, "estado" => $estado];
