@@ -5,7 +5,7 @@
  * - Funciones de formato y consulta de pedidos (admin.php, pedido_pdf.php, pedido_excel.php, vendedor.php).
  */
 
-const ESQUEMA_VEND_VERSION = 5;
+const ESQUEMA_VEND_VERSION = 7;
 
 function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
 {
@@ -18,6 +18,99 @@ function agregarColumna(mysqli $c, string $tabla, string $col, string $def): boo
     } catch (Throwable $e) {
         return false;
     }
+}
+
+/** Tabla de clientes con TODOS los campos del catálogo de terceros de Syscafe. */
+function ddlClientes(string $tabla): string
+{
+    return "CREATE TABLE IF NOT EXISTS `$tabla` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tipo_persona VARCHAR(10) NOT NULL DEFAULT 'juridica',
+        tipo_documento VARCHAR(40) NOT NULL DEFAULT 'NIT',
+        identificacion VARCHAR(30) NOT NULL,
+        identificacion_norm VARCHAR(30) NOT NULL,
+        dv VARCHAR(3) NULL,
+        codigo VARCHAR(30) NULL,
+        razon_social VARCHAR(200) NOT NULL,
+        nombre_comercial VARCHAR(200) NULL,
+        nota VARCHAR(500) NULL,
+        direccion VARCHAR(255) NULL,
+        direccion2 VARCHAR(255) NULL,
+        puntos_referencia VARCHAR(255) NULL,
+        telefono1 VARCHAR(40) NULL,
+        telefono2 VARCHAR(40) NULL,
+        telefono3 VARCHAR(40) NULL,
+        movil VARCHAR(40) NULL,
+        codigo_postal VARCHAR(20) NULL,
+        email VARCHAR(150) NULL,
+        email_fe VARCHAR(150) NULL,
+        departamento VARCHAR(80) NULL,
+        codigo_municipio VARCHAR(12) NULL,
+        municipio VARCHAR(100) NULL,
+        codigo_pais VARCHAR(6) NULL DEFAULT '169',
+        pais VARCHAR(60) NULL DEFAULT 'Colombia',
+        codigo_barrio VARCHAR(20) NULL,
+        barrio VARCHAR(120) NULL,
+        grupo VARCHAR(80) NULL,
+        subgrupo VARCHAR(80) NULL,
+        encargado VARCHAR(150) NULL,
+        representante_legal VARCHAR(150) NULL,
+        observaciones TEXT NULL,
+        zona VARCHAR(80) NULL,
+        codigo_vendedor VARCHAR(20) NULL,
+        vendedor_asignado VARCHAR(100) NULL,
+        codigo_cobrador VARCHAR(20) NULL,
+        cobrador VARCHAR(100) NULL,
+        codigo_agente VARCHAR(20) NULL,
+        agente_comercial VARCHAR(100) NULL,
+        codigo_transporta VARCHAR(20) NULL,
+        transportadora VARCHAR(100) NULL,
+        lista_precios VARCHAR(60) NULL,
+        calificacion VARCHAR(40) NULL,
+        cupo_cartera DECIMAL(14,2) NOT NULL DEFAULT 0,
+        no_facturas INT NOT NULL DEFAULT 0,
+        dias_mora INT NOT NULL DEFAULT 0,
+        condicion_pago VARCHAR(10) NOT NULL DEFAULT 'contado',
+        dias_credito INT NULL,
+        inactivo TINYINT(1) NOT NULL DEFAULT 0,
+        creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_ident (identificacion_norm),
+        KEY idx_razon (razon_social)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+}
+
+/** Lista de precios / tipo de cliente: "mayorista" o "detal". */
+function listaValida($l): string
+{
+    return $l === "detal" ? "detal" : "mayorista";
+}
+
+function tablaClientes(string $lista): string
+{
+    return listaValida($lista) === "detal" ? "clientes_detal" : "clientes_mayoristas";
+}
+
+/** Un solo catálogo para ambos tipos de cliente (cambia solo la columna de precio). */
+function tablaProductos(string $lista = ""): string
+{
+    return "productos_mayoristas";
+}
+
+function tablaFotos(string $lista = ""): string
+{
+    return "producto_fotos";
+}
+
+/** Columna de precio según el tipo de cliente. */
+function columnaPrecio(string $lista): string
+{
+    return listaValida($lista) === "detal" ? "precio_detal" : "precio_mayorista";
+}
+
+function etiquetaTipoCliente(string $lista): string
+{
+    return listaValida($lista) === "detal" ? "Detal" : "Mayorista";
 }
 
 function asegurarTablasVendedores(mysqli $c): void
@@ -71,50 +164,60 @@ function asegurarTablasVendedores(mysqli $c): void
         actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // Base de datos de clientes (estructura basada en el catálogo de terceros de Syscafe)
-    $c->query("CREATE TABLE IF NOT EXISTS clientes (
+    // Un solo catálogo de productos con dos precios (mayorista y detal); las fotos se suben una sola vez
+    $okPrecios = agregarColumna($c, "productos_mayoristas", "precio_mayorista", "DECIMAL(12,2) NOT NULL DEFAULT 0");
+    $okPrecios = agregarColumna($c, "productos_mayoristas", "precio_detal", "DECIMAL(12,2) NOT NULL DEFAULT 0") && $okPrecios;
+    try {
+        $c->query("UPDATE productos_mayoristas SET precio_mayorista = precio WHERE precio_mayorista = 0 AND precio > 0");
+    } catch (Throwable $e) {
+        $okPrecios = false;
+    }
+    // Las tablas separadas de detal ya no se usan: se eliminan solo si están vacías
+    foreach (["productos_detal", "producto_detal_fotos"] as $tablaVieja) {
+        try {
+            $rv = $c->query("SELECT COUNT(*) FROM `$tablaVieja`");
+            $filaV = $rv ? $rv->fetch_row() : null;
+            if ($filaV && (int) $filaV[0] === 0) {
+                $c->query("DROP TABLE IF EXISTS `$tablaVieja`");
+            }
+        } catch (Throwable $e) {
+            // la tabla no existe: nada que hacer
+        }
+    }
+
+    // Clientes: dos bases (mayoristas y detal) con todos los campos del catálogo de terceros de Syscafe
+    $c->query(ddlClientes("clientes_mayoristas"));
+    $c->query(ddlClientes("clientes_detal"));
+
+    $c->query("CREATE TABLE IF NOT EXISTS cliente_subterceros (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        tipo_persona VARCHAR(10) NOT NULL DEFAULT 'juridica',
-        tipo_documento VARCHAR(20) NOT NULL DEFAULT 'NIT',
-        identificacion VARCHAR(30) NOT NULL,
-        identificacion_norm VARCHAR(30) NOT NULL,
-        dv VARCHAR(3) NULL,
-        codigo VARCHAR(30) NULL,
-        razon_social VARCHAR(200) NOT NULL,
-        nombre_comercial VARCHAR(200) NULL,
-        direccion VARCHAR(255) NULL,
-        direccion2 VARCHAR(255) NULL,
-        puntos_referencia VARCHAR(255) NULL,
-        telefono1 VARCHAR(40) NULL,
-        telefono2 VARCHAR(40) NULL,
-        telefono3 VARCHAR(40) NULL,
-        movil VARCHAR(40) NULL,
-        codigo_postal VARCHAR(20) NULL,
-        email VARCHAR(150) NULL,
-        email_fe VARCHAR(150) NULL,
-        departamento VARCHAR(80) NULL,
-        municipio VARCHAR(100) NULL,
-        codigo_municipio VARCHAR(12) NULL,
-        pais VARCHAR(60) NULL DEFAULT 'Colombia',
-        barrio VARCHAR(120) NULL,
-        grupo VARCHAR(80) NULL,
-        subgrupo VARCHAR(80) NULL,
-        encargado VARCHAR(150) NULL,
-        representante_legal VARCHAR(150) NULL,
-        zona VARCHAR(80) NULL,
-        vendedor_asignado VARCHAR(100) NULL,
-        cobrador VARCHAR(100) NULL,
-        lista_precios VARCHAR(40) NULL,
-        condicion_pago VARCHAR(10) NOT NULL DEFAULT 'contado',
-        dias_credito INT NULL,
-        cupo_cartera DECIMAL(14,2) NOT NULL DEFAULT 0,
-        observaciones TEXT NULL,
-        inactivo TINYINT(1) NOT NULL DEFAULT 0,
-        creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_cliente_ident (identificacion_norm),
-        KEY idx_cliente_razon (razon_social)
+        lista VARCHAR(10) NOT NULL,
+        cliente_id INT NOT NULL,
+        tipo VARCHAR(60) NULL,
+        codigo VARCHAR(40) NULL,
+        nombre VARCHAR(200) NULL,
+        KEY idx_subt_cliente (lista, cliente_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $c->query("CREATE TABLE IF NOT EXISTS cliente_contactos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        lista VARCHAR(10) NOT NULL,
+        cliente_id INT NOT NULL,
+        nombre VARCHAR(150) NULL,
+        cargo VARCHAR(100) NULL,
+        telefono VARCHAR(40) NULL,
+        movil VARCHAR(40) NULL,
+        email VARCHAR(150) NULL,
+        observaciones VARCHAR(255) NULL,
+        KEY idx_cont_cliente (lista, cliente_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // La base de clientes anterior (una sola) ya no se usa: se elimina
+    try {
+        $c->query("DROP TABLE IF EXISTS clientes");
+    } catch (Throwable $e) {
+        // sin consecuencias
+    }
 
     $c->query("CREATE TABLE IF NOT EXISTS pedidos_vendedores (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -166,9 +269,10 @@ function asegurarTablasVendedores(mysqli $c): void
     $ok = agregarColumna($c, "pedidos_vendedores", "condicion_pago", "VARCHAR(10) NOT NULL DEFAULT 'contado'") && $ok;
     $ok = agregarColumna($c, "pedidos_vendedores", "dias_credito", "INT NULL") && $ok;
     $ok = agregarColumna($c, "pedidos_vendedores", "actualizado_en", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "tipo_cliente", "VARCHAR(10) NOT NULL DEFAULT 'mayorista'") && $ok;
 
     // Solo se marca como terminado si TODO se aplicó; si no, se reintenta en la próxima visita
-    if ($ok) {
+    if ($ok && $okPrecios) {
         $c->query("REPLACE INTO esquema_modulo (clave, valor) VALUES ('vendedores', " . ESQUEMA_VEND_VERSION . ")");
     }
 }
@@ -267,6 +371,13 @@ function obtenerPedidos(mysqli $c, array $f = [], ?int $limite = 300, ?int $id =
             $where[] = "p.vendedor_id = ?";
             $tipos .= "i";
             $params[] = $vend;
+        }
+
+        $tc = $f["tipo_cliente"] ?? "";
+        if (in_array($tc, ["mayorista", "detal"], true)) {
+            $where[] = "p.tipo_cliente = ?";
+            $tipos .= "s";
+            $params[] = $tc;
         }
 
         $estado = $f["estado"] ?? "";
