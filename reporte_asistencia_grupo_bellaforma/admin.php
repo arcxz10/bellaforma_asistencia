@@ -1186,14 +1186,7 @@ $resultadoEmpleados =
                 href="#productos_mayoristas"
                 class="nav-item"
             >
-                🏷️ Productos al por mayor
-            </a>
-
-            <a
-                href="#productos_detal"
-                class="nav-item"
-            >
-                🛍️ Productos al detal
+                🏷️ Productos
             </a>
 
             <a
@@ -2582,9 +2575,6 @@ $resultadoEmpleados =
             <?php
             include __DIR__ . "/admin_seccion_vendedores.php";
             include __DIR__ . "/admin_seccion_pedidos.php";
-            $ProdLista = "mayorista";
-            include __DIR__ . "/admin_seccion_productos.php";
-            $ProdLista = "detal";
             include __DIR__ . "/admin_seccion_productos.php";
             $CliLista = "mayorista";
             include __DIR__ . "/admin_seccion_clientes.php";
