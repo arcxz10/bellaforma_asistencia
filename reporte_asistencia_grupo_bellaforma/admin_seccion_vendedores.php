@@ -1,330 +1,278 @@
 <?php
-/* Sección "Vendedores" del panel admin (se incluye dentro de admin.php). */
+/**
+ * Acciones POST del módulo de ejecutivos / productos / pedidos / clientes.
+ * Se incluye desde admin.php dentro del bloque POST (usa $conexion, $accion y redireccionar()).
+ */
 
-$buscarV = trim($_GET["buscar_v"] ?? "");
-$desdeV = $_GET["desde_v"] ?? "";
-$hastaV = $_GET["hasta_v"] ?? "";
-$ordenV = ($_GET["orden_v"] ?? "valor") === "pedidos" ? "pedidos" : "valor";
+$accionesPropias = [
+    "vend_crear", "vend_editar", "vend_estado",
+    "prod_crear", "prod_editar", "prod_estado",
+    "ped_estado",
+    "cli_guardar", "cli_estado", "cli_importar",
+    "prod_importar",
+];
 
-$joinExtra = "";
-$tiposV = "";
-$paramsV = [];
-
-if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $desdeV)) {
-    $joinExtra .= " AND DATE(p.creado_en) >= ?";
-    $tiposV .= "s";
-    $paramsV[] = $desdeV;
-}
-if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $hastaV)) {
-    $joinExtra .= " AND DATE(p.creado_en) <= ?";
-    $tiposV .= "s";
-    $paramsV[] = $hastaV;
+if (!in_array($accion, $accionesPropias, true)) {
+    return;
 }
 
-$sqlV = "SELECT v.id, v.nombre, v.identificacion, v.ciudad, v.telefono, v.usuario, v.activo,
-                COUNT(p.id) AS total_pedidos,
-                COALESCE(SUM(p.total), 0) AS total_valor
-         FROM vendedores v
-         LEFT JOIN pedidos_vendedores p
-                ON p.vendedor_id = v.id AND p.estado NOT IN ('anulado','borrador')" . $joinExtra;
+require_once __DIR__ . "/vendedores_db.php";
+require_once __DIR__ . "/pedidos_lib.php";
+require_once __DIR__ . "/clientes_lib.php";
+require_once __DIR__ . "/productos_lib.php";
 
-if ($buscarV !== "") {
-    $sqlV .= " WHERE (v.nombre LIKE ? OR v.identificacion LIKE ? OR v.usuario LIKE ?)";
-    $likeV = "%" . $buscarV . "%";
-    $tiposV .= "sss";
-    array_push($paramsV, $likeV, $likeV, $likeV);
-}
-
-$sqlV .= " GROUP BY v.id, v.nombre, v.identificacion, v.ciudad, v.telefono, v.usuario, v.activo";
-$sqlV .= $ordenV === "pedidos"
-    ? " ORDER BY total_pedidos DESC, total_valor DESC, v.nombre ASC"
-    : " ORDER BY total_valor DESC, total_pedidos DESC, v.nombre ASC";
-
-$vendedoresLista = [];
-$stmtV = $conexion->prepare($sqlV);
-if ($stmtV) {
-    if ($paramsV) {
-        $stmtV->bind_param($tiposV, ...$paramsV);
+/** Guarda (o reemplaza) la foto de un producto. Devuelve "" si todo va bien o el mensaje de error. */
+function guardarFotoProducto(mysqli $c, string $lista, int $productoId, array $archivo): string
+{
+    $err = $archivo["error"] ?? UPLOAD_ERR_NO_FILE;
+    if ($err === UPLOAD_ERR_NO_FILE) {
+        return "";
     }
-    $stmtV->execute();
-    $resV = $stmtV->get_result();
-    $vendedoresLista = $resV ? $resV->fetch_all(MYSQLI_ASSOC) : [];
-    $stmtV->close();
-}
-
-$datosGraficoVend = array_map(function ($v) {
-    return [
-        "nombre" => $v["nombre"],
-        "pedidos" => (int) $v["total_pedidos"],
-        "valor" => (float) $v["total_valor"],
-    ];
-}, $vendedoresLista);
-?>
-<style>
-    .grid-detalle { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 20px; margin-bottom: 14px; font-size: 14px; }
-    .grid-detalle span.et { color: #667; font-size: 12px; display: block; }
-    .btn-fila { display: inline-block; margin: 2px; }
-    .form-inline { display: inline; margin: 0; }
-    .num-der { text-align: right; white-space: nowrap; }
-</style>
-
-<section id="vendedores" class="section">
-
-    <div class="cabecera-seccion">
-        <div>
-            <h2>🧳 Vendedores</h2>
-            <p>Ejecutivos de negocios con acceso para tomar pedidos. No se cuentan los pedidos anulados ni los borradores.</p>
-        </div>
-        <button type="button" class="btn-nuevo" onclick="nuevoVendedor()">+ Nuevo Vendedor</button>
-    </div>
-
-    <form method="GET" action="admin.php#vendedores" class="filtros">
-        <input type="hidden" name="seccion" value="vendedores">
-        <div>
-            <label for="buscar_v">Buscar</label>
-            <input type="text" id="buscar_v" name="buscar_v" placeholder="Nombre, identificación o usuario" value="<?= escapar($buscarV) ?>">
-        </div>
-        <div>
-            <label for="desde_v">Pedidos desde</label>
-            <input type="date" id="desde_v" name="desde_v" value="<?= escapar($desdeV) ?>">
-        </div>
-        <div>
-            <label for="hasta_v">Hasta</label>
-            <input type="date" id="hasta_v" name="hasta_v" value="<?= escapar($hastaV) ?>">
-        </div>
-        <div>
-            <label for="orden_v">Ordenar por</label>
-            <select id="orden_v" name="orden_v">
-                <option value="valor" <?= $ordenV === "valor" ? "selected" : "" ?>>Valor vendido</option>
-                <option value="pedidos" <?= $ordenV === "pedidos" ? "selected" : "" ?>>Número de pedidos</option>
-            </select>
-        </div>
-        <button type="submit" class="btn-filtrar">Filtrar</button>
-    </form>
-
-    <div class="tabla-contenedor">
-        <table class="tabla">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Vendedor</th>
-                    <th>Identificación</th>
-                    <th>Usuario</th>
-                    <th>Ciudad</th>
-                    <th class="num-der">Pedidos</th>
-                    <th class="num-der">Valor total</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (!$vendedoresLista): ?>
-                    <tr><td colspan="9" class="sin-resultados">No hay vendedores registrados.</td></tr>
-                <?php else: ?>
-                    <?php foreach ($vendedoresLista as $i => $v): ?>
-                        <tr>
-                            <td><?= $i + 1 ?></td>
-                            <td><?= escapar($v["nombre"]) ?></td>
-                            <td><?= escapar($v["identificacion"]) ?></td>
-                            <td><?= escapar($v["usuario"]) ?></td>
-                            <td><?= escapar($v["ciudad"]) ?: "—" ?></td>
-                            <td class="num-der"><?= (int) $v["total_pedidos"] ?></td>
-                            <td class="num-der"><?= formatoCOP($v["total_valor"]) ?></td>
-                            <td>
-                                <?php if ((int) $v["activo"] === 1): ?>
-                                    <span class="estado estado-activo">Activo</span>
-                                <?php else: ?>
-                                    <span class="estado estado-inactivo">Inactivo</span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <button type="button" class="btn-editar btn-fila"
-                                    data-v="<?= escapar(json_encode([
-                                        "id" => (int) $v["id"],
-                                        "nombre" => $v["nombre"],
-                                        "identificacion" => $v["identificacion"],
-                                        "ciudad" => $v["ciudad"],
-                                        "telefono" => $v["telefono"],
-                                        "usuario" => $v["usuario"],
-                                    ], JSON_UNESCAPED_UNICODE)) ?>"
-                                    onclick="editarVendedor(this)">Editar</button>
-
-                                <form method="POST" action="admin.php" class="form-inline">
-                                    <input type="hidden" name="accion" value="vend_estado">
-                                    <input type="hidden" name="id" value="<?= (int) $v["id"] ?>">
-                                    <input type="hidden" name="activo" value="<?= (int) $v["activo"] === 1 ? 0 : 1 ?>">
-                                    <?php if ((int) $v["activo"] === 1): ?>
-                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return confirm('¿Desactivar este vendedor? No podrá ingresar.')">Desactivar</button>
-                                    <?php else: ?>
-                                        <button type="submit" class="btn-activar btn-fila">Activar</button>
-                                    <?php endif; ?>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="tarjeta-grafico">
-        <div class="tarjeta-grafico-cabecera">
-            <h3 style="margin:0;">🏆 Ranking de Vendedores</h3>
-            <div class="selector-metrica">
-                <label for="metricaVendedores">Ver por:</label>
-                <select id="metricaVendedores" onchange="actualizarGraficoVendedores()">
-                    <option value="valor" <?= $ordenV === "valor" ? "selected" : "" ?>>Valor vendido</option>
-                    <option value="pedidos" <?= $ordenV === "pedidos" ? "selected" : "" ?>>Número de pedidos</option>
-                </select>
-            </div>
-        </div>
-        <div id="contenedorGraficoVendedores" style="position: relative; width: 100%;">
-            <canvas id="graficoVendedores"></canvas>
-        </div>
-        <p id="sinDatosVendedores" style="display:none; text-align:center; color:#6c757d; margin-top:10px;">
-            No hay datos para graficar con los filtros actuales.
-        </p>
-    </div>
-</section>
-
-<!-- MODAL VENDEDOR -->
-<div class="modal" id="modalVendedor">
-    <div class="modal-contenido">
-        <h3 id="tituloModalVendedor">Nuevo vendedor</h3>
-        <form method="POST" action="admin.php" class="formulario-modal">
-            <input type="hidden" name="accion" id="vend_accion" value="vend_crear">
-            <input type="hidden" name="id" id="vend_id" value="">
-
-            <div>
-                <label for="vend_nombre">Nombre completo *</label>
-                <input type="text" id="vend_nombre" name="nombre" maxlength="150" required>
-            </div>
-            <div>
-                <label for="vend_identificacion">Número de identificación *</label>
-                <input type="text" id="vend_identificacion" name="identificacion" maxlength="40" required>
-            </div>
-            <div>
-                <label for="vend_ciudad">Ciudad</label>
-                <input type="text" id="vend_ciudad" name="ciudad" maxlength="100">
-            </div>
-            <div>
-                <label for="vend_telefono">Teléfono</label>
-                <input type="text" id="vend_telefono" name="telefono" maxlength="40">
-            </div>
-            <div>
-                <label for="vend_usuario">Usuario de acceso *</label>
-                <input type="text" id="vend_usuario" name="usuario" maxlength="60" autocomplete="off" required>
-            </div>
-            <div>
-                <label for="vend_password" id="vend_password_label">Contraseña * (mínimo 6)</label>
-                <div style="display:flex; gap:8px;">
-                    <input type="text" id="vend_password" name="password" autocomplete="off" minlength="6">
-                    <button type="button" class="btn-editar" onclick="generarClaveVendedor()">Generar</button>
-                </div>
-            </div>
-
-            <div class="botones-modal">
-                <button type="button" class="btn-editar" onclick="cerrarModalVendedor()">Cancelar</button>
-                <button type="submit" class="btn-nuevo">Guardar</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<script>
-    function nuevoVendedor() {
-        document.getElementById("tituloModalVendedor").textContent = "Nuevo vendedor";
-        document.getElementById("vend_accion").value = "vend_crear";
-        document.getElementById("vend_id").value = "";
-        ["nombre", "identificacion", "ciudad", "telefono", "usuario", "password"].forEach(function (c) {
-            document.getElementById("vend_" + c).value = "";
-        });
-        document.getElementById("vend_password").required = true;
-        document.getElementById("vend_password_label").textContent = "Contraseña * (mínimo 6)";
-        document.getElementById("modalVendedor").style.display = "flex";
+    if ($err !== UPLOAD_ERR_OK) {
+        return "No se pudo subir la foto (puede ser muy pesada).";
     }
-
-    function editarVendedor(btn) {
-        var d = JSON.parse(btn.dataset.v);
-        document.getElementById("tituloModalVendedor").textContent = "Editar vendedor";
-        document.getElementById("vend_accion").value = "vend_editar";
-        document.getElementById("vend_id").value = d.id;
-        document.getElementById("vend_nombre").value = d.nombre || "";
-        document.getElementById("vend_identificacion").value = d.identificacion || "";
-        document.getElementById("vend_ciudad").value = d.ciudad || "";
-        document.getElementById("vend_telefono").value = d.telefono || "";
-        document.getElementById("vend_usuario").value = d.usuario || "";
-        document.getElementById("vend_password").value = "";
-        document.getElementById("vend_password").required = false;
-        document.getElementById("vend_password_label").textContent = "Nueva contraseña (dejar vacío para no cambiarla)";
-        document.getElementById("modalVendedor").style.display = "flex";
+    if (($archivo["size"] ?? 0) > 4 * 1024 * 1024) {
+        return "La foto supera 4 MB.";
     }
-
-    function cerrarModalVendedor() {
-        document.getElementById("modalVendedor").style.display = "none";
+    $datos = file_get_contents($archivo["tmp_name"]);
+    $info = $datos !== false ? @getimagesizefromstring($datos) : false;
+    if (!$info || !in_array($info["mime"], ["image/jpeg", "image/png", "image/webp", "image/gif"], true)) {
+        return "La foto debe ser JPG, PNG o WEBP.";
     }
+    $mime = $info["mime"];
 
-    function generarClaveVendedor() {
-        var c = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        var s = "";
-        for (var i = 0; i < 8; i++) { s += c.charAt(Math.floor(Math.random() * c.length)); }
-        document.getElementById("vend_password").value = s;
-    }
-
-    var datosGraficoVend = <?= json_encode($datosGraficoVend, JSON_UNESCAPED_UNICODE) ?>;
-    var graficoVendInstancia = null;
-
-    function actualizarGraficoVendedores() {
-        var metrica = document.getElementById("metricaVendedores").value;
-        var canvas = document.getElementById("graficoVendedores");
-        var contenedor = document.getElementById("contenedorGraficoVendedores");
-        var aviso = document.getElementById("sinDatosVendedores");
-
-        var datos = datosGraficoVend.filter(function (d) { return d[metrica] > 0; })
-            .sort(function (a, b) { return b[metrica] - a[metrica]; });
-
-        if (graficoVendInstancia) { graficoVendInstancia.destroy(); graficoVendInstancia = null; }
-
-        if (typeof Chart === "undefined" || datos.length === 0) {
-            contenedor.style.display = "none";
-            aviso.style.display = "block";
-            return;
+    // Si el servidor tiene GD, se reduce el tamaño (además el navegador ya la reduce antes de subirla)
+    if (function_exists("imagecreatefromstring") && max($info[0], $info[1]) > 900) {
+        $im = @imagecreatefromstring($datos);
+        if ($im) {
+            $esc = 800 / max($info[0], $info[1]);
+            $nw = max(1, (int) round($info[0] * $esc));
+            $nh = max(1, (int) round($info[1] * $esc));
+            $dst = imagecreatetruecolor($nw, $nh);
+            imagefill($dst, 0, 0, imagecolorallocate($dst, 255, 255, 255));
+            imagecopyresampled($dst, $im, 0, 0, 0, 0, $nw, $nh, $info[0], $info[1]);
+            ob_start();
+            imagejpeg($dst, null, 82);
+            $datos = ob_get_clean();
+            $mime = "image/jpeg";
         }
-        contenedor.style.display = "block";
-        aviso.style.display = "none";
-        contenedor.style.height = Math.max(220, datos.length * 36 + 60) + "px";
-
-        graficoVendInstancia = new Chart(canvas, {
-            type: "bar",
-            data: {
-                labels: datos.map(function (d, i) { return (i + 1) + ". " + d.nombre; }),
-                datasets: [{
-                    label: metrica === "valor" ? "Valor vendido (COP)" : "Número de pedidos",
-                    data: datos.map(function (d) { return d[metrica]; }),
-                    backgroundColor: "#1565C0",
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                indexAxis: "y",
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function (ctx) {
-                                return metrica === "valor"
-                                    ? "$ " + Math.round(ctx.parsed.x).toLocaleString("es-CO")
-                                    : ctx.parsed.x + " pedidos";
-                            }
-                        }
-                    }
-                },
-                scales: { x: { beginAtZero: true } }
-            }
-        });
     }
 
-    document.addEventListener("DOMContentLoaded", actualizarGraficoVendedores);
-</script>
+    $nulo = null;
+    $tablaFoto = tablaFotos($lista);
+    $st = $c->prepare(
+        "INSERT INTO `$tablaFoto` (producto_id, mime, datos) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE mime = VALUES(mime), datos = VALUES(datos)"
+    );
+    $st->bind_param("isb", $productoId, $mime, $nulo);
+    $st->send_long_data(2, $datos);
+    $st->execute();
+    $st->close();
+    return "";
+}
+
+/* ---------------- VENDEDORES ---------------- */
+
+if ($accion === "vend_crear" || $accion === "vend_editar") {
+
+    $id = (int) ($_POST["id"] ?? 0);
+    $nombre = trim($_POST["nombre"] ?? "");
+    $identificacion = trim($_POST["identificacion"] ?? "");
+    $ciudad = trim($_POST["ciudad"] ?? "");
+    $telefono = trim($_POST["telefono"] ?? "");
+    $usuario = trim($_POST["usuario"] ?? "");
+    $password = (string) ($_POST["password"] ?? "");
+    $esNuevo = ($accion === "vend_crear");
+
+    if ($nombre === "" || $identificacion === "" || $usuario === "") {
+        redireccionar("Complete nombre, identificación y usuario.", "error", "vendedores");
+    }
+    if (!preg_match('/^[A-Za-z0-9._-]{3,60}$/', $usuario)) {
+        redireccionar("El usuario solo puede tener letras, números, punto, guion y guion bajo (3 a 60 caracteres).", "error", "vendedores");
+    }
+    if ($esNuevo && strlen($password) < 6) {
+        redireccionar("La contraseña debe tener mínimo 6 caracteres.", "error", "vendedores");
+    }
+    if (!$esNuevo && $password !== "" && strlen($password) < 6) {
+        redireccionar("La nueva contraseña debe tener mínimo 6 caracteres.", "error", "vendedores");
+    }
+
+    try {
+        if ($esNuevo) {
+            $hash = password_hash($password, PASSWORD_DEFAULT);
+            $stmt = $conexion->prepare(
+                "INSERT INTO vendedores (nombre, identificacion, ciudad, telefono, usuario, password_hash) VALUES (?, ?, ?, ?, ?, ?)"
+            );
+            $stmt->bind_param("ssssss", $nombre, $identificacion, $ciudad, $telefono, $usuario, $hash);
+            $stmt->execute();
+            $stmt->close();
+            redireccionar("Ejecutivo creado. Usuario: " . $usuario, "exito", "vendedores");
+        }
+
+        if ($password !== "") {
+            $hash = password_hash($password, PASSWORD_DEFAULT);
+            $stmt = $conexion->prepare(
+                "UPDATE vendedores SET nombre = ?, identificacion = ?, ciudad = ?, telefono = ?, usuario = ?, password_hash = ? WHERE id = ?"
+            );
+            $stmt->bind_param("ssssssi", $nombre, $identificacion, $ciudad, $telefono, $usuario, $hash, $id);
+        } else {
+            $stmt = $conexion->prepare(
+                "UPDATE vendedores SET nombre = ?, identificacion = ?, ciudad = ?, telefono = ?, usuario = ? WHERE id = ?"
+            );
+            $stmt->bind_param("sssssi", $nombre, $identificacion, $ciudad, $telefono, $usuario, $id);
+        }
+        $stmt->execute();
+        $stmt->close();
+        redireccionar("Ejecutivo actualizado correctamente.", "exito", "vendedores");
+    } catch (mysqli_sql_exception $ex) {
+        if ((int) $ex->getCode() === 1062) {
+            redireccionar("Ese usuario ya existe. Elija otro.", "error", "vendedores");
+        }
+        redireccionar("No se pudo guardar.", "error", "vendedores");
+    }
+}
+
+if ($accion === "vend_estado") {
+    $id = (int) ($_POST["id"] ?? 0);
+    $activo = ((int) ($_POST["activo"] ?? 0)) === 1 ? 1 : 0;
+    $stmt = $conexion->prepare("UPDATE vendedores SET activo = ? WHERE id = ?");
+    $stmt->bind_param("ii", $activo, $id);
+    $stmt->execute();
+    $stmt->close();
+    redireccionar($activo ? "Ejecutivo activado." : "Ejecutivo desactivado.", "exito", "vendedores");
+}
+
+/* ---------------- PRODUCTOS (un solo catálogo con precio mayorista y precio detal) ---------------- */
+
+$seccionProd = "productos_mayoristas";
+
+if ($accion === "prod_crear" || $accion === "prod_editar") {
+
+    $id = (int) ($_POST["id"] ?? 0);
+    $referencia = trim($_POST["referencia"] ?? "");
+    $nombre = trim($_POST["nombre"] ?? "");
+    $precioMay = parsearPrecio((string) ($_POST["precio_mayorista"] ?? ""));
+    $precioDet = parsearPrecio((string) ($_POST["precio_detal"] ?? ""));
+
+    if ($referencia === "" || $nombre === "" || ($precioMay <= 0 && $precioDet <= 0)) {
+        redireccionar("Complete referencia, nombre y al menos un precio (mayorista o detal) mayor a 0.", "error", $seccionProd);
+    }
+
+    try {
+        if ($accion === "prod_crear") {
+            // la columna "precio" se mantiene igual al precio mayorista (compatibilidad)
+            $stmt = $conexion->prepare("INSERT INTO productos_mayoristas (referencia, nombre, precio, precio_mayorista, precio_detal) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("ssddd", $referencia, $nombre, $precioMay, $precioMay, $precioDet);
+            $stmt->execute();
+            $id = (int) $conexion->insert_id;
+            $stmt->close();
+            $msg = "Producto agregado: " . $referencia;
+        } else {
+            $stmt = $conexion->prepare("UPDATE productos_mayoristas SET referencia = ?, nombre = ?, precio = ?, precio_mayorista = ?, precio_detal = ? WHERE id = ?");
+            $stmt->bind_param("ssdddi", $referencia, $nombre, $precioMay, $precioMay, $precioDet, $id);
+            $stmt->execute();
+            $stmt->close();
+            $msg = "Producto actualizado.";
+        }
+    } catch (mysqli_sql_exception $ex) {
+        if ((int) $ex->getCode() === 1062) {
+            redireccionar("Ya existe un producto con esa referencia.", "error", $seccionProd);
+        }
+        redireccionar("No se pudo guardar el producto: " . substr($ex->getMessage(), 0, 140), "error", $seccionProd);
+    }
+
+    if (!empty($_POST["quitar_foto"])) {
+        $conexion->query("DELETE FROM producto_fotos WHERE producto_id = " . (int) $id);
+    }
+    if (isset($_FILES["foto"])) {
+        $errFoto = guardarFotoProducto($conexion, "mayorista", $id, $_FILES["foto"]);
+        if ($errFoto !== "") {
+            redireccionar($msg . " Pero la foto no se guardó: " . $errFoto, "error", $seccionProd);
+        }
+    }
+    redireccionar($msg, "exito", $seccionProd);
+}
+
+if ($accion === "prod_estado") {
+    $id = (int) ($_POST["id"] ?? 0);
+    $activo = ((int) ($_POST["activo"] ?? 0)) === 1 ? 1 : 0;
+    $stmt = $conexion->prepare("UPDATE productos_mayoristas SET activo = ? WHERE id = ?");
+    $stmt->bind_param("ii", $activo, $id);
+    $stmt->execute();
+    $stmt->close();
+    redireccionar($activo ? "Producto activado." : "Producto desactivado (ya no aparece a los ejecutivos).", "exito", $seccionProd);
+}
+
+if ($accion === "prod_importar") {
+    @set_time_limit(300);
+    $f = $_FILES["archivo"] ?? null;
+    if (!$f || ($f["error"] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        redireccionar("Seleccione el archivo CSV de productos.", "error", $seccionProd);
+    }
+    $r = importarProductosCSV($conexion, $f["tmp_name"]);
+    if (!$r["ok"]) {
+        redireccionar($r["error"], "error", $seccionProd);
+    }
+    $txt = "Productos importados: " . $r["nuevos"] . " nuevos y " . $r["actualizados"] . " actualizados.";
+    if ($r["errores"]) {
+        $txt .= " Filas omitidas (faltan datos o precio): " . implode(", ", $r["errores"]) . ".";
+    }
+    redireccionar($txt, "exito", $seccionProd);
+}
+
+/* ---------------- PEDIDOS ---------------- */
+
+if ($accion === "ped_estado") {
+    $id = (int) ($_POST["id"] ?? 0);
+    $estado = $_POST["estado"] ?? "";
+    if (!in_array($estado, ["pendiente", "procesado", "anulado"], true)) {
+        redireccionar("Estado de pedido no válido.", "error", "pedidos");
+    }
+    $stmt = $conexion->prepare("UPDATE pedidos_vendedores SET estado = ? WHERE id = ? AND estado <> 'borrador'");
+    $stmt->bind_param("si", $estado, $id);
+    $stmt->execute();
+    $stmt->close();
+    redireccionar("Pedido #" . numeroPedido($id) . " marcado como: " . etiquetaEstadoPedido($estado), "exito", "pedidos");
+}
+
+/* ---------------- CLIENTES (mayoristas y detal) ---------------- */
+
+$listaCli = listaValida($_POST["lista"] ?? "");
+$seccionCli = $listaCli === "detal" ? "clientes_detal" : "clientes_mayoristas";
+$tablaCli = tablaClientes($listaCli);
+
+if ($accion === "cli_guardar") {
+    $id = (int) ($_POST["id"] ?? 0);
+    $r = guardarCliente($conexion, $listaCli, $_POST, $id ?: null);
+    if (!$r["ok"]) {
+        redireccionar($r["error"], "error", $seccionCli);
+    }
+    redireccionar($id ? "Cliente actualizado." : "Cliente creado.", "exito", $seccionCli);
+}
+
+if ($accion === "cli_estado") {
+    $id = (int) ($_POST["id"] ?? 0);
+    $inactivo = ((int) ($_POST["inactivo"] ?? 0)) === 1 ? 1 : 0;
+    $stmt = $conexion->prepare("UPDATE `$tablaCli` SET inactivo = ? WHERE id = ?");
+    $stmt->bind_param("ii", $inactivo, $id);
+    $stmt->execute();
+    $stmt->close();
+    redireccionar($inactivo ? "Cliente marcado como inactivo." : "Cliente activado.", "exito", $seccionCli);
+}
+
+if ($accion === "cli_importar") {
+    @set_time_limit(300);
+    $f = $_FILES["archivo"] ?? null;
+    if (!$f || ($f["error"] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        redireccionar("Seleccione el archivo CSV de clientes (si es muy pesado, divídalo en partes).", "error", $seccionCli);
+    }
+    $r = importarClientesCSV($conexion, $listaCli, $f["tmp_name"]);
+    if (!$r["ok"]) {
+        redireccionar($r["error"], "error", $seccionCli);
+    }
+    $txt = "Importación lista: " . $r["nuevos"] . " clientes nuevos y " . $r["actualizados"] . " actualizados.";
+    if ($r["errores"]) {
+        $txt .= " Filas omitidas por datos incompletos: " . implode(", ", $r["errores"]) . ".";
+    }
+    redireccionar($txt, "exito", $seccionCli);
+}
