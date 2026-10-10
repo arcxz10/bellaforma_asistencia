@@ -21,7 +21,7 @@ function soloDigitos(string $s): string
 }
 
 /** Busca un cliente por NIT / cédula (acepta puntos, espacios y dígito de verificación con guion). */
-function buscarClientePorDocumento(mysqli $c, string $raw): ?array
+function buscarClientePorDocumento(mysqli $c, string $lista, string $raw): ?array
 {
     $raw = trim($raw);
     $norm = soloDigitos($raw);
@@ -36,7 +36,8 @@ function buscarClientePorDocumento(mysqli $c, string $raw): ?array
         }
     }
     foreach ($candidatos as $n) {
-        $stmt = $c->prepare("SELECT * FROM clientes WHERE identificacion_norm = ? LIMIT 1");
+        $tabla = tablaClientes($lista);
+        $stmt = $c->prepare("SELECT * FROM `$tabla` WHERE identificacion_norm = ? LIMIT 1");
         $stmt->bind_param("s", $n);
         $stmt->execute();
         $res = $stmt->get_result();
@@ -83,6 +84,15 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
             }
         }
         $vendedorId = (int) $existente["vendedor_id"];
+    }
+
+    // ---- Tipo de cliente (define la lista de precios) ----
+    $tipoCliente = $d["tipo_cliente"] ?? "";
+    if (!in_array($tipoCliente, ["mayorista", "detal"], true)) {
+        if ($modo === "enviar" && !$existente) {
+            return $falla("Elija primero el tipo de cliente: mayorista o detal.");
+        }
+        $tipoCliente = $existente["tipo_cliente"] ?? "mayorista";
     }
 
     // ---- Datos del cliente ----
@@ -157,7 +167,8 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
 
     $preciosPrevios = [];   // precio ya pactado en un pedido enviado (se respeta al editar)
     $idsPrevios = [];
-    if ($existente) {
+    $mismaLista = $existente && ($existente["tipo_cliente"] ?? "mayorista") === $tipoCliente;
+    if ($mismaLista) {
         foreach ($existente["items"] as $it) {
             $idsPrevios[(int) $it["producto_id"]] = true;
             if ($existente["estado"] !== "borrador") {
@@ -169,8 +180,10 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
     $lineas = [];
     $total = 0.0;
     if ($cantidades) {
-        $lista = implode(",", array_map("intval", array_keys($cantidades)));
-        $res = $c->query("SELECT id, referencia, nombre, precio, activo FROM productos_mayoristas WHERE id IN ($lista)");
+        $idsLista = implode(",", array_map("intval", array_keys($cantidades)));
+        $tablaProd = tablaProductos($tipoCliente);
+        $colPrecio = columnaPrecio($tipoCliente);   // precio_mayorista o precio_detal
+        $res = $c->query("SELECT id, referencia, nombre, `$colPrecio` AS precio, activo FROM `$tablaProd` WHERE id IN ($idsLista)");
         $porId = [];
         while ($res && ($p = $res->fetch_assoc())) {
             $porId[(int) $p["id"]] = $p;
@@ -184,6 +197,9 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
                 continue;
             }
             $precio = $preciosPrevios[$pid] ?? (float) $p["precio"];
+            if ($precio <= 0) {
+                continue;   // sin precio en esta lista: no se puede pedir
+            }
             $sub = round($precio * $cant, 2);
             $total += $sub;
             $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
@@ -205,6 +221,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
     }
 
     $campos = [
+        "tipo_cliente"              => ["s", $tipoCliente],
         "cliente_id"                => ["i", $clienteId],
         "cliente_tipo_persona"      => ["s", $tipo],
         "cliente_tipo_documento"    => ["s", $tipoDoc],
@@ -273,37 +290,43 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
     return ["ok" => true, "id" => $idFinal, "total" => $total, "estado" => $estado];
 }
 
-/** Productos para mostrar en el formulario (activos + los que ya estén en el pedido que se edita). */
+/**
+ * Productos para el formulario: un solo catálogo con los dos precios (precio_mayorista y precio_detal).
+ * Incluye los activos y los que ya estén en el pedido que se edita (conservando el precio pactado).
+ */
 function productosParaFormulario(mysqli $c, ?array $pedido): array
 {
-    $extra = [];
+    $listaPedido = $pedido["tipo_cliente"] ?? "mayorista";
+    $colPedido = columnaPrecio($listaPedido);
+    $tabla = tablaProductos();
+    $tablaFoto = tablaFotos();
     $precios = [];
-    if ($pedido) {
+    $or = "";
+    if ($pedido && $pedido["items"]) {
+        $extra = [];
         foreach ($pedido["items"] as $it) {
             $extra[] = (int) $it["producto_id"];
             if ($pedido["estado"] !== "borrador") {
                 $precios[(int) $it["producto_id"]] = (float) $it["precio_unitario"];
             }
         }
-    }
-    $or = $extra ? " OR p.id IN (" . implode(",", $extra) . ")" : "";
-    if ($pedido && $pedido["items"]) {
+        $or = " OR p.id IN (" . implode(",", $extra) . ")";
         $refs = array_map(fn($it) => "'" . $c->real_escape_string((string) $it["referencia"]) . "'", $pedido["items"]);
         $or .= " OR p.referencia IN (" . implode(",", $refs) . ")";
     }
     $res = $c->query(
-        "SELECT p.id, p.referencia, p.nombre, p.precio, p.activo,
-                (SELECT UNIX_TIMESTAMP(f.actualizado_en) FROM producto_fotos f WHERE f.producto_id = p.id) AS foto_v
-         FROM productos_mayoristas p WHERE p.activo = 1 $or ORDER BY p.referencia ASC"
+        "SELECT p.id, p.referencia, p.nombre, p.precio_mayorista, p.precio_detal, p.activo,
+                (SELECT UNIX_TIMESTAMP(f.actualizado_en) FROM `$tablaFoto` f WHERE f.producto_id = p.id) AS foto_v
+         FROM `$tabla` p WHERE p.activo = 1 $or ORDER BY p.referencia ASC"
     );
-    $lista = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
-    foreach ($lista as &$p) {
+    $filas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+    foreach ($filas as &$p) {
         if (isset($precios[(int) $p["id"]])) {
-            $p["precio"] = $precios[(int) $p["id"]];
+            $p[$colPedido] = $precios[(int) $p["id"]];   // precio ya pactado en el pedido
         }
     }
     unset($p);
-    return $lista;
+    return $filas;
 }
 
 /** Pedidos para PDF / Excel según los parámetros GET (id único o filtros de la sección Pedidos). */
@@ -316,6 +339,7 @@ function pedidosParaExportar(mysqli $c): array
     return obtenerPedidos($c, [
         "vendedor" => (int) ($_GET["vendedor_p"] ?? 0),
         "estado"   => $_GET["estado_p"] ?? "",
+        "tipo_cliente" => $_GET["tipo_p"] ?? "",
         "desde"    => $_GET["desde_p"] ?? "",
         "hasta"    => $_GET["hasta_p"] ?? "",
         "buscar"   => $_GET["buscar_p"] ?? "",
@@ -377,7 +401,7 @@ function manejarApiPedido(mysqli $conexion): void
         $accion = $in["accion"] ?? "";
 
         if ($accion === "buscar_cliente") {
-            $cli = buscarClientePorDocumento($conexion, (string) ($in["doc"] ?? ""));
+            $cli = buscarClientePorDocumento($conexion, listaValida($in["lista"] ?? ""), (string) ($in["doc"] ?? ""));
             if (!$cli) {
                 api_responder(["ok" => true, "encontrado" => false]);
             }
