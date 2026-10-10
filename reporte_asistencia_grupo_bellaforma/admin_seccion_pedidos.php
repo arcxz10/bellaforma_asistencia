@@ -4,6 +4,7 @@
 $filtrosPed = [
     "vendedor" => (int) ($_GET["vendedor_p"] ?? 0),
     "estado"   => $_GET["estado_p"] ?? "",
+    "tipo_cliente" => $_GET["tipo_p"] ?? "",
     "desde"    => $_GET["desde_p"] ?? "",
     "hasta"    => $_GET["hasta_p"] ?? "",
     "buscar"   => trim($_GET["buscar_p"] ?? ""),
@@ -20,6 +21,7 @@ if ($resLV) {
 $qsDescarga = http_build_query([
     "vendedor_p" => $filtrosPed["vendedor"] ?: "",
     "estado_p"   => $filtrosPed["estado"],
+    "tipo_p"     => $filtrosPed["tipo_cliente"],
     "desde_p"    => $filtrosPed["desde"],
     "hasta_p"    => $filtrosPed["hasta"],
     "buscar_p"   => $filtrosPed["buscar"],
@@ -74,6 +76,14 @@ foreach ($pedidosAdmin as $pp) {
             </select>
         </div>
         <div>
+            <label for="tipo_p">Tipo de cliente</label>
+            <select id="tipo_p" name="tipo_p">
+                <option value="">Todos</option>
+                <option value="mayorista" <?= $filtrosPed["tipo_cliente"] === "mayorista" ? "selected" : "" ?>>Mayorista</option>
+                <option value="detal" <?= $filtrosPed["tipo_cliente"] === "detal" ? "selected" : "" ?>>Detal</option>
+            </select>
+        </div>
+        <div>
             <label for="desde_p">Desde</label>
             <input type="date" id="desde_p" name="desde_p" value="<?= escapar($filtrosPed["desde"]) ?>">
         </div>
@@ -120,6 +130,7 @@ foreach ($pedidosAdmin as $pp) {
                             <td><?= date("d/m/Y H:i", strtotime($ped["actualizado_en"] ?? $ped["creado_en"])) ?></td>
                             <td><?= escapar($ped["vendedor_nombre"]) ?></td>
                             <td>
+                                <span class="pf-tag-lista <?= listaValida($ped["tipo_cliente"] ?? "") ?>" style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;background:<?= ($ped["tipo_cliente"] ?? "") === "detal" ? "#FCE4EC" : "#E3F2FD" ?>;color:<?= ($ped["tipo_cliente"] ?? "") === "detal" ? "#AD1457" : "#0D47A1" ?>;"><?= escapar(etiquetaTipoCliente($ped["tipo_cliente"] ?? "mayorista")) ?></span><br>
                                 <?= escapar($ped["cliente_nombre"]) ?: "—" ?>
                                 <?php if (!empty($ped["cliente_nombre_comercial"])): ?><br><small style="color:#667;"><?= escapar($ped["cliente_nombre_comercial"]) ?></small><?php endif; ?>
                             </td>
@@ -151,7 +162,8 @@ foreach ($pedidosAdmin as $pp) {
                                     <div class="grid-detalle">
                                         <div><span class="et">Fecha</span><?= date("d/m/Y H:i", strtotime($ped["creado_en"])) ?></div>
                                         <div><span class="et">Ejecutivo</span><?= escapar($ped["vendedor_nombre"]) ?> (ID <?= escapar($ped["vendedor_identificacion"]) ?>)</div>
-                                        <div><span class="et">Tipo de cliente</span><?= ($ped["cliente_tipo_persona"] ?? "juridica") === "natural" ? "Persona natural" : "Persona jurídica" ?></div>
+                                        <div><span class="et">Tipo de cliente (lista de precios)</span><?= escapar(etiquetaTipoCliente($ped["tipo_cliente"] ?? "mayorista")) ?></div>
+                                        <div><span class="et">Persona</span><?= ($ped["cliente_tipo_persona"] ?? "juridica") === "natural" ? "Persona natural" : "Persona jurídica" ?></div>
                                         <div><span class="et"><?= ($ped["cliente_tipo_persona"] ?? "") === "natural" ? "Nombre completo" : "Razón social" ?></span><?= escapar($ped["cliente_nombre"]) ?: "—" ?></div>
                                         <div><span class="et"><?= escapar(etiquetaDocumento($ped["cliente_tipo_persona"] ?? "juridica")) ?></span><?= escapar($ped["cliente_nit"]) ?: "—" ?></div>
                                         <div><span class="et">Nombre comercial</span><?= escapar($ped["cliente_nombre_comercial"]) ?: "—" ?></div>
