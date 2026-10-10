@@ -17,7 +17,11 @@ if ($id <= 0) {
 }
 session_write_close();
 
-$stmt = $conexion->prepare("SELECT mime, datos FROM producto_fotos WHERE producto_id = ?");
+require_once "vendedores_db.php";
+$tablaFoto = tablaFotos();
+$tablaProd = tablaProductos();
+
+$stmt = $conexion->prepare("SELECT mime, datos FROM `$tablaFoto` WHERE producto_id = ?");
 $stmt->bind_param("i", $id);
 $stmt->execute();
 $stmt->bind_result($mime, $datos);
@@ -34,7 +38,7 @@ if ($hay) {
 }
 
 // Respaldo: archivo en img/productos/REFERENCIA.jpg
-$r = $conexion->prepare("SELECT referencia FROM productos_mayoristas WHERE id = ?");
+$r = $conexion->prepare("SELECT referencia FROM `$tablaProd` WHERE id = ?");
 $r->bind_param("i", $id);
 $r->execute();
 $r->bind_result($ref);
