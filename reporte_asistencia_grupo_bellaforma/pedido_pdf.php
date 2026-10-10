@@ -112,6 +112,7 @@ foreach ($pedidos as $p) {
 
     $pdf->SetFont("Arial", "B", 10);
     $pdf->Cell(0, 6.5, t("CLIENTE - " . ($natural ? "PERSONA NATURAL" : "PERSONA JURIDICA")), 0, 1, "L", true);
+    $campo("Tipo de cliente:", strtoupper(etiquetaTipoCliente($p["tipo_cliente"] ?? "mayorista")) . "  (lista de precios " . strtolower(etiquetaTipoCliente($p["tipo_cliente"] ?? "mayorista")) . ")");
     $campo(($natural ? "Cedula:" : "NIT:"), (string) $p["cliente_nit"]);
     $campo(($natural ? "Nombre completo:" : "Razon social:"), (string) $p["cliente_nombre"]);
     $campo("Nombre comercial:", (string) $p["cliente_nombre_comercial"]);
