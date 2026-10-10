@@ -108,7 +108,7 @@ function tarjetaPedido(array $ped, string $csrf): void
         <summary>
             <span class="p-num"><?= $esBorrador ? "Borrador" : "Pedido" ?> #<?= numeroPedido($ped["id"]) ?></span>
             <span class="estado <?= claseEstadoPedido($ped["estado"]) ?>"><?= e(etiquetaEstadoPedido($ped["estado"])) ?></span>
-            <span class="p-cli"><?= e($nombre) ?></span>
+            <span class="p-cli"><?= e($nombre) ?> <span class="pf-tag-lista <?= e(listaValida($ped["tipo_cliente"] ?? "")) ?>"><?= e(etiquetaTipoCliente($ped["tipo_cliente"] ?? "mayorista")) ?></span></span>
             <span class="p-fecha"><?= date("d/m/Y H:i", strtotime($ped["actualizado_en"] ?? $ped["creado_en"])) ?></span>
             <span class="p-total"><?= formatoCOP($ped["total"]) ?></span>
         </summary>
