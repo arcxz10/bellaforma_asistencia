@@ -29,7 +29,7 @@ if (!$pedidos) {
 $pedidos = array_reverse($pedidos);
 
 $encabezados = [
-    "Pedido", "Fecha", "Estado", "Ejecutivo", "ID ejecutivo", "Tipo de persona", "Tipo documento", "NIT / Cédula",
+    "Pedido", "Fecha", "Estado", "Tipo de cliente", "Ejecutivo", "ID ejecutivo", "Tipo de persona", "Tipo documento", "NIT / Cédula",
     "Razón social / Nombre", "Nombre comercial", "Teléfono", "Correo", "Departamento", "Municipio", "Barrio",
     "Dirección de entrega", "Puntos de referencia", "Factura electrónica", "Correo factura electrónica",
     "Condición de pago", "Días de crédito", "Observaciones", "Referencia", "Descripción", "Cantidad",
@@ -41,6 +41,7 @@ foreach ($pedidos as $p) {
         numeroPedido($p["id"]),
         date("d/m/Y H:i", strtotime($p["creado_en"])),
         etiquetaEstadoPedido($p["estado"]),
+        etiquetaTipoCliente($p["tipo_cliente"] ?? "mayorista"),
         $p["vendedor_nombre"],
         $p["vendedor_identificacion"],
         ($p["cliente_tipo_persona"] ?? "juridica") === "natural" ? "Natural" : "Jurídica",
@@ -73,8 +74,8 @@ foreach ($pedidos as $p) {
     }
 }
 
-$anchos = [9, 17, 18, 24, 14, 12, 12, 16, 34, 28, 16, 28, 20, 20, 20, 36, 36, 12, 28, 14, 10, 36, 14, 44, 10, 14, 14, 16];
-$binario = xlsx_generar($encabezados, $filas, $anchos, [20, 24, 25, 26, 27]);
+$anchos = [9, 17, 18, 14, 24, 14, 12, 12, 16, 34, 28, 16, 28, 20, 20, 20, 36, 36, 12, 28, 14, 10, 36, 14, 44, 10, 14, 14, 16];
+$binario = xlsx_generar($encabezados, $filas, $anchos, [21, 25, 26, 27, 28]);
 
 $idUnico = (int) ($_GET["id"] ?? 0);
 $nombre = $idUnico > 0 ? "pedido_" . numeroPedido($idUnico) . ".xlsx" : "pedidos_" . date("Ymd_His") . ".xlsx";
