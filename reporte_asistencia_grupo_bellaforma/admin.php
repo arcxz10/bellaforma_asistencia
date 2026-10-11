@@ -1190,17 +1190,10 @@ $resultadoEmpleados =
             </a>
 
             <a
-                href="#clientes_mayoristas"
+                href="#clientes"
                 class="nav-item"
             >
-                🏪 Clientes mayoristas
-            </a>
-
-            <a
-                href="#clientes_detal"
-                class="nav-item"
-            >
-                🛍️ Clientes detal
+                👥 Clientes
             </a>
 
         </nav>
@@ -2576,9 +2569,6 @@ $resultadoEmpleados =
             include __DIR__ . "/admin_seccion_vendedores.php";
             include __DIR__ . "/admin_seccion_pedidos.php";
             include __DIR__ . "/admin_seccion_productos.php";
-            $CliLista = "mayorista";
-            include __DIR__ . "/admin_seccion_clientes.php";
-            $CliLista = "detal";
             include __DIR__ . "/admin_seccion_clientes.php";
             ?>
 
