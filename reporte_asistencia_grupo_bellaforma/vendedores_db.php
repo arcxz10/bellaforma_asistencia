@@ -5,7 +5,7 @@
  * - Funciones de formato y consulta de pedidos (admin.php, pedido_pdf.php, pedido_excel.php, vendedor.php).
  */
 
-const ESQUEMA_VEND_VERSION = 7;
+const ESQUEMA_VEND_VERSION = 8;
 
 function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
 {
@@ -25,6 +25,7 @@ function ddlClientes(string $tabla): string
 {
     return "CREATE TABLE IF NOT EXISTS `$tabla` (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        tipo_cliente VARCHAR(10) NOT NULL DEFAULT 'mayorista',
         tipo_persona VARCHAR(10) NOT NULL DEFAULT 'juridica',
         tipo_documento VARCHAR(40) NOT NULL DEFAULT 'NIT',
         identificacion VARCHAR(30) NOT NULL,
@@ -76,7 +77,8 @@ function ddlClientes(string $tabla): string
         creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY uq_ident (identificacion_norm),
-        KEY idx_razon (razon_social)
+        KEY idx_razon (razon_social),
+        KEY idx_tipo_cliente (tipo_cliente)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 }
 
@@ -86,9 +88,10 @@ function listaValida($l): string
     return $l === "detal" ? "detal" : "mayorista";
 }
 
-function tablaClientes(string $lista): string
+/** Una sola base de clientes; el campo tipo_cliente indica si es mayorista o detal. */
+function tablaClientes(string $lista = ""): string
 {
-    return listaValida($lista) === "detal" ? "clientes_detal" : "clientes_mayoristas";
+    return "clientes";
 }
 
 /** Un solo catálogo para ambos tipos de cliente (cambia solo la columna de precio). */
@@ -185,9 +188,9 @@ function asegurarTablasVendedores(mysqli $c): void
         }
     }
 
-    // Clientes: dos bases (mayoristas y detal) con todos los campos del catálogo de terceros de Syscafe
-    $c->query(ddlClientes("clientes_mayoristas"));
-    $c->query(ddlClientes("clientes_detal"));
+    // Clientes: una sola base (con el campo "tipo de cliente": mayorista o detal) y todos los campos de Syscafe
+    $c->query(ddlClientes("clientes"));
+    $okClientes = agregarColumna($c, "clientes", "tipo_cliente", "VARCHAR(10) NOT NULL DEFAULT 'mayorista'");
 
     $c->query("CREATE TABLE IF NOT EXISTS cliente_subterceros (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -212,11 +215,31 @@ function asegurarTablasVendedores(mysqli $c): void
         KEY idx_cont_cliente (lista, cliente_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // La base de clientes anterior (una sola) ya no se usa: se elimina
-    try {
-        $c->query("DROP TABLE IF EXISTS clientes");
-    } catch (Throwable $e) {
-        // sin consecuencias
+    // Si existían las bases separadas (clientes_mayoristas / clientes_detal), sus datos se copian a "clientes".
+    // Las tablas viejas NO se borran: puede eliminarlas usted cuando confirme que todo quedó bien.
+    $colsMigrar = ["tipo_persona", "tipo_documento", "identificacion", "identificacion_norm", "dv", "codigo", "razon_social",
+        "nombre_comercial", "nota", "direccion", "direccion2", "puntos_referencia", "telefono1", "telefono2", "telefono3", "movil",
+        "codigo_postal", "email", "email_fe", "departamento", "codigo_municipio", "municipio", "codigo_pais", "pais", "codigo_barrio",
+        "barrio", "grupo", "subgrupo", "encargado", "representante_legal", "observaciones", "zona", "codigo_vendedor",
+        "vendedor_asignado", "codigo_cobrador", "cobrador", "codigo_agente", "agente_comercial", "codigo_transporta",
+        "transportadora", "lista_precios", "calificacion", "cupo_cartera", "no_facturas", "dias_mora", "condicion_pago",
+        "dias_credito", "inactivo"];
+    $listaCols = implode(", ", array_map(fn($x) => "`$x`", $colsMigrar));
+    foreach ([["clientes_mayoristas", "mayorista"], ["clientes_detal", "detal"], ["detalles_clientes", "detal"]] as [$vieja, $tipoV]) {
+        try {
+            $existe = $c->query("SHOW TABLES LIKE '$vieja'");
+            if (!$existe || $existe->num_rows === 0) {
+                continue;
+            }
+            $c->query("INSERT IGNORE INTO clientes ($listaCols, tipo_cliente) SELECT $listaCols, '$tipoV' FROM `$vieja`");
+            foreach (["cliente_subterceros", "cliente_contactos"] as $hija) {
+                $c->query("UPDATE `$hija` h JOIN `$vieja` o ON o.id = h.cliente_id
+                           JOIN clientes n ON n.identificacion_norm = o.identificacion_norm
+                           SET h.cliente_id = n.id, h.lista = 'cliente' WHERE h.lista = '$tipoV'");
+            }
+        } catch (Throwable $e) {
+            // si esa tabla no se puede copiar, se ignora (no afecta lo demás)
+        }
     }
 
     $c->query("CREATE TABLE IF NOT EXISTS pedidos_vendedores (
@@ -272,7 +295,7 @@ function asegurarTablasVendedores(mysqli $c): void
     $ok = agregarColumna($c, "pedidos_vendedores", "tipo_cliente", "VARCHAR(10) NOT NULL DEFAULT 'mayorista'") && $ok;
 
     // Solo se marca como terminado si TODO se aplicó; si no, se reintenta en la próxima visita
-    if ($ok && $okPrecios) {
+    if ($ok && $okPrecios && $okClientes) {
         $c->query("REPLACE INTO esquema_modulo (clave, valor) VALUES ('vendedores', " . ESQUEMA_VEND_VERSION . ")");
     }
 }
