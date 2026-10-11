@@ -1,34 +1,38 @@
 <?php
 /*
- * Sección de clientes del panel admin. Se incluye dos veces desde admin.php:
- *   $CliLista = "mayorista"  -> Clientes mayoristas
- *   $CliLista = "detal"      -> Clientes detal
- * Cada lista tiene su propia base de datos, con todos los campos del catálogo de terceros de Syscafe.
+ * Sección "Clientes" del panel admin: una sola base de clientes. El campo "Tipo de cliente" (mayorista / detal)
+ * define la lista de precios que se usa en los pedidos. Incluye todos los campos del catálogo de terceros de Syscafe.
  */
 require_once __DIR__ . "/clientes_lib.php";
 
-$CliLista = listaValida($CliLista ?? "mayorista");
-$C = $CliLista === "detal" ? "D" : "M";
-$CliTabla = tablaClientes($CliLista);
-$CliSeccion = $CliLista === "detal" ? "clientes_detal" : "clientes_mayoristas";
-$CliTitulo = $CliLista === "detal" ? "Clientes detal" : "Clientes mayoristas";
+$C = "";                       // sin sufijo en los identificadores
+$CliTabla = tablaClientes();
+$CliSeccion = "clientes";
+$CliTitulo = "Clientes";
 
-$pBuscar = "buscar_c" . $C;
-$pPag = "pag_c" . $C;
+$pBuscar = "buscar_c";
+$pPag = "pag_c";
 $buscarC = trim($_GET[$pBuscar] ?? "");
+$tipoFiltro = in_array($_GET["tipo_c"] ?? "", ["mayorista", "detal"], true) ? $_GET["tipo_c"] : "";
 $pagC = max(1, (int) ($_GET[$pPag] ?? 1));
 $porPagina = 50;
 
-$whereC = "";
+$condiciones = [];
 $tiposC = "";
 $paramsC = [];
 if ($buscarC !== "") {
-    $whereC = " WHERE (razon_social LIKE ? OR nombre_comercial LIKE ? OR identificacion_norm LIKE ? OR municipio LIKE ? OR codigo LIKE ?)";
+    $condiciones[] = "(razon_social LIKE ? OR nombre_comercial LIKE ? OR identificacion_norm LIKE ? OR municipio LIKE ? OR codigo LIKE ?)";
     $likeC = "%" . $buscarC . "%";
     $dig = "%" . (preg_replace('/\D+/', '', $buscarC) ?: "__sin_digitos__") . "%";
-    $tiposC = "sssss";
+    $tiposC .= "sssss";
     array_push($paramsC, $likeC, $likeC, $dig, $likeC, $likeC);
 }
+if ($tipoFiltro !== "") {
+    $condiciones[] = "tipo_cliente = ?";
+    $tiposC .= "s";
+    $paramsC[] = $tipoFiltro;
+}
+$whereC = $condiciones ? " WHERE " . implode(" AND ", $condiciones) : "";
 
 $totalClientes = 0;
 $stC = $conexion->prepare("SELECT COUNT(*) FROM `$CliTabla`" . $whereC);
@@ -53,10 +57,10 @@ $rC = $stC->get_result();
 $clientesLista = $rC ? $rC->fetch_all(MYSQLI_ASSOC) : [];
 $stC->close();
 
-$hijosC = cargarHijosClientes($conexion, $CliLista, array_map(fn($x) => (int) $x["id"], $clientesLista));
+$hijosC = cargarHijosClientes($conexion, array_map(fn($x) => (int) $x["id"], $clientesLista));
 
-$qsPag = function (int $n) use ($pBuscar, $pPag, $buscarC, $CliSeccion) {
-    return "admin.php?" . http_build_query([$pBuscar => $buscarC, $pPag => $n]) . "#" . $CliSeccion;
+$qsPag = function (int $n) use ($pBuscar, $pPag, $buscarC, $tipoFiltro, $CliSeccion) {
+    return "admin.php?" . http_build_query([$pBuscar => $buscarC, "tipo_c" => $tipoFiltro, $pPag => $n]) . "#" . $CliSeccion;
 };
 
 // Ayuda para dibujar campos de texto del formulario
@@ -70,8 +74,8 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
 
     <div class="cabecera-seccion">
         <div>
-            <h2><?= $CliLista === "detal" ? "🛍️" : "🏪" ?> <?= $CliTitulo ?></h2>
-            <p>Base de clientes <strong><?= $CliLista === "detal" ? "detal" : "mayoristas" ?></strong>, con los mismos datos del catálogo de terceros de Syscafe (incluye subterceros y contactos). Cuando el ejecutivo elige este tipo de cliente y escribe el NIT o la cédula, sus datos aparecen solos.</p>
+            <h2>👥 Clientes</h2>
+            <p>Una sola base de clientes, con los datos del catálogo de terceros de Syscafe (incluye subterceros y contactos). Cada cliente tiene su <strong>tipo</strong> (mayorista o detal), que define la lista de precios. Cuando el ejecutivo elige el tipo y escribe el NIT o la cédula, los datos aparecen solos.</p>
         </div>
         <button type="button" class="btn-nuevo" onclick="nuevoCliente<?= $C ?>()">+ Nuevo Cliente</button>
     </div>
@@ -80,11 +84,14 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
         <strong>📥 Cargar clientes desde Excel</strong>
         <p style="margin:6px 0 10px; font-size:13px; color:#556;">
             En Excel use <em>Guardar como → CSV</em> y súbalo aquí. Si el NIT/cédula ya existe, se actualizan sus datos.
-            <a href="clientes_plantilla.php?lista=<?= $CliLista ?>">Descargar plantilla de ejemplo</a>
+            <a href="clientes_plantilla.php">Descargar plantilla de ejemplo</a>. Si el archivo trae la columna <em>tipo_cliente</em> (mayorista / detal) se respeta; si no, se usa el tipo que elija aquí.
         </p>
         <form method="POST" action="admin.php" enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <input type="hidden" name="accion" value="cli_importar">
-            <input type="hidden" name="lista" value="<?= $CliLista ?>">
+            <select name="tipo_defecto" style="padding:9px; border:1px solid #ccd; border-radius:6px;">
+                <option value="mayorista">Estos clientes son MAYORISTAS</option>
+                <option value="detal">Estos clientes son DETAL</option>
+            </select>
             <input type="file" name="archivo" accept=".csv,text/csv,text/plain" required>
             <button type="submit" class="btn-nuevo">Importar clientes</button>
         </form>
@@ -96,6 +103,14 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
             <label for="<?= $pBuscar ?>">Buscar</label>
             <input type="text" id="<?= $pBuscar ?>" name="<?= $pBuscar ?>" placeholder="Nombre, NIT/cédula, municipio o código" value="<?= escapar($buscarC) ?>">
         </div>
+        <div>
+            <label for="tipo_c">Tipo de cliente</label>
+            <select id="tipo_c" name="tipo_c">
+                <option value="">Todos</option>
+                <option value="mayorista" <?= $tipoFiltro === "mayorista" ? "selected" : "" ?>>Mayorista</option>
+                <option value="detal" <?= $tipoFiltro === "detal" ? "selected" : "" ?>>Detal</option>
+            </select>
+        </div>
         <button type="submit" class="btn-filtrar">Buscar</button>
     </form>
 
@@ -105,6 +120,7 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
         <table class="tabla">
             <thead>
                 <tr>
+                    <th>Tipo</th>
                     <th>Documento</th>
                     <th>Razón social / Nombre</th>
                     <th>Nombre comercial</th>
@@ -117,7 +133,7 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
             </thead>
             <tbody>
                 <?php if (!$clientesLista): ?>
-                    <tr><td colspan="8" class="sin-resultados">No hay clientes<?= $buscarC !== "" ? " con esa búsqueda" : " cargados todavía" ?>.</td></tr>
+                    <tr><td colspan="9" class="sin-resultados">No hay clientes<?= $buscarC !== "" ? " con esa búsqueda" : " cargados todavía" ?>.</td></tr>
                 <?php else: ?>
                     <?php foreach ($clientesLista as $cl): ?>
                         <?php
@@ -126,6 +142,9 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
                         $datosJs["contactos"] = $hijosC[(int) $cl["id"]]["contactos"] ?? [];
                         ?>
                         <tr>
+                            <td>
+                                <span class="estado" style="background:<?= ($cl["tipo_cliente"] ?? "mayorista") === "detal" ? "#FCE4EC" : "#E3F2FD" ?>; color:<?= ($cl["tipo_cliente"] ?? "mayorista") === "detal" ? "#AD1457" : "#0D47A1" ?>;"><?= escapar(etiquetaTipoCliente($cl["tipo_cliente"] ?? "mayorista")) ?></span>
+                            </td>
                             <td><small><?= $cl["tipo_persona"] === "natural" ? "CC" : "NIT" ?></small> <?= escapar($cl["identificacion"]) ?><?= ($cl["dv"] ?? "") !== "" ? "-" . escapar($cl["dv"]) : "" ?></td>
                             <td><?= escapar($cl["razon_social"]) ?></td>
                             <td><?= escapar($cl["nombre_comercial"]) ?: "—" ?></td>
@@ -145,7 +164,6 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
                                     onclick="editarCliente<?= $C ?>(this)">Editar</button>
                                 <form method="POST" action="admin.php" class="form-inline">
                                     <input type="hidden" name="accion" value="cli_estado">
-                                    <input type="hidden" name="lista" value="<?= $CliLista ?>">
                                     <input type="hidden" name="id" value="<?= (int) $cl["id"] ?>">
                                     <input type="hidden" name="inactivo" value="<?= (int) $cl["inactivo"] === 1 ? 0 : 1 ?>">
                                     <?php if ((int) $cl["inactivo"] === 1): ?>
@@ -171,19 +189,26 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
     <?php endif; ?>
 </section>
 
-<!-- MODAL CLIENTE (<?= $CliLista ?>) -->
+<!-- MODAL CLIENTE -->
 <div class="modal" id="modalCli<?= $C ?>">
     <div class="modal-contenido" style="max-width: 900px; width: 96%; max-height: 92vh; overflow-y: auto;">
-        <h3 id="tituloCli<?= $C ?>">Nuevo cliente <?= $CliLista === "detal" ? "detal" : "mayorista" ?></h3>
+        <h3 id="tituloCli<?= $C ?>">Nuevo cliente</h3>
         <form method="POST" action="admin.php" class="formulario-modal" id="formCli<?= $C ?>">
             <input type="hidden" name="accion" value="cli_guardar">
-            <input type="hidden" name="lista" value="<?= $CliLista ?>">
             <input type="hidden" name="id" id="cli<?= $C ?>_id" value="">
             <input type="hidden" name="subterceros_json" id="cli<?= $C ?>_subterceros_json" value="[]">
             <input type="hidden" name="contactos_json" id="cli<?= $C ?>_contactos_json" value="[]">
 
             <h4 class="cli-h">Identificación</h4>
             <div class="cli-grid">
+                <div class="cli-ancho" style="background:#E3F2FD; padding:10px; border-radius:8px;">
+                    <label for="cli<?= $C ?>_tipo_cliente">Tipo de cliente * (define la lista de precios)</label>
+                    <select name="tipo_cliente" id="cli<?= $C ?>_tipo_cliente" required>
+                        <option value="">— Seleccione —</option>
+                        <option value="mayorista">Cliente mayorista (precio mayorista)</option>
+                        <option value="detal">Cliente detal (precio detal)</option>
+                    </select>
+                </div>
                 <div>
                     <label for="cli<?= $C ?>_tipo_documento">Identificación (tipo)</label>
                     <select name="tipo_documento" id="cli<?= $C ?>_tipo_documento">
@@ -345,8 +370,9 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
         }
 
         window["nuevoCliente" + C] = function () {
-            document.getElementById("tituloCli" + C).textContent = "Nuevo cliente <?= $CliLista === "detal" ? "detal" : "mayorista" ?>";
+            document.getElementById("tituloCli" + C).textContent = "Nuevo cliente";
             $("id").value = "";
+            $("tipo_cliente").value = "";
             CAMPOS.forEach(function (c) { $(c).value = ""; });
             $("tipo_documento").selectedIndex = 0;
             $("pais").value = "Colombia"; $("codigo_pais").value = "169";
@@ -362,6 +388,7 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
             var d = JSON.parse(btn.dataset.c);
             document.getElementById("tituloCli" + C).textContent = "Editar cliente";
             $("id").value = d.id;
+            $("tipo_cliente").value = d.tipo_cliente || "mayorista";
             CAMPOS.forEach(function (c) { $(c).value = (d[c] === null || d[c] === undefined) ? "" : d[c]; });
             if (d.tipo_documento && $("tipo_documento").value !== d.tipo_documento) {
                 var op = document.createElement("option"); op.value = d.tipo_documento; op.textContent = d.tipo_documento;
