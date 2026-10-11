@@ -399,6 +399,11 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         llamar({ accion: "buscar_cliente", doc: doc, lista: S.lista }).then(function (r) {
             if (!r.ok) { S.docOk = ""; msgCliente(r.error || "No se pudo buscar.", "alerta"); return; }
             if (r.encontrado) { aplicarCliente(r.cliente); }
+            else if (r.otro_tipo) {
+                S.clienteId = null;
+                msgCliente("⚠️ Este cliente está registrado como " + (r.otro_tipo === "detal" ? "DETAL" : "MAYORISTA") +
+                           ". Elija arriba «Cliente " + (r.otro_tipo === "detal" ? "detal" : "mayorista") + "» para cargar sus datos y su lista de precios.", "alerta");
+            }
             else { S.clienteId = null; msgCliente("Cliente nuevo: complete sus datos para el pedido.", ""); }
         }).catch(function () { msgCliente("Sin conexión: no se pudo buscar el cliente.", "alerta"); });
     }
