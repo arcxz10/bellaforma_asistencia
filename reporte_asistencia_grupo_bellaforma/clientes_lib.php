@@ -1,6 +1,6 @@
 <?php
 /**
- * Bases de clientes (mayoristas y detal) con todos los campos del catálogo de terceros de Syscafe.
+ * Base de clientes (mayoristas y detal, según el campo tipo_cliente) con todos los campos del catálogo de terceros de Syscafe.
  * Guardado manual, subterceros, contactos e importación desde CSV (Excel > Guardar como CSV).
  */
 require_once __DIR__ . "/pedidos_lib.php";
@@ -48,6 +48,7 @@ function normalizarCliente(array $in): array
         $d[$campo] = textoCorto($in[$campo] ?? "", $max);
     }
     $d["observaciones"] = textoCorto($in["observaciones"] ?? "", 4000, false);
+    $d["tipo_cliente"] = listaValida(strtolower(trim((string) ($in["tipo_cliente"] ?? ""))));
 
     // Persona natural o jurídica
     $tp = strtolower(trim((string) ($in["tipo_persona"] ?? "")));
@@ -90,7 +91,7 @@ function normalizarCliente(array $in): array
 function tiposCliente(array $d): array
 {
     $cols = array_merge(
-        ["tipo_persona", "identificacion_norm", "dias_credito", "cupo_cartera", "no_facturas", "dias_mora", "inactivo", "condicion_pago", "observaciones"],
+        ["tipo_cliente", "tipo_persona", "identificacion_norm", "dias_credito", "cupo_cartera", "no_facturas", "dias_mora", "inactivo", "condicion_pago", "observaciones"],
         array_keys(CLIENTE_TEXTOS)
     );
     $tipos = "";
@@ -133,9 +134,9 @@ function filasHijas($json, array $campos, int $max = 100): array
     return $out;
 }
 
-function guardarHijosCliente(mysqli $c, string $lista, int $clienteId, array $subterceros, array $contactos): void
+function guardarHijosCliente(mysqli $c, int $clienteId, array $subterceros, array $contactos): void
 {
-    $lista = listaValida($lista);
+    $lista = "cliente";
 
     $st = $c->prepare("DELETE FROM cliente_subterceros WHERE lista = ? AND cliente_id = ?");
     $st->bind_param("si", $lista, $clienteId);
@@ -162,9 +163,9 @@ function guardarHijosCliente(mysqli $c, string $lista, int $clienteId, array $su
 }
 
 /** Subterceros y contactos de varios clientes: [cliente_id => ['subterceros'=>[], 'contactos'=>[]]] */
-function cargarHijosClientes(mysqli $c, string $lista, array $ids): array
+function cargarHijosClientes(mysqli $c, array $ids): array
 {
-    $lista = listaValida($lista);
+    $lista = "cliente";
     $salida = [];
     $ids = array_values(array_filter(array_map("intval", $ids)));
     foreach ($ids as $id) {
@@ -188,12 +189,14 @@ function cargarHijosClientes(mysqli $c, string $lista, array $ids): array
     return $salida;
 }
 
-/** Crea o edita un cliente (en la base mayorista o detal). */
-function guardarCliente(mysqli $c, string $lista, array $in, ?int $id): array
+/** Crea o edita un cliente (el campo tipo_cliente indica si es mayorista o detal). */
+function guardarCliente(mysqli $c, array $in, ?int $id): array
 {
-    $tabla = tablaClientes($lista);
-    $lista = listaValida($lista);
+    $tabla = tablaClientes();
     $d = normalizarCliente($in);
+    if (!in_array((string) ($in["tipo_cliente"] ?? ""), ["mayorista", "detal"], true)) {
+        return ["ok" => false, "error" => "Seleccione el tipo de cliente: mayorista o detal."];
+    }
     if (strlen($d["identificacion_norm"]) < 5) {
         return ["ok" => false, "error" => "Ingrese un NIT o cédula válido."];
     }
@@ -224,7 +227,7 @@ function guardarCliente(mysqli $c, string $lista, array $in, ?int $id): array
 
         if (isset($in["subterceros_json"]) || isset($in["contactos_json"])) {
             guardarHijosCliente(
-                $c, $lista, $clienteId,
+                $c, $clienteId,
                 filasHijas($in["subterceros_json"] ?? "[]", SUBTERCERO_CAMPOS),
                 filasHijas($in["contactos_json"] ?? "[]", CONTACTO_CAMPOS)
             );
@@ -233,7 +236,7 @@ function guardarCliente(mysqli $c, string $lista, array $in, ?int $id): array
     } catch (mysqli_sql_exception $e) {
         $c->rollback();
         if ((int) $e->getCode() === 1062) {
-            return ["ok" => false, "error" => "Ya existe un cliente con ese NIT / cédula en esta base."];
+            return ["ok" => false, "error" => "Ya existe un cliente con ese NIT / cédula."];
         }
         return ["ok" => false, "error" => "No se pudo guardar el cliente: " . substr($e->getMessage(), 0, 160)];
     }
@@ -243,6 +246,7 @@ function guardarCliente(mysqli $c, string $lista, array $in, ?int $id): array
 function aliasColumnasClientes(): array
 {
     $a = [
+        "tipo_cliente" => ["tipo_cliente", "tipo_de_cliente", "clase_cliente"],
         "tipo_persona" => ["tipo_persona", "tipo_de_persona", "persona"],
         "es_juridica" => ["persona_juridica", "juridica", "es_juridica"],
         "tipo_documento" => ["tipo_documento", "tipo_doc", "tipo_identificacion", "tipo_de_documento", "identificacion_tipo"],
@@ -302,9 +306,10 @@ function aliasColumnasClientes(): array
 }
 
 /** Importa clientes desde un CSV (separado por coma, punto y coma o tabulador). */
-function importarClientesCSV(mysqli $c, string $lista, string $ruta): array
+function importarClientesCSV(mysqli $c, string $tipoDefecto, string $ruta): array
 {
-    $tabla = tablaClientes($lista);
+    $tabla = tablaClientes();
+    $tipoDefecto = listaValida($tipoDefecto);
     $texto = file_get_contents($ruta);
     if ($texto === false || trim($texto) === "") {
         return ["ok" => false, "error" => "El archivo está vacío."];
@@ -363,6 +368,8 @@ function importarClientesCSV(mysqli $c, string $lista, string $ruta): array
             foreach ($columnas as $i => $campo) {
                 $in[$campo] = $fila[$i] ?? "";
             }
+            $tc = strtolower(trim((string) ($in["tipo_cliente"] ?? "")));
+            $in["tipo_cliente"] = in_array($tc, ["mayorista", "detal"], true) ? $tc : $tipoDefecto;
             $d = normalizarCliente($in);
             if (strlen($d["identificacion_norm"]) < 5 || $d["razon_social"] === "") {
                 if (count($errores) < 8) {
