@@ -9,6 +9,7 @@ $accionesPropias = [
     "prod_crear", "prod_editar", "prod_estado",
     "ped_estado",
     "cli_guardar", "cli_estado", "cli_importar",
+    "prod_importar",
 ];
 
 if (!in_array($accion, $accionesPropias, true)) {
@@ -18,9 +19,10 @@ if (!in_array($accion, $accionesPropias, true)) {
 require_once __DIR__ . "/vendedores_db.php";
 require_once __DIR__ . "/pedidos_lib.php";
 require_once __DIR__ . "/clientes_lib.php";
+require_once __DIR__ . "/productos_lib.php";
 
 /** Guarda (o reemplaza) la foto de un producto. Devuelve "" si todo va bien o el mensaje de error. */
-function guardarFotoProducto(mysqli $c, int $productoId, array $archivo): string
+function guardarFotoProducto(mysqli $c, string $lista, int $productoId, array $archivo): string
 {
     $err = $archivo["error"] ?? UPLOAD_ERR_NO_FILE;
     if ($err === UPLOAD_ERR_NO_FILE) {
@@ -57,8 +59,9 @@ function guardarFotoProducto(mysqli $c, int $productoId, array $archivo): string
     }
 
     $nulo = null;
+    $tablaFoto = tablaFotos($lista);
     $st = $c->prepare(
-        "INSERT INTO producto_fotos (producto_id, mime, datos) VALUES (?, ?, ?)
+        "INSERT INTO `$tablaFoto` (producto_id, mime, datos) VALUES (?, ?, ?)
          ON DUPLICATE KEY UPDATE mime = VALUES(mime), datos = VALUES(datos)"
     );
     $st->bind_param("isb", $productoId, $mime, $nulo);
@@ -139,51 +142,55 @@ if ($accion === "vend_estado") {
     redireccionar($activo ? "Ejecutivo activado." : "Ejecutivo desactivado.", "exito", "vendedores");
 }
 
-/* ---------------- PRODUCTOS AL POR MAYOR ---------------- */
+/* ---------------- PRODUCTOS (un solo catálogo con precio mayorista y precio detal) ---------------- */
+
+$seccionProd = "productos_mayoristas";
 
 if ($accion === "prod_crear" || $accion === "prod_editar") {
 
     $id = (int) ($_POST["id"] ?? 0);
     $referencia = trim($_POST["referencia"] ?? "");
     $nombre = trim($_POST["nombre"] ?? "");
-    $precio = parsearPrecio((string) ($_POST["precio"] ?? ""));
+    $precioMay = parsearPrecio((string) ($_POST["precio_mayorista"] ?? ""));
+    $precioDet = parsearPrecio((string) ($_POST["precio_detal"] ?? ""));
 
-    if ($referencia === "" || $nombre === "" || $precio <= 0) {
-        redireccionar("Complete referencia, nombre y un precio mayor a 0.", "error", "productos_mayoristas");
+    if ($referencia === "" || $nombre === "" || ($precioMay <= 0 && $precioDet <= 0)) {
+        redireccionar("Complete referencia, nombre y al menos un precio (mayorista o detal) mayor a 0.", "error", $seccionProd);
     }
 
     try {
         if ($accion === "prod_crear") {
-            $stmt = $conexion->prepare("INSERT INTO productos_mayoristas (referencia, nombre, precio) VALUES (?, ?, ?)");
-            $stmt->bind_param("ssd", $referencia, $nombre, $precio);
+            // la columna "precio" se mantiene igual al precio mayorista (compatibilidad)
+            $stmt = $conexion->prepare("INSERT INTO productos_mayoristas (referencia, nombre, precio, precio_mayorista, precio_detal) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("ssddd", $referencia, $nombre, $precioMay, $precioMay, $precioDet);
             $stmt->execute();
             $id = (int) $conexion->insert_id;
             $stmt->close();
             $msg = "Producto agregado: " . $referencia;
         } else {
-            $stmt = $conexion->prepare("UPDATE productos_mayoristas SET referencia = ?, nombre = ?, precio = ? WHERE id = ?");
-            $stmt->bind_param("ssdi", $referencia, $nombre, $precio, $id);
+            $stmt = $conexion->prepare("UPDATE productos_mayoristas SET referencia = ?, nombre = ?, precio = ?, precio_mayorista = ?, precio_detal = ? WHERE id = ?");
+            $stmt->bind_param("ssdddi", $referencia, $nombre, $precioMay, $precioMay, $precioDet, $id);
             $stmt->execute();
             $stmt->close();
             $msg = "Producto actualizado.";
         }
     } catch (mysqli_sql_exception $ex) {
         if ((int) $ex->getCode() === 1062) {
-            redireccionar("Ya existe un producto con esa referencia.", "error", "productos_mayoristas");
+            redireccionar("Ya existe un producto con esa referencia.", "error", $seccionProd);
         }
-        redireccionar("No se pudo guardar el producto.", "error", "productos_mayoristas");
+        redireccionar("No se pudo guardar el producto: " . substr($ex->getMessage(), 0, 140), "error", $seccionProd);
     }
 
     if (!empty($_POST["quitar_foto"])) {
         $conexion->query("DELETE FROM producto_fotos WHERE producto_id = " . (int) $id);
     }
     if (isset($_FILES["foto"])) {
-        $errFoto = guardarFotoProducto($conexion, $id, $_FILES["foto"]);
+        $errFoto = guardarFotoProducto($conexion, "mayorista", $id, $_FILES["foto"]);
         if ($errFoto !== "") {
-            redireccionar($msg . " Pero la foto no se guardó: " . $errFoto, "error", "productos_mayoristas");
+            redireccionar($msg . " Pero la foto no se guardó: " . $errFoto, "error", $seccionProd);
         }
     }
-    redireccionar($msg, "exito", "productos_mayoristas");
+    redireccionar($msg, "exito", $seccionProd);
 }
 
 if ($accion === "prod_estado") {
@@ -193,7 +200,24 @@ if ($accion === "prod_estado") {
     $stmt->bind_param("ii", $activo, $id);
     $stmt->execute();
     $stmt->close();
-    redireccionar($activo ? "Producto activado." : "Producto desactivado (ya no aparece a los ejecutivos).", "exito", "productos_mayoristas");
+    redireccionar($activo ? "Producto activado." : "Producto desactivado (ya no aparece a los ejecutivos).", "exito", $seccionProd);
+}
+
+if ($accion === "prod_importar") {
+    @set_time_limit(300);
+    $f = $_FILES["archivo"] ?? null;
+    if (!$f || ($f["error"] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        redireccionar("Seleccione el archivo CSV de productos.", "error", $seccionProd);
+    }
+    $r = importarProductosCSV($conexion, $f["tmp_name"]);
+    if (!$r["ok"]) {
+        redireccionar($r["error"], "error", $seccionProd);
+    }
+    $txt = "Productos importados: " . $r["nuevos"] . " nuevos y " . $r["actualizados"] . " actualizados.";
+    if ($r["errores"]) {
+        $txt .= " Filas omitidas (faltan datos o precio): " . implode(", ", $r["errores"]) . ".";
+    }
+    redireccionar($txt, "exito", $seccionProd);
 }
 
 /* ---------------- PEDIDOS ---------------- */
@@ -211,40 +235,43 @@ if ($accion === "ped_estado") {
     redireccionar("Pedido #" . numeroPedido($id) . " marcado como: " . etiquetaEstadoPedido($estado), "exito", "pedidos");
 }
 
-/* ---------------- CLIENTES ---------------- */
+/* ---------------- CLIENTES (una sola base; el campo tipo_cliente indica mayorista o detal) ---------------- */
+
+$seccionCli = "clientes";
+$tablaCli = tablaClientes();
 
 if ($accion === "cli_guardar") {
     $id = (int) ($_POST["id"] ?? 0);
     $r = guardarCliente($conexion, $_POST, $id ?: null);
     if (!$r["ok"]) {
-        redireccionar($r["error"], "error", "clientes");
+        redireccionar($r["error"], "error", $seccionCli);
     }
-    redireccionar($id ? "Cliente actualizado." : "Cliente creado.", "exito", "clientes");
+    redireccionar($id ? "Cliente actualizado." : "Cliente creado.", "exito", $seccionCli);
 }
 
 if ($accion === "cli_estado") {
     $id = (int) ($_POST["id"] ?? 0);
     $inactivo = ((int) ($_POST["inactivo"] ?? 0)) === 1 ? 1 : 0;
-    $stmt = $conexion->prepare("UPDATE clientes SET inactivo = ? WHERE id = ?");
+    $stmt = $conexion->prepare("UPDATE `$tablaCli` SET inactivo = ? WHERE id = ?");
     $stmt->bind_param("ii", $inactivo, $id);
     $stmt->execute();
     $stmt->close();
-    redireccionar($inactivo ? "Cliente marcado como inactivo." : "Cliente activado.", "exito", "clientes");
+    redireccionar($inactivo ? "Cliente marcado como inactivo." : "Cliente activado.", "exito", $seccionCli);
 }
 
 if ($accion === "cli_importar") {
     @set_time_limit(300);
     $f = $_FILES["archivo"] ?? null;
     if (!$f || ($f["error"] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        redireccionar("Seleccione el archivo CSV de clientes (si es muy pesado, divídalo en partes).", "error", "clientes");
+        redireccionar("Seleccione el archivo CSV de clientes (si es muy pesado, divídalo en partes).", "error", $seccionCli);
     }
-    $r = importarClientesCSV($conexion, $f["tmp_name"]);
+    $r = importarClientesCSV($conexion, (string) ($_POST["tipo_defecto"] ?? "mayorista"), $f["tmp_name"]);
     if (!$r["ok"]) {
-        redireccionar($r["error"], "error", "clientes");
+        redireccionar($r["error"], "error", $seccionCli);
     }
     $txt = "Importación lista: " . $r["nuevos"] . " clientes nuevos y " . $r["actualizados"] . " actualizados.";
     if ($r["errores"]) {
         $txt .= " Filas omitidas por datos incompletos: " . implode(", ", $r["errores"]) . ".";
     }
-    redireccionar($txt, "exito", "clientes");
+    redireccionar($txt, "exito", $seccionCli);
 }
