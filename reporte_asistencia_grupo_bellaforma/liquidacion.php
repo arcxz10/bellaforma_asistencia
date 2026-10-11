@@ -1399,6 +1399,29 @@ foreach ($empleadosBase as $fila) {
             transform: none;
         }
 
+        .btn-pdf {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 13px;
+            background: var(--surface);
+            color: var(--ink-soft);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+            text-decoration: none;
+            margin-bottom: 6px;
+            transition: background .15s ease, color .15s ease, border-color .15s ease;
+        }
+
+        .btn-pdf:hover {
+            background: var(--canvas);
+            color: var(--primary-dark);
+            border-color: var(--primary);
+        }
+
         /* ===== TOTAL NÓMINA ===== */
         .total-nomina-caja {
             margin-top: 20px;
@@ -1654,6 +1677,15 @@ foreach ($empleadosBase as $fila) {
                                         <?php endif; ?>
                                     </td>
                                     <td>
+                                        <?php if (!empty($desde) && !empty($hasta)): ?>
+                                            <a
+                                                href="reporte_empleado_pdf.php?empleado_id=<?= (int) $fila["id"] ?>&desde=<?= urlencode($desde) ?>&hasta=<?= urlencode($hasta) ?>"
+                                                target="_blank"
+                                                class="btn-pdf"
+                                            >📄 PDF</a>
+                                        <?php else: ?>
+                                            <span class="sin-valor" style="display:block; margin-bottom:6px;">PDF: selecciona<br>un rango de fechas</span>
+                                        <?php endif; ?>
                                         <form method="POST" action="liquidacion.php" class="form-liquidar" style="display:inline;">
                                             <input type="hidden" name="accion" value="liquidar">
                                             <input type="hidden" name="empleado_id" value="<?= (int) $fila["id"] ?>">
