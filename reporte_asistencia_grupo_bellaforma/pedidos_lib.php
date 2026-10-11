@@ -21,7 +21,7 @@ function soloDigitos(string $s): string
 }
 
 /** Busca un cliente por NIT / cédula (acepta puntos, espacios y dígito de verificación con guion). */
-function buscarClientePorDocumento(mysqli $c, string $lista, string $raw): ?array
+function buscarClientePorDocumento(mysqli $c, string $raw): ?array
 {
     $raw = trim($raw);
     $norm = soloDigitos($raw);
@@ -36,7 +36,7 @@ function buscarClientePorDocumento(mysqli $c, string $lista, string $raw): ?arra
         }
     }
     foreach ($candidatos as $n) {
-        $tabla = tablaClientes($lista);
+        $tabla = tablaClientes();
         $stmt = $c->prepare("SELECT * FROM `$tabla` WHERE identificacion_norm = ? LIMIT 1");
         $stmt->bind_param("s", $n);
         $stmt->execute();
@@ -401,9 +401,14 @@ function manejarApiPedido(mysqli $conexion): void
         $accion = $in["accion"] ?? "";
 
         if ($accion === "buscar_cliente") {
-            $cli = buscarClientePorDocumento($conexion, listaValida($in["lista"] ?? ""), (string) ($in["doc"] ?? ""));
+            $cli = buscarClientePorDocumento($conexion, (string) ($in["doc"] ?? ""));
             if (!$cli) {
                 api_responder(["ok" => true, "encontrado" => false]);
+            }
+            // El cliente existe, pero está registrado con otro tipo (mayorista / detal): no se mezclan las listas de precios
+            $listaPedida = listaValida($in["lista"] ?? "");
+            if (($cli["tipo_cliente"] ?? "mayorista") !== $listaPedida) {
+                api_responder(["ok" => true, "encontrado" => false, "otro_tipo" => $cli["tipo_cliente"]]);
             }
             $ident = $cli["identificacion"] . (($cli["dv"] ?? "") !== "" && $cli["tipo_persona"] === "juridica" ? "-" . $cli["dv"] : "");
             api_responder(["ok" => true, "encontrado" => true, "cliente" => [
