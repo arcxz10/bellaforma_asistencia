@@ -98,17 +98,33 @@ foreach ($filas as $f) {
     <title>Reporte de Asistencia - <?= escapar($empleado["nombre"]) ?></title>
 
     <link rel="icon" type="image/x-icon" href="img/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
             --primary: #1565C0;
+            --primary-dark: #0D47A1;
+            --primary-light: #E9F2FE;
+            --success: #1E7A34;
+            --warning: #B7791F;
+            --danger: #C62839;
+            --danger-light: #FDEAEC;
+            --extra: #A0710A;
+            --extra-light: #FFF6E0;
             --ink: #16202E;
             --ink-soft: #5B6676;
+            --ink-faint: #93A0B1;
             --line: #E3E8F0;
-            --danger: #C62839;
-            --danger-bg: #FDEAEC;
-            --extra: #A0710A;
-            --extra-bg: #FFF6E0;
+            --surface: #FFFFFF;
+            --canvas: #F4F7FB;
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 7px;
+            --shadow-card: 0 1px 2px rgba(22,32,46,0.04), 0 8px 24px -12px rgba(22,32,46,0.10);
+            --font-display: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+            --font-body: "Inter", system-ui, -apple-system, sans-serif;
         }
 
         * {
@@ -116,9 +132,9 @@ foreach ($filas as $f) {
         }
 
         body {
-            font-family: "Inter", system-ui, -apple-system, sans-serif;
+            font-family: var(--font-body);
             color: var(--ink);
-            background: #F4F7FB;
+            background: var(--canvas);
             margin: 0;
             padding: 30px 16px;
         }
@@ -126,10 +142,11 @@ foreach ($filas as $f) {
         .hoja {
             max-width: 850px;
             margin: 0 auto;
-            background: #fff;
-            border-radius: 12px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-lg);
             padding: 40px 46px;
-            box-shadow: 0 1px 2px rgba(22,32,46,0.04), 0 8px 24px -12px rgba(22,32,46,0.12);
+            box-shadow: var(--shadow-card);
         }
 
         .encabezado {
@@ -137,14 +154,27 @@ foreach ($filas as $f) {
             align-items: center;
             justify-content: space-between;
             gap: 20px;
-            border-bottom: 2px solid var(--line);
+            border-bottom: 1px solid var(--line);
             padding-bottom: 20px;
             margin-bottom: 24px;
         }
 
+        .encabezado .marca {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
         .encabezado img {
-            height: 50px;
+            height: 44px;
             width: auto;
+        }
+
+        .encabezado .marca .nombre-empresa {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--ink);
         }
 
         .encabezado .titulo-reporte {
@@ -152,9 +182,11 @@ foreach ($filas as $f) {
         }
 
         .encabezado h1 {
-            font-size: 18px;
+            font-family: var(--font-display);
+            font-size: 19px;
+            font-weight: 700;
             margin: 0 0 4px;
-            color: var(--primary);
+            color: var(--ink);
         }
 
         .encabezado .subt {
@@ -167,12 +199,12 @@ foreach ($filas as $f) {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 10px 24px;
-            background: #F7F9FC;
-            border: 1px solid var(--line);
-            border-radius: 10px;
+            background: var(--primary-light);
+            border-radius: var(--radius-md);
             padding: 16px 20px;
             margin-bottom: 24px;
             font-size: 13.5px;
+            color: #0F3D73;
         }
 
         .datos-empleado .etiqueta {
@@ -181,32 +213,40 @@ foreach ($filas as $f) {
             margin-right: 6px;
         }
 
+        .tabla-contenedor {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
         }
 
         thead th {
             text-align: left;
-            font-size: 11px;
+            font-size: 11.5px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: .04em;
             color: var(--ink-soft);
             background: #FAFBFD;
             border-bottom: 1px solid var(--line);
-            padding: 10px 12px;
+            padding: 12px 14px;
         }
 
         tbody td {
-            padding: 10px 12px;
-            font-size: 13px;
+            padding: 11px 14px;
+            font-size: 13.5px;
             border-bottom: 1px solid var(--line);
             vertical-align: top;
         }
 
-        tbody tr:nth-child(even) {
-            background: #FBFCFE;
+        tbody tr:last-child td {
+            border-bottom: none;
         }
 
         .etiqueta-tarde {
@@ -215,7 +255,7 @@ foreach ($filas as $f) {
             font-size: 11px;
             font-weight: 700;
             color: var(--danger);
-            background: var(--danger-bg);
+            background: var(--danger-light);
             padding: 2px 7px;
             border-radius: 5px;
         }
@@ -226,13 +266,13 @@ foreach ($filas as $f) {
             font-size: 11px;
             font-weight: 700;
             color: var(--extra);
-            background: var(--extra-bg);
+            background: var(--extra-light);
             padding: 2px 7px;
             border-radius: 5px;
         }
 
         .sin-dato {
-            color: #B7BFCB;
+            color: var(--ink-faint);
         }
 
         .resumen {
@@ -244,28 +284,32 @@ foreach ($filas as $f) {
         .resumen .caja {
             flex: 1;
             border: 1px solid var(--line);
-            border-radius: 10px;
-            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
             text-align: center;
         }
 
         .resumen .caja .numero {
-            font-size: 17px;
+            font-family: var(--font-display);
+            font-size: 18px;
             font-weight: 800;
         }
 
         .resumen .caja .etiq {
             font-size: 11.5px;
             color: var(--ink-soft);
+            margin-top: 2px;
         }
 
+        .resumen .caja.retraso { background: var(--danger-light); }
         .resumen .caja.retraso .numero { color: var(--danger); }
+        .resumen .caja.extra { background: var(--extra-light); }
         .resumen .caja.extra .numero { color: var(--extra); }
 
         .pie {
             margin-top: 28px;
             font-size: 11px;
-            color: #B7BFCB;
+            color: var(--ink-faint);
             text-align: center;
         }
 
@@ -285,14 +329,17 @@ foreach ($filas as $f) {
             color: white;
             border: none;
             padding: 10px 20px;
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             font-weight: 700;
             font-size: 13.5px;
             cursor: pointer;
+            box-shadow: 0 6px 16px -6px rgba(21,101,192,0.55);
+            transition: background .15s ease, transform .15s ease;
         }
 
         .btn-imprimir:hover {
-            background: #0D47A1;
+            background: var(--primary-dark);
+            transform: translateY(-1px);
         }
 
         @media print {
@@ -306,6 +353,7 @@ foreach ($filas as $f) {
             .hoja {
                 box-shadow: none;
                 border-radius: 0;
+                border: none;
                 padding: 0;
                 max-width: 100%;
             }
@@ -323,7 +371,10 @@ foreach ($filas as $f) {
     <div class="hoja">
 
         <div class="encabezado">
-            <img src="img/logo-verde.png" alt="Grupo Bella Forma S.A.S.">
+            <div class="marca">
+                <img src="img/logo-verde.png" alt="Grupo Bella Forma S.A.S.">
+                <span class="nombre-empresa">Grupo Bella Forma S.A.S.</span>
+            </div>
             <div class="titulo-reporte">
                 <h1>Reporte de Asistencia</h1>
                 <p class="subt">Generado el <?= date("d/m/Y h:i A") ?></p>
@@ -337,6 +388,7 @@ foreach ($filas as $f) {
             <div><span class="etiqueta">Periodo:</span><?= date("d/m/Y", strtotime($desde)) ?> — <?= date("d/m/Y", strtotime($hasta)) ?></div>
         </div>
 
+        <div class="tabla-contenedor">
         <table>
             <thead>
                 <tr>
@@ -387,6 +439,7 @@ foreach ($filas as $f) {
                 <?php endif; ?>
             </tbody>
         </table>
+        </div>
 
         <?php if (!empty($filas)): ?>
             <div class="resumen">
