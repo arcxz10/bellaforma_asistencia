@@ -372,8 +372,8 @@ foreach ($filas as $f) {
 
         <div class="encabezado">
             <div class="marca">
-                <img src="img/logo-verde.png" alt="Grupo Bella Forma S.A.S.">
-                <span class="nombre-empresa">Grupo Bella Forma S.A.S.</span>
+                <img src="img/logo-verde.png" alt="Grupo Bellaforma S.A.S.">
+                <span class="nombre-empresa">Grupo Bellaforma S.A.S.</span>
             </div>
             <div class="titulo-reporte">
                 <h1>Reporte de Asistencia</h1>
