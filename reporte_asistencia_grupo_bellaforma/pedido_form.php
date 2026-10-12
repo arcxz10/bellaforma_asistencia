@@ -779,7 +779,9 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     /* ---------- La barra inferior siempre pegada a la parte visible de la pantalla ---------- */
     function ajustarBarra() {
         var vv = window.visualViewport, dif = 0;
-        if (vv) { dif = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); }
+        // Solo en celulares/tablets (pantalla táctil). En computador no hay teclado en pantalla y este cálculo subía la barra por error.
+        var tactil = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+        if (vv && tactil) { dif = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); }
         document.documentElement.style.setProperty("--vv-dif", dif + "px");
     }
     if (window.visualViewport) {
