@@ -44,7 +44,7 @@ button { cursor: pointer; }
 }
 .tab-btn.activo { background: var(--superficie); color: var(--azul-700); box-shadow: var(--sombra-sm); }
 .panel { display: none; }
-.panel.activo { display: block; animation: bf-entrar .3s ease-out both; }
+.panel.activo { display: block; animation: bf-entrar .3s ease-out backwards; }
 
 .mensaje { padding: 13px 15px; border-radius: var(--radio-md); margin-bottom: 14px; font-size: 15px; border: 1px solid transparent; border-left-width: 4px; }
 .mensaje.exito { background: var(--verde-100); color: #14501A; border-color: #BFE5C5; border-left-color: var(--verde-500); }
@@ -98,7 +98,7 @@ button { cursor: pointer; }
 .pf-estado { min-height: 22px; font-size: 13px; color: var(--tinta-suave); padding: 2px 4px 8px; }
 
 .pf-seccion { display: none; }
-.pf-seccion.activo { display: block; animation: bf-entrar .3s ease-out both; }
+.pf-seccion.activo { display: block; animation: bf-entrar .3s ease-out backwards; }
 .pf-card { background: var(--superficie); border: 1px solid var(--linea); border-radius: var(--radio-lg); padding: 18px; margin-bottom: 14px; box-shadow: var(--sombra-sm); }
 .pf-card h2 { margin: 0 0 10px; font-size: 20px; color: var(--azul-900); }
 .pf label { display: block; margin: 14px 0 6px; font-size: 14px; font-weight: 600; color: var(--tinta); }
