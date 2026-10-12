@@ -341,7 +341,15 @@ if (!empty($filas)) {
     }
 }
 
-$nombreArchivo = "Reporte_" . preg_replace('/[^A-Za-z0-9_]+/', '_', $empleado["nombre"]) . "_" . $desde . "_a_" . $hasta . ".pdf";
+// Nombre de archivo limpio: le quita tildes al nombre del empleado (en vez
+// de convertirlas en guiones bajos) para que quede legible, ej: "Jose_Perez".
+function nombreArchivoLimpio($texto)
+{
+    $sinTildes = iconv("UTF-8", "ASCII//TRANSLIT//IGNORE", (string) $texto);
+    return preg_replace('/[^A-Za-z0-9]+/', '_', $sinTildes);
+}
+
+$nombreArchivo = "Reporte_" . nombreArchivoLimpio($empleado["nombre"]) . "_" . $desde . "_a_" . $hasta . ".pdf";
 
 $pdf->Output("D", $nombreArchivo);
 exit;
