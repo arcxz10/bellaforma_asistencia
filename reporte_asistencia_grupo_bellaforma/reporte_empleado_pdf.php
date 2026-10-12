@@ -10,7 +10,11 @@ if (!isset($_SESSION["admin_id"])) {
     exit;
 }
 
+require_once __DIR__ . "/vendor/autoload.php";
 require_once "conexion.php";
+
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 date_default_timezone_set("America/Bogota");
 
@@ -79,387 +83,310 @@ $stmt->bind_param("iss", $empleadoId, $desde, $hasta);
 $stmt->execute();
 $filas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-$totalRetraso = 0;
-$totalExtra = 0;
+$totalRetrasoBruto = 0;
+$totalExtraBruto = 0;
 foreach ($filas as $f) {
-    $totalRetraso += (int) $f["minutos_retraso"];
-    $totalExtra += (int) $f["minutos_extra"];
+    $totalRetrasoBruto += (int) $f["minutos_retraso"];
+    $totalExtraBruto += (int) $f["minutos_extra"];
 }
 
+// --- Misma lógica de compensación que usa Liquidación: el tiempo extra ---
+// --- primero recupera el retraso. Lo que sobre de cada lado queda neto.  ---
+$compensado = min($totalRetrasoBruto, $totalExtraBruto);
+$retrasoNeto = max(0, $totalRetrasoBruto - $totalExtraBruto);
+$extraNeto = max(0, $totalExtraBruto - $totalRetrasoBruto);
+
+// --- Logo embebido en base64 (evita problemas de rutas dentro de Dompdf) ---
+$logoPath = __DIR__ . "/img/logo-verde.png";
+$logoBase64 = file_exists($logoPath)
+    ? "data:image/png;base64," . base64_encode(file_get_contents($logoPath))
+    : "";
+
+// ==========================================================================
+// Construcción del HTML. Dompdf soporta CSS limitado (sin flexbox, sin
+// grid, sin variables CSS), así que aquí se usan tablas y colores literales.
+// ==========================================================================
+ob_start();
 ?>
 <!DOCTYPE html>
-<html lang="es">
-
+<html>
 <head>
+<meta charset="UTF-8">
+<style>
+    body {
+        font-family: "DejaVu Sans", sans-serif;
+        color: #16202E;
+        font-size: 11.5px;
+    }
 
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    .encabezado-tabla {
+        width: 100%;
+        border-bottom: 1.5px solid #E3E8F0;
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+    }
 
-    <title>Reporte de Asistencia - <?= escapar($empleado["nombre"]) ?></title>
+    .encabezado-tabla td {
+        vertical-align: middle;
+    }
 
-    <link rel="icon" type="image/x-icon" href="img/favicon.ico">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    .logo-img {
+        height: 36px;
+    }
 
-    <style>
-        :root {
-            --primary: #1565C0;
-            --primary-dark: #0D47A1;
-            --primary-light: #E9F2FE;
-            --success: #1E7A34;
-            --warning: #B7791F;
-            --danger: #C62839;
-            --danger-light: #FDEAEC;
-            --extra: #A0710A;
-            --extra-light: #FFF6E0;
-            --ink: #16202E;
-            --ink-soft: #5B6676;
-            --ink-faint: #93A0B1;
-            --line: #E3E8F0;
-            --surface: #FFFFFF;
-            --canvas: #F4F7FB;
-            --radius-lg: 16px;
-            --radius-md: 10px;
-            --radius-sm: 7px;
-            --shadow-card: 0 1px 2px rgba(22,32,46,0.04), 0 8px 24px -12px rgba(22,32,46,0.10);
-            --font-display: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
-            --font-body: "Inter", system-ui, -apple-system, sans-serif;
-        }
+    .nombre-empresa {
+        font-size: 12px;
+        font-weight: bold;
+        padding-left: 10px;
+    }
 
-        * {
-            box-sizing: border-box;
-        }
+    .titulo-reporte {
+        text-align: right;
+    }
 
-        body {
-            font-family: var(--font-body);
-            color: var(--ink);
-            background: var(--canvas);
-            margin: 0;
-            padding: 30px 16px;
-        }
+    .titulo-reporte h1 {
+        font-size: 16px;
+        margin: 0 0 3px;
+        color: #16202E;
+    }
 
-        .hoja {
-            max-width: 850px;
-            margin: 0 auto;
-            background: var(--surface);
-            border: 1px solid var(--line);
-            border-radius: var(--radius-lg);
-            padding: 40px 46px;
-            box-shadow: var(--shadow-card);
-        }
+    .titulo-reporte p {
+        font-size: 10px;
+        color: #5B6676;
+        margin: 0;
+    }
 
-        .encabezado {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 20px;
-            border-bottom: 1px solid var(--line);
-            padding-bottom: 20px;
-            margin-bottom: 24px;
-        }
+    .datos-empleado {
+        width: 100%;
+        background-color: #E9F2FE;
+        border-radius: 6px;
+        margin-bottom: 18px;
+    }
 
-        .encabezado .marca {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
+    .datos-empleado td {
+        padding: 8px 14px;
+        font-size: 11px;
+        color: #0F3D73;
+    }
 
-        .encabezado img {
-            height: 44px;
-            width: auto;
-        }
+    .etiqueta {
+        color: #5B6676;
+        font-weight: bold;
+    }
 
-        .encabezado .marca .nombre-empresa {
-            font-family: var(--font-display);
-            font-weight: 700;
-            font-size: 14px;
-            color: var(--ink);
-        }
+    table.tabla-dias {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 18px;
+    }
 
-        .encabezado .titulo-reporte {
-            text-align: right;
-        }
+    table.tabla-dias th {
+        text-align: left;
+        font-size: 9.5px;
+        text-transform: uppercase;
+        color: #5B6676;
+        background-color: #FAFBFD;
+        border-bottom: 1px solid #E3E8F0;
+        padding: 8px 10px;
+    }
 
-        .encabezado h1 {
-            font-family: var(--font-display);
-            font-size: 19px;
-            font-weight: 700;
-            margin: 0 0 4px;
-            color: var(--ink);
-        }
+    table.tabla-dias td {
+        padding: 7px 10px;
+        font-size: 10.5px;
+        border-bottom: 1px solid #E3E8F0;
+        vertical-align: top;
+    }
 
-        .encabezado .subt {
-            font-size: 12.5px;
-            color: var(--ink-soft);
-            margin: 0;
-        }
+    .etiqueta-tarde {
+        color: #C62839;
+        font-weight: bold;
+        font-size: 9.5px;
+    }
 
-        .datos-empleado {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px 24px;
-            background: var(--primary-light);
-            border-radius: var(--radius-md);
-            padding: 16px 20px;
-            margin-bottom: 24px;
-            font-size: 13.5px;
-            color: #0F3D73;
-        }
+    .etiqueta-extra {
+        color: #A0710A;
+        font-weight: bold;
+        font-size: 9.5px;
+    }
 
-        .datos-empleado .etiqueta {
-            color: var(--ink-soft);
-            font-weight: 600;
-            margin-right: 6px;
-        }
+    .sin-dato {
+        color: #B7BFCB;
+    }
 
-        .tabla-contenedor {
-            background: var(--surface);
-            border: 1px solid var(--line);
-            border-radius: var(--radius-md);
-            overflow: hidden;
-            margin-bottom: 20px;
-        }
+    table.resumen-tabla {
+        width: 100%;
+        margin-bottom: 12px;
+    }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
+    table.resumen-tabla td {
+        width: 50%;
+        text-align: center;
+        padding: 10px;
+        font-size: 10px;
+        color: #5B6676;
+    }
 
-        thead th {
-            text-align: left;
-            font-size: 11.5px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-            color: var(--ink-soft);
-            background: #FAFBFD;
-            border-bottom: 1px solid var(--line);
-            padding: 12px 14px;
-        }
+    .caja-retraso {
+        background-color: #FDEAEC;
+        border-radius: 6px;
+    }
 
-        tbody td {
-            padding: 11px 14px;
-            font-size: 13.5px;
-            border-bottom: 1px solid var(--line);
-            vertical-align: top;
-        }
+    .caja-extra {
+        background-color: #FFF6E0;
+        border-radius: 6px;
+    }
 
-        tbody tr:last-child td {
-            border-bottom: none;
-        }
+    .numero-resumen {
+        font-size: 15px;
+        font-weight: bold;
+        display: block;
+        margin-bottom: 2px;
+    }
 
-        .etiqueta-tarde {
-            display: inline-block;
-            margin-top: 3px;
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--danger);
-            background: var(--danger-light);
-            padding: 2px 7px;
-            border-radius: 5px;
-        }
+    .color-retraso { color: #C62839; }
+    .color-extra { color: #A0710A; }
 
-        .etiqueta-extra {
-            display: inline-block;
-            margin-top: 3px;
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--extra);
-            background: var(--extra-light);
-            padding: 2px 7px;
-            border-radius: 5px;
-        }
+    .nota-compensacion {
+        background-color: #F4F7FB;
+        border-left: 3px solid #1565C0;
+        padding: 10px 14px;
+        font-size: 10px;
+        color: #16202E;
+        margin-bottom: 6px;
+    }
 
-        .sin-dato {
-            color: var(--ink-faint);
-        }
-
-        .resumen {
-            display: flex;
-            gap: 14px;
-            margin-top: 10px;
-        }
-
-        .resumen .caja {
-            flex: 1;
-            border: 1px solid var(--line);
-            border-radius: var(--radius-md);
-            padding: 14px 16px;
-            text-align: center;
-        }
-
-        .resumen .caja .numero {
-            font-family: var(--font-display);
-            font-size: 18px;
-            font-weight: 800;
-        }
-
-        .resumen .caja .etiq {
-            font-size: 11.5px;
-            color: var(--ink-soft);
-            margin-top: 2px;
-        }
-
-        .resumen .caja.retraso { background: var(--danger-light); }
-        .resumen .caja.retraso .numero { color: var(--danger); }
-        .resumen .caja.extra { background: var(--extra-light); }
-        .resumen .caja.extra .numero { color: var(--extra); }
-
-        .pie {
-            margin-top: 28px;
-            font-size: 11px;
-            color: var(--ink-faint);
-            text-align: center;
-        }
-
-        .barra-acciones {
-            max-width: 850px;
-            margin: 0 auto 16px;
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-
-        .btn-imprimir {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: var(--radius-sm);
-            font-weight: 700;
-            font-size: 13.5px;
-            cursor: pointer;
-            box-shadow: 0 6px 16px -6px rgba(21,101,192,0.55);
-            transition: background .15s ease, transform .15s ease;
-        }
-
-        .btn-imprimir:hover {
-            background: var(--primary-dark);
-            transform: translateY(-1px);
-        }
-
-        @media print {
-            body {
-                background: #fff;
-                padding: 0;
-            }
-            .barra-acciones {
-                display: none;
-            }
-            .hoja {
-                box-shadow: none;
-                border-radius: 0;
-                border: none;
-                padding: 0;
-                max-width: 100%;
-            }
-        }
-    </style>
-
+    .pie {
+        margin-top: 24px;
+        font-size: 9px;
+        color: #B7BFCB;
+        text-align: center;
+    }
+</style>
 </head>
-
 <body>
 
-    <div class="barra-acciones">
-        <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
-    </div>
-
-    <div class="hoja">
-
-        <div class="encabezado">
-            <div class="marca">
-                <img src="img/logo-verde.png" alt="Grupo Bellaforma S.A.S.">
-                <span class="nombre-empresa">Grupo Bellaforma S.A.S.</span>
-            </div>
-            <div class="titulo-reporte">
+    <table class="encabezado-tabla">
+        <tr>
+            <td style="width:50%;">
+                <?php if ($logoBase64): ?>
+                    <img src="<?= $logoBase64 ?>" class="logo-img">
+                <?php endif; ?>
+                <span class="nombre-empresa">Grupo Bella Forma S.A.S.</span>
+            </td>
+            <td class="titulo-reporte" style="width:50%;">
                 <h1>Reporte de Asistencia</h1>
-                <p class="subt">Generado el <?= date("d/m/Y h:i A") ?></p>
-            </div>
-        </div>
+                <p>Generado el <?= date("d/m/Y h:i A") ?></p>
+            </td>
+        </tr>
+    </table>
 
-        <div class="datos-empleado">
-            <div><span class="etiqueta">Empleado:</span><?= escapar($empleado["nombre"]) ?></div>
-            <div><span class="etiqueta">Identificación:</span><?= escapar($empleado["identificacion"]) ?></div>
-            <div><span class="etiqueta">Cargo:</span><?= escapar($empleado["cargo"]) ?></div>
-            <div><span class="etiqueta">Periodo:</span><?= date("d/m/Y", strtotime($desde)) ?> — <?= date("d/m/Y", strtotime($hasta)) ?></div>
-        </div>
+    <table class="datos-empleado">
+        <tr>
+            <td style="width:50%;"><span class="etiqueta">Empleado:</span> <?= escapar($empleado["nombre"]) ?></td>
+            <td style="width:50%;"><span class="etiqueta">Identificación:</span> <?= escapar($empleado["identificacion"]) ?></td>
+        </tr>
+        <tr>
+            <td><span class="etiqueta">Cargo:</span> <?= escapar($empleado["cargo"]) ?></td>
+            <td><span class="etiqueta">Periodo:</span> <?= date("d/m/Y", strtotime($desde)) ?> — <?= date("d/m/Y", strtotime($hasta)) ?></td>
+        </tr>
+    </table>
 
-        <div class="tabla-contenedor">
-        <table>
-            <thead>
+    <table class="tabla-dias">
+        <thead>
+            <tr>
+                <th style="width:34%;">Fecha</th>
+                <th style="width:33%;">Hora de entrada</th>
+                <th style="width:33%;">Hora de salida</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (empty($filas)): ?>
                 <tr>
-                    <th>Fecha</th>
-                    <th>Hora de entrada</th>
-                    <th>Hora de salida</th>
+                    <td colspan="3" style="text-align:center; color:#B7BFCB; padding:16px;">
+                        No hay registros de asistencia en este rango de fechas.
+                    </td>
                 </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($filas)): ?>
+            <?php else: ?>
+                <?php foreach ($filas as $f): ?>
+                    <?php
+                    $retraso = (int) $f["minutos_retraso"];
+                    $extra = (int) $f["minutos_extra"];
+                    $horaEntrada = horaBonita($f["hora_entrada"]);
+                    $horaSalida = horaBonita($f["hora_salida"]);
+                    ?>
                     <tr>
-                        <td colspan="3" style="text-align:center; color:#B7BFCB; padding:20px;">
-                            No hay registros de asistencia en este rango de fechas.
+                        <td><?= nombreDiaFecha($f["fecha"]) ?></td>
+                        <td>
+                            <?php if ($horaEntrada): ?>
+                                <?= $horaEntrada ?>
+                                <?php if ($retraso > 0): ?>
+                                    <br><span class="etiqueta-tarde">Tarde: <?= minutosAHoras($retraso) ?></span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="sin-dato">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($horaSalida): ?>
+                                <?= $horaSalida ?>
+                                <?php if ($extra > 0): ?>
+                                    <br><span class="etiqueta-extra">Extra: <?= minutosAHoras($extra) ?></span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="sin-dato">—</span>
+                            <?php endif; ?>
                         </td>
                     </tr>
-                <?php else: ?>
-                    <?php foreach ($filas as $f): ?>
-                        <?php
-                        $retraso = (int) $f["minutos_retraso"];
-                        $extra = (int) $f["minutos_extra"];
-                        $horaEntrada = horaBonita($f["hora_entrada"]);
-                        $horaSalida = horaBonita($f["hora_salida"]);
-                        ?>
-                        <tr>
-                            <td><?= nombreDiaFecha($f["fecha"]) ?></td>
-                            <td>
-                                <?php if ($horaEntrada): ?>
-                                    <?= $horaEntrada ?>
-                                    <?php if ($retraso > 0): ?>
-                                        <br><span class="etiqueta-tarde">Tarde: <?= minutosAHoras($retraso) ?></span>
-                                    <?php endif; ?>
-                                <?php else: ?>
-                                    <span class="sin-dato">—</span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if ($horaSalida): ?>
-                                    <?= $horaSalida ?>
-                                    <?php if ($extra > 0): ?>
-                                        <br><span class="etiqueta-extra">Extra: <?= minutosAHoras($extra) ?></span>
-                                    <?php endif; ?>
-                                <?php else: ?>
-                                    <span class="sin-dato">—</span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-        </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
+    </table>
 
-        <?php if (!empty($filas)): ?>
-            <div class="resumen">
-                <div class="caja retraso">
-                    <div class="numero"><?= minutosAHoras($totalRetraso) ?></div>
-                    <div class="etiq">Total retraso del periodo</div>
-                </div>
-                <div class="caja extra">
-                    <div class="numero"><?= minutosAHoras($totalExtra) ?></div>
-                    <div class="etiq">Total horas extra del periodo</div>
-                </div>
+    <?php if (!empty($filas)): ?>
+        <table class="resumen-tabla">
+            <tr>
+                <td class="caja-retraso">
+                    <span class="numero-resumen color-retraso"><?= minutosAHoras($totalRetrasoBruto) ?></span>
+                    Total retraso del periodo
+                </td>
+                <td class="caja-extra">
+                    <span class="numero-resumen color-extra"><?= minutosAHoras($totalExtraBruto) ?></span>
+                    Total horas extra del periodo
+                </td>
+            </tr>
+        </table>
+
+        <?php if ($compensado > 0): ?>
+            <div class="nota-compensacion">
+                ⚠ Se descuentan <strong><?= minutosAHoras($compensado) ?></strong> de las horas extra para compensar el retraso acumulado.<br>
+                <strong>Quedan pendientes:</strong>
+                Retraso: <?= $retrasoNeto > 0 ? minutosAHoras($retrasoNeto) : "0 min (ya compensado)" ?>
+                &nbsp;|&nbsp;
+                Extra: <?= $extraNeto > 0 ? minutosAHoras($extraNeto) : "0 min (ya compensado)" ?>
             </div>
         <?php endif; ?>
+    <?php endif; ?>
 
-        <div class="pie">
-            Grupo Bella Forma S.A.S. — Sistema de Asistencia y Control
-        </div>
-
+    <div class="pie">
+        Grupo Bella Forma S.A.S. — Sistema de Asistencia y Control
     </div>
 
 </body>
-
 </html>
+<?php
+$html = ob_get_clean();
+
+// --- Generar y descargar el PDF ---
+$opciones = new Options();
+$opciones->set("isRemoteEnabled", false);
+$opciones->set("defaultFont", "DejaVu Sans");
+
+$dompdf = new Dompdf($opciones);
+$dompdf->loadHtml($html);
+$dompdf->setPaper("A4", "portrait");
+$dompdf->render();
+
+$nombreArchivo = "Reporte_" . preg_replace('/[^A-Za-z0-9_]+/', '_', $empleado["nombre"]) . "_" . $desde . "_a_" . $hasta . ".pdf";
+
+$dompdf->stream($nombreArchivo, ["Attachment" => true]);
+exit;
