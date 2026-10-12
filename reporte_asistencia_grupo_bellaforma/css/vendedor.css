@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+/* @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import url("base.css");
 
 /* ===== Panel de ejecutivos de negocios (pensado para celular) ===== */
@@ -12,7 +12,7 @@ body {
     font-size: 16px;
     background: var(--lienzo);
     color: var(--tinta);
-    padding-bottom: 96px;
+    padding-bottom: 170px;   /* espacio para que la barra inferior no tape el final del formulario */
 }
 button, input, select, textarea { font-family: inherit; font-size: 16px; touch-action: manipulation; }
 button { cursor: pointer; }
@@ -168,10 +168,12 @@ button { cursor: pointer; }
 
 /* ---- Barra inferior fija ---- */
 .pf-barra {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    /* Barra flotante un poco elevada; --vv-dif la mantiene pegada a la parte visible aunque el teclado del celular se abra o se cierre */
+    position: fixed; left: 10px; right: 10px; z-index: 50;
+    bottom: calc(14px + var(--vv-dif, 0px) + env(safe-area-inset-bottom, 0px));
     background: linear-gradient(120deg, var(--azul-900), var(--azul-800)); color: #fff; display: flex; align-items: center; gap: 10px;
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-    box-shadow: 0 -12px 30px -14px rgba(7, 27, 64, .65);
+    padding: 10px 12px; border-radius: 18px;
+    box-shadow: 0 14px 34px -10px rgba(7, 27, 64, .6);
 }
 body.pf-kb .pf-barra { display: none; }
 .pf-atras { width: 48px; height: 48px; border-radius: var(--radio-md); border: none; background: rgba(255,255,255,.16); color: #fff; font-size: 22px; flex: none; }
@@ -183,7 +185,7 @@ body.pf-kb .pf-barra { display: none; }
 .pf-btn-prim:disabled { opacity: .6; }
 
 .pf-toast {
-    position: fixed; left: 12px; right: 12px; bottom: 90px; z-index: 60; padding: 14px 16px; border-radius: var(--radio-md);
+    position: fixed; left: 12px; right: 12px; bottom: calc(112px + var(--vv-dif, 0px)); z-index: 60; padding: 14px 16px; border-radius: var(--radio-md);
     background: var(--tinta); color: #fff; font-size: 15px; box-shadow: var(--sombra-md);
 }
 .pf-toast.error { background: var(--peligro); }
@@ -191,7 +193,7 @@ body.pf-kb .pf-barra { display: none; }
 .pf-lightbox img { max-width: 100%; max-height: 100%; border-radius: var(--radio-lg); background: #fff; }
 
 @media (min-width: 700px) {
-    .pf-barra { left: 50%; right: auto; width: 720px; transform: translateX(-50%); border-radius: 18px 18px 0 0; }
+    .pf-barra { left: 0; right: 0; margin: 0 auto; width: 720px; bottom: calc(22px + var(--vv-dif, 0px)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -223,3 +225,7 @@ body.pf-kb .pf-barra { display: none; }
 @media (prefers-reduced-motion: reduce) {
     .pf-dialogo-caja { animation: none; }
 }
+
+/* ---- Buscador de productos ---- */
+.pf-busq-nota { font-size: 13px; color: #6B4A00; background: var(--aviso-bg); border-radius: var(--radio-md); padding: 9px 13px; margin: 0 0 8px; }
+.pf-lista { display: flex; flex-direction: column; } */
