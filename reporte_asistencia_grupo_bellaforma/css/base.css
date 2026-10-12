@@ -325,7 +325,7 @@ label {
     border-left-width: 4px;
     font-size: 14px;
     line-height: 1.55;
-    animation: bf-entrar .35s ease-out both;
+    animation: bf-entrar .35s ease-out backwards;
 }
 
 .alert-icon,
@@ -427,6 +427,10 @@ label {
 
 @keyframes bf-girar { to { transform: rotate(360deg); } }
 
+/* IMPORTANTE: las animaciones que usan bf-entrar deben llevar fill-mode "backwards"
+   (nunca "both" ni "forwards"). Si una animación de transform se queda "rellenando"
+   al final, el contenedor se vuelve referencia de los elementos position:fixed de su
+   interior y estos (p. ej. la barra inferior del pedido) dejan de pegarse a la pantalla. */
 @keyframes bf-entrar {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
