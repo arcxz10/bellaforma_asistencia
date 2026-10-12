@@ -58,7 +58,7 @@ body {
     background: var(--superficie);
     border-radius: 26px;
     box-shadow: var(--sombra-md);
-    animation: bf-entrar .6s .1s cubic-bezier(.2, .7, .3, 1) both;
+    animation: bf-entrar .6s .1s cubic-bezier(.2, .7, .3, 1) backwards;
 }
 
 .login-card h2 {
