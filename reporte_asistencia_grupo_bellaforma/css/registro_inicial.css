@@ -18,7 +18,7 @@ body {
 .container-inicial {
     max-width: 640px;
     margin: 0 auto;
-    animation: bf-entrar .6s cubic-bezier(.2, .7, .3, 1) both;
+    animation: bf-entrar .6s cubic-bezier(.2, .7, .3, 1) backwards;
 }
 
 .card-inicial {
