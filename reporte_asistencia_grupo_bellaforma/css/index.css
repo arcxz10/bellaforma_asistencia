@@ -50,7 +50,7 @@ body {
     background: var(--superficie);
     border-radius: 26px;
     box-shadow: var(--sombra-md), 0 0 0 1px rgba(255, 255, 255, .5) inset;
-    animation: bf-entrar .6s .1s cubic-bezier(.2, .7, .3, 1) both;
+    animation: bf-entrar .6s .1s cubic-bezier(.2, .7, .3, 1) backwards;
 }
 
 .tarjeta h2 {
