@@ -151,6 +151,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             <input type="search" id="pfBuscarProd" placeholder="🔍 Buscar referencia o nombre" autocomplete="off">
             <button type="button" class="pf-chip" id="pfSoloSel">Elegidos</button>
         </div>
+        <div class="pf-busq-nota" id="pfBusqNota" hidden></div>
 
         <div class="pf-lista-etq" id="pfListaEtq"></div>
         <div class="pf-lista" id="pfLista">
@@ -452,16 +453,104 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         inp.addEventListener("blur", function () { pintarFila(f); });
     });
 
+    /* ---------- Búsqueda inteligente ----------
+       - Cada palabra se busca por separado (en cualquier orden): «laca negra» = laca + negra.
+       - No importan tildes, mayúsculas, plurales ni género (negro / negra / negros).
+       - Se entienden colores y términos en español e inglés (negro = black, rosado = pink, ...).
+       - Se puede escribir solo el inicio de la palabra («neg», «ros»).
+       - Si nada coincide con todas las palabras, se muestran los más parecidos. */
+    var GRUPOS = [
+        ["negro", "negra", "black", "azabache", "noir"],
+        ["blanco", "blanca", "white", "whithe"],
+        ["rojo", "roja", "red"],
+        ["azul", "blue", "blu", "navy", "royal", "marino"],
+        ["celeste", "sky", "cielo"],
+        ["verde", "green", "lima", "militar"],
+        ["amarillo", "amarilla", "yellow"],
+        ["naranja", "anaranjado", "orange", "tangerine"],
+        ["rosa", "rosado", "rosada", "pink", "rose"],
+        ["fucsia", "fuchsia", "fuxia", "magenta"],
+        ["morado", "morada", "violeta", "violetta", "purple", "violet", "lila", "lilac", "purpura"],
+        ["dorado", "dorada", "oro", "gold", "golden"],
+        ["plateado", "plateada", "plata", "silver", "silvery"],
+        ["cafe", "marron", "chocolate", "brown", "caramelo", "caramel"],
+        ["gris", "gray", "grey"],
+        ["beige", "nude", "piel", "arena"],
+        ["turquesa", "turquoise", "aqua", "agua"],
+        ["cobre", "copper"],
+        ["bronce", "bronze"],
+        ["glitter", "escarcha", "brillo", "brillante", "shimmer"],
+        ["neon", "fluor", "fluorescente"],
+        ["cejas", "ceja", "brow", "betun"],
+        ["labial", "labiales", "lipstick", "labios"],
+        ["delineador", "delineadores", "eyeliner", "liner"],
+        ["sombra", "sombras", "eyeshadow", "shadow"],
+        ["rubor", "rubores", "blush", "colorete"],
+        ["iluminador", "iluminadores", "highlighter", "glow"],
+        ["corrector", "correctores", "concealer"],
+        ["contorno", "contour", "contouring"],
+        ["perfume", "perfumes", "splash", "fragancia", "body"],
+        ["brocha", "brochas", "brush", "pincel"],
+        ["laca", "lacas", "lacquer"],
+        ["pigmento", "pigmentos", "pigment"],
+        ["paleta", "paletas", "palette"]
+    ];
+    todasLasFilas.forEach(function (f, i) {
+        var ref = f.querySelector(".pf-prod-info b").textContent;
+        var nom = f.querySelector(".pf-prod-info span").textContent;
+        f._txt = " " + norm(ref + " " + nom).replace(/[^a-z0-9]+/g, " ") + " ";
+        f._ref = norm(ref).replace(/[^a-z0-9]/g, "");
+        f._orden = i;
+        f.style.order = i;
+    });
+    function variantes(t) {
+        var v = [t];
+        if (t.length >= 4 && /s$/.test(t)) { v.push(t.slice(0, -1)); }
+        v.slice().forEach(function (x) { if (x.length >= 5 && /[ao]$/.test(x)) { v.push(x.slice(0, -1)); } });
+        return v;
+    }
+    function expandir(t) {
+        var alts = {};
+        var vt = variantes(t);
+        vt.forEach(function (x) { alts[x] = 1; });
+        GRUPOS.forEach(function (g) {
+            var coincide = g.some(function (m) { return m === t || (t.length >= 3 && m.indexOf(t) === 0) || vt.indexOf(m) !== -1; });
+            if (coincide) { g.forEach(function (m) { variantes(m).forEach(function (x) { alts[x] = 1; }); }); }
+        });
+        return Object.keys(alts);
+    }
+
     var soloSel = false;
     function filtrar() {
-        var q = norm($("pfBuscarProd").value.trim());
-        var vis = 0;
-        filas.forEach(function (f) {
-            var ok = (q === "" || norm(f.dataset.busq).indexOf(q) !== -1) && (!soloSel || cantidadDe(f.dataset.id) > 0);
-            f.hidden = !ok;
-            if (ok) { vis++; }
-        });
-        $("pfSinRes").hidden = vis !== 0 || filas.length === 0;
+        var q = norm($("pfBuscarProd").value).replace(/[^a-z0-9]+/g, " ").trim();
+        var terminos = q ? q.split(" ").filter(function (t) { return t.length >= 2 || /\d/.test(t); }) : [];
+        var candidatos = filas.filter(function (f) { return !soloSel || cantidadDe(f.dataset.id) > 0; });
+        var res = [];
+        if (!terminos.length) {
+            res = candidatos.map(function (f) { return { f: f, score: 1, full: true }; });
+        } else {
+            var exp = terminos.map(expandir);
+            var junto = terminos.join("");
+            candidatos.forEach(function (f) {
+                var s = 0;
+                exp.forEach(function (alts) { if (alts.some(function (a) { return f._txt.indexOf(a) !== -1; })) { s++; } });
+                var full = s === terminos.length || f._ref.indexOf(junto) !== -1;
+                if (s > 0 || full) { res.push({ f: f, score: full ? terminos.length + 1 : s, full: full }); }
+            });
+        }
+        var hayCompletas = res.some(function (r) { return r.full; });
+        var mostrar = hayCompletas ? res.filter(function (r) { return r.full; }) : res;
+        mostrar.sort(function (a, b) { return (b.score - a.score) || (a.f._orden - b.f._orden); });
+
+        filas.forEach(function (f) { f.hidden = true; });
+        mostrar.forEach(function (r, i) { r.f.hidden = false; r.f.style.order = i; });
+
+        var nota = $("pfBusqNota");
+        if (terminos.length && !hayCompletas && mostrar.length) {
+            nota.textContent = "No hay una coincidencia exacta con «" + $("pfBuscarProd").value.trim() + "». Estos son los más parecidos.";
+            nota.hidden = false;
+        } else { nota.hidden = true; }
+        $("pfSinRes").hidden = mostrar.length !== 0 || filas.length === 0;
     }
     $("pfBuscarProd").addEventListener("input", filtrar);
     $("pfSoloSel").addEventListener("click", function () {
@@ -687,6 +776,19 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (e.target.closest && e.target.closest("#pfLightbox")) { $("pfLightbox").hidden = true; }
     });
 
+    /* ---------- La barra inferior siempre pegada a la parte visible de la pantalla ---------- */
+    function ajustarBarra() {
+        var vv = window.visualViewport, dif = 0;
+        if (vv) { dif = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)); }
+        document.documentElement.style.setProperty("--vv-dif", dif + "px");
+    }
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", ajustarBarra);
+        window.visualViewport.addEventListener("scroll", ajustarBarra);
+    }
+    window.addEventListener("resize", ajustarBarra);
+    window.addEventListener("orientationchange", function () { setTimeout(ajustarBarra, 300); });
+
     /* ---------- Teclado: ocultar la barra inferior para que no se mueva ---------- */
     document.addEventListener("focusin", function (e) {
         if (e.target.matches && e.target.matches("input,textarea,select")) { document.body.classList.add("pf-kb"); }
@@ -695,6 +797,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         setTimeout(function () {
             var a = document.activeElement;
             if (!a || !a.matches || !a.matches("input,textarea,select")) { document.body.classList.remove("pf-kb"); }
+            ajustarBarra();
+            setTimeout(ajustarBarra, 400);   // por si el navegador tarda en recuperar el tamaño tras cerrar el teclado
         }, 120);
     });
 
