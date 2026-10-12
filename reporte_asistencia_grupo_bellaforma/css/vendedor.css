@@ -1,4 +1,4 @@
-/* @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import url("base.css");
 
 /* ===== Panel de ejecutivos de negocios (pensado para celular) ===== */
@@ -228,4 +228,4 @@ body.pf-kb .pf-barra { display: none; }
 
 /* ---- Buscador de productos ---- */
 .pf-busq-nota { font-size: 13px; color: #6B4A00; background: var(--aviso-bg); border-radius: var(--radio-md); padding: 9px 13px; margin: 0 0 8px; }
-.pf-lista { display: flex; flex-direction: column; } */
+.pf-lista { display: flex; flex-direction: column; }
