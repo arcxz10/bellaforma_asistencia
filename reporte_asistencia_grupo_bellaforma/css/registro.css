@@ -51,7 +51,7 @@ body {
 
 /* Nombre de la empresa junto al logo (sin tocar el HTML de cada página) */
 .header-title::after {
-    content: "Grupo Bellaforma";
+    content: "Grupo Bella Forma";
     font-size: 19px;
     letter-spacing: -.005em;
 }
@@ -70,7 +70,7 @@ body {
 .container-registro {
     max-width: 600px;
     margin: 0 auto;
-    animation: bf-entrar .6s cubic-bezier(.2, .7, .3, 1) both;
+    animation: bf-entrar .6s cubic-bezier(.2, .7, .3, 1) backwards;
 }
 
 .registro-card {
