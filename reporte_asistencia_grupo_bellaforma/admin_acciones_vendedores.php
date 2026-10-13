@@ -7,7 +7,7 @@
 $accionesPropias = [
     "vend_crear", "vend_editar", "vend_estado",
     "prod_crear", "prod_editar", "prod_estado", "prod_eliminar",
-    "ped_estado", "ped_eliminar",
+    "ped_estado", "ped_eliminar", "ped_numero",
     "cli_guardar", "cli_estado", "cli_importar",
     "prod_importar",
 ];
@@ -265,6 +265,35 @@ if ($accion === "ped_estado") {
     $stmt->close();
     $filaDoc = obtenerPedidos($conexion, ["con_borradores" => true], null, $id)[0] ?? ["id" => $id];
     redireccionar(tituloDocumento($filaDoc) . " marcado como: " . etiquetaEstadoPedido($estado), "exito", "pedidos");
+}
+
+if ($accion === "ped_numero") {
+    // Cambio rápido del tipo de documento y del número desde la lista de pedidos
+    $id = (int) ($_POST["id"] ?? 0);
+    $filaDoc = $id > 0 ? (obtenerPedidos($conexion, ["con_borradores" => true], null, $id)[0] ?? null) : null;
+    if (!$filaDoc) {
+        redireccionar("El pedido ya no existe.", "error", "pedidos");
+    }
+    $tipoNuevo = tipoDocumentoValido($_POST["tipo_documento"] ?? "pedido");
+    $numNuevo = trim((string) ($_POST["numero"] ?? ""));
+    $nombreNuevo = nombreCortoDocumento($tipoNuevo);
+    if ($numNuevo !== "" && (!preg_match('/^\d{1,10}$/', $numNuevo) || (int) $numNuevo < 1)) {
+        redireccionar("El número de la " . $nombreNuevo . " solo puede tener dígitos (máximo 10) y debe ser mayor que 0.", "error", "pedidos");
+    }
+    if ($filaDoc["estado"] !== "borrador") {
+        $revisar = $numNuevo !== "" ? (int) $numNuevo : (int) $filaDoc["id"];
+        if (numeroDocumentoEnUso($conexion, $tipoNuevo, $revisar, (int) $filaDoc["id"])) {
+            redireccionar("El número " . ($numNuevo !== "" ? $numNuevo : numeroPedido($revisar)) . " ya está en uso por otra " . $nombreNuevo . ". Escriba uno distinto.", "error", "pedidos");
+        }
+    }
+    $valorNum = $numNuevo !== "" ? $numNuevo : null;
+    $stmt = $conexion->prepare("UPDATE pedidos_vendedores SET tipo_pedido = ?, numero_pedido = ? WHERE id = ?");
+    $stmt->bind_param("ssi", $tipoNuevo, $valorNum, $id);
+    $stmt->execute();
+    $stmt->close();
+    $filaDoc["tipo_pedido"] = $tipoNuevo;
+    $filaDoc["numero_pedido"] = $valorNum;
+    redireccionar(tituloDocumento($filaDoc) . " actualizado.", "exito", "pedidos");
 }
 
 if ($accion === "ped_eliminar") {
