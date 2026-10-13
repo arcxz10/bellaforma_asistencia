@@ -1,8 +1,9 @@
 <?php
 /**
- * Descarga de pedidos en formato Syscafe (.XLS) para importarlos en el pedido de Syscafe.
- *   pedido_syscafe.php?id=12   -> un archivo .XLS
- *   pedido_syscafe.php?vendedor_p=..&estado_p=..&desde_p=..&hasta_p=..&buscar_p=..  -> un .ZIP con un .XLS por pedido
+ * Descarga de pedidos en formato Syscafe (.xlsx) para importarlos en Syscafe.
+ * Usa la plantilla de pedidos de Syscafe (PEDIDOS.xlsx, 60 columnas): ver syscafe_pedidos_xlsx.php
+ *   pedido_syscafe.php?id=12   -> un archivo .xlsx con ese pedido
+ *   pedido_syscafe.php?vendedor_p=..&estado_p=..&desde_p=..&hasta_p=..&buscar_p=..  -> un solo .xlsx con todos los pedidos filtrados
  */
 session_start();
 
@@ -17,7 +18,7 @@ ob_start();
 require_once "conexion.php";
 require_once "vendedores_db.php";
 require_once "pedidos_lib.php";
-require_once "xls_syscafe.php";
+require_once "syscafe_pedidos_xlsx.php";
 date_default_timezone_set("America/Bogota");
 asegurarTablasVendedores($conexion);
 
@@ -28,28 +29,21 @@ if (!$pedidos) {
 }
 
 $idUnico = (int) ($_GET["id"] ?? 0);
+$tipoMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 if ($idUnico > 0 || count($pedidos) === 1) {
     $p = $pedidos[0];
-    $binario = syscafe_xls(syscafe_filas_pedido($p));
-    ob_end_clean();
-    header("Content-Type: application/vnd.ms-excel");
-    header("Content-Disposition: attachment; filename=\"" . syscafe_nombre_archivo($p) . "\"");
-    header("Content-Length: " . strlen($binario));
-    header("Cache-Control: private, no-store");
-    echo $binario;
-    exit;
+    $binario = syscafe_pedidos_xlsx([$p]);
+    $nombre = syscafe_pe_nombre_archivo($p);
+} else {
+    // varios pedidos: un solo archivo, del más antiguo al más reciente
+    $binario = syscafe_pedidos_xlsx(array_reverse($pedidos));
+    $nombre = "PEDIDOS_SYSCAFE_" . date("Ymd_His") . ".xlsx";
 }
-
-$archivos = [];
-foreach (array_reverse($pedidos) as $p) {
-    $archivos[syscafe_nombre_archivo($p)] = syscafe_xls(syscafe_filas_pedido($p));
-}
-$zip = xlsx_zip($archivos);
 
 ob_end_clean();
-header("Content-Type: application/zip");
-header("Content-Disposition: attachment; filename=\"pedidos_syscafe_" . date("Ymd_His") . ".zip\"");
-header("Content-Length: " . strlen($zip));
+header("Content-Type: " . $tipoMime);
+header("Content-Disposition: attachment; filename=\"" . $nombre . "\"");
+header("Content-Length: " . strlen($binario));
 header("Cache-Control: private, no-store");
-echo $zip;
+echo $binario;
