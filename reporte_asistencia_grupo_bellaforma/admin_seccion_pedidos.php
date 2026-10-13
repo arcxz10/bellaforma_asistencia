@@ -5,6 +5,7 @@ $filtrosPed = [
     "vendedor" => (int) ($_GET["vendedor_p"] ?? 0),
     "estado"   => $_GET["estado_p"] ?? "",
     "tipo_cliente" => $_GET["tipo_p"] ?? "",
+    "tipo_documento" => $_GET["doc_p"] ?? "",
     "desde"    => $_GET["desde_p"] ?? "",
     "hasta"    => $_GET["hasta_p"] ?? "",
     "buscar"   => trim($_GET["buscar_p"] ?? ""),
@@ -22,6 +23,7 @@ $qsDescarga = http_build_query([
     "vendedor_p" => $filtrosPed["vendedor"] ?: "",
     "estado_p"   => $filtrosPed["estado"],
     "tipo_p"     => $filtrosPed["tipo_cliente"],
+    "doc_p"      => $filtrosPed["tipo_documento"],
     "desde_p"    => $filtrosPed["desde"],
     "hasta_p"    => $filtrosPed["hasta"],
     "buscar_p"   => $filtrosPed["buscar"],
@@ -37,6 +39,9 @@ foreach ($pedidosAdmin as $pp) {
 <style>
     .estado-borrador { background: #E8EAF6; color: #3949AB; }
     .grid-detalle span.et { color: #667; font-size: 12px; display: block; }
+    .tag-doc { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; background: #E3F2FD; color: #0D47A1; }
+    .tag-doc-remision { background: #FFF3E0; color: #E65100; }
+    .tag-doc-cotizacion { background: #F3E5F5; color: #6A1B9A; }
 </style>
 
 <section id="pedidos" class="section">
@@ -44,7 +49,7 @@ foreach ($pedidosAdmin as $pp) {
     <div class="cabecera-seccion">
         <div>
             <h2>🧾 Pedidos de ejecutivos</h2>
-            <p>Revise, edite y descargue los pedidos (PDF, archivo para Syscafe o Excel detallado). Márquelos «Subido a Syscafe» cuando ya estén digitados: desde ese momento el ejecutivo ya no puede editarlos.</p>
+            <p>Revise, edite y descargue los pedidos, remisiones y cotizaciones (PDF, archivo para Syscafe o Excel detallado). Márquelos «Subido a Syscafe» cuando ya estén digitados: desde ese momento el ejecutivo ya no puede editarlos.</p>
         </div>
         <?php if ($pedidosAdmin): ?>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -76,6 +81,15 @@ foreach ($pedidosAdmin as $pp) {
             </select>
         </div>
         <div>
+            <label for="doc_p">Tipo de documento</label>
+            <select id="doc_p" name="doc_p">
+                <option value="">Todos</option>
+                <?php foreach (tiposDocumentoPedido() as $clave => $infoDoc): ?>
+                    <option value="<?= $clave ?>" <?= $filtrosPed["tipo_documento"] === $clave ? "selected" : "" ?>><?= escapar($infoDoc[0]) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div>
             <label for="tipo_p">Tipo de cliente</label>
             <select id="tipo_p" name="tipo_p">
                 <option value="">Todos</option>
@@ -92,7 +106,7 @@ foreach ($pedidosAdmin as $pp) {
             <input type="date" id="hasta_p" name="hasta_p" value="<?= escapar($filtrosPed["hasta"]) ?>">
         </div>
         <div>
-            <label for="buscar_p">Cliente / NIT / N° pedido</label>
+            <label for="buscar_p">Cliente / NIT / N° documento</label>
             <input type="text" id="buscar_p" name="buscar_p" value="<?= escapar($filtrosPed["buscar"]) ?>">
         </div>
         <button type="submit" class="btn-filtrar">Filtrar</button>
@@ -107,7 +121,7 @@ foreach ($pedidosAdmin as $pp) {
         <table class="tabla">
             <thead>
                 <tr>
-                    <th>N°</th>
+                    <th>Documento / N°</th>
                     <th>Fecha</th>
                     <th>Ejecutivo</th>
                     <th>Cliente</th>
@@ -126,7 +140,10 @@ foreach ($pedidosAdmin as $pp) {
                     <?php foreach ($pedidosAdmin as $ped): ?>
                         <?php $esBorr = $ped["estado"] === "borrador"; ?>
                         <tr>
-                            <td><strong><?= numeroPedido($ped["id"]) ?></strong></td>
+                            <td>
+                                <span class="tag-doc tag-doc-<?= escapar(tipoDocumentoValido($ped["tipo_pedido"] ?? "pedido")) ?>"><?= escapar(etiquetaTipoDocumento($ped["tipo_pedido"] ?? "pedido")) ?></span><br>
+                                <strong><?= escapar(numeroDocumento($ped)) ?></strong>
+                            </td>
                             <td><?= date("d/m/Y H:i", strtotime($ped["actualizado_en"] ?? $ped["creado_en"])) ?></td>
                             <td><?= escapar($ped["vendedor_nombre"]) ?></td>
                             <td>
@@ -145,7 +162,8 @@ foreach ($pedidosAdmin as $pp) {
                                    <?= $ped["estado"] === "procesado" ? "onclick=\"return confirm('Este pedido ya está subido a Syscafe. ¿Editarlo de todos modos?')\"" : "" ?>>Editar</a>
                                 <button type="button" class="btn-eliminar btn-fila"
                                     data-id="<?= (int) $ped["id"] ?>"
-                                    data-num="<?= escapar(numeroPedido($ped["id"])) ?>"
+                                    data-num="<?= escapar(numeroDocumento($ped)) ?>"
+                                    data-doc="<?= escapar(etiquetaTipoDocumento($ped["tipo_pedido"] ?? "pedido")) ?>"
                                     data-cliente="<?= escapar($ped["cliente_nombre"] ?: "Sin cliente") ?>"
                                     data-total="<?= escapar(formatoCOP($ped["total"])) ?>"
                                     data-estado="<?= escapar($ped["estado"]) ?>"
@@ -165,10 +183,12 @@ foreach ($pedidosAdmin as $pp) {
                                 <?php endif; ?>
 
                                 <div id="detalle-ped-<?= (int) $ped["id"] ?>" style="display:none;">
-                                    <h3>Pedido #<?= numeroPedido($ped["id"]) ?> · <?= escapar(etiquetaEstadoPedido($ped["estado"])) ?></h3>
+                                    <h3><?= escapar(tituloDocumento($ped)) ?> · <?= escapar(etiquetaEstadoPedido($ped["estado"])) ?></h3>
                                     <div class="grid-detalle">
                                         <div><span class="et">Fecha</span><?= date("d/m/Y H:i", strtotime($ped["creado_en"])) ?></div>
                                         <div><span class="et">Ejecutivo</span><?= escapar($ped["vendedor_nombre"]) ?> (ID <?= escapar($ped["vendedor_identificacion"]) ?>)</div>
+                                        <div><span class="et">Tipo de documento</span><?= escapar(etiquetaTipoDocumento($ped["tipo_pedido"] ?? "pedido")) ?></div>
+                                        <div><span class="et">Número</span><?= escapar(numeroDocumento($ped)) ?><?= trim((string) ($ped["numero_pedido"] ?? "")) === "" ? " (automático)" : "" ?></div>
                                         <div><span class="et">Tipo de cliente (lista de precios)</span><?= escapar(etiquetaTipoCliente($ped["tipo_cliente"] ?? "mayorista")) ?></div>
                                         <div><span class="et">Persona</span><?= ($ped["cliente_tipo_persona"] ?? "juridica") === "natural" ? "Persona natural" : "Persona jurídica" ?></div>
                                         <div><span class="et"><?= ($ped["cliente_tipo_persona"] ?? "") === "natural" ? "Nombre completo" : "Razón social" ?></span><?= escapar($ped["cliente_nombre"]) ?: "—" ?></div>
@@ -229,7 +249,7 @@ foreach ($pedidosAdmin as $pp) {
 <div class="modal" id="modalEliminarPed">
     <div class="modal-contenido modal-confirmar" role="alertdialog" aria-modal="true" aria-labelledby="elimPedTitulo" aria-describedby="elimPedTexto">
         <div class="confirmar-icono">⚠️</div>
-        <h3 id="elimPedTitulo">¿Eliminar este pedido?</h3>
+        <h3 id="elimPedTitulo">¿Eliminar este documento?</h3>
         <p id="elimPedTexto" class="confirmar-texto"></p>
         <p id="elimPedExtra" class="confirmar-extra" style="display:none;"></p>
         <p class="confirmar-aviso">Se borrará de la base de datos con todos sus productos y <strong>no se puede deshacer</strong>.</p>
@@ -258,7 +278,7 @@ foreach ($pedidosAdmin as $pp) {
         var t = document.getElementById("elimPedTexto");
         t.innerHTML = "";
         var b = document.createElement("strong");
-        b.textContent = "Pedido #" + btn.dataset.num;
+        b.textContent = (btn.dataset.doc || "Pedido") + " #" + btn.dataset.num;
         t.appendChild(b);
         t.appendChild(document.createTextNode(" — " + btn.dataset.cliente + " — " + btn.dataset.total));
         var extra = document.getElementById("elimPedExtra");
