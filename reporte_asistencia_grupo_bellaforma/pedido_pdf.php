@@ -78,6 +78,8 @@ function encabezadoTabla(FPDF $pdf)
 foreach ($pedidos as $p) {
 
     $natural = ($p["cliente_tipo_persona"] ?? "juridica") === "natural";
+    $claveDoc = tipoDocumentoValido($p["tipo_pedido"] ?? "pedido");
+    $nombreDocPdf = tiposDocumentoPedido()[$claveDoc][2];   // PEDIDO / REMISION / COTIZACION
 
     $pdf->AddPage();
 
@@ -89,10 +91,10 @@ foreach ($pedidos as $p) {
     $pdf->SetFont("Arial", "B", 15);
     $pdf->Cell(110, 7, t("GRUPO BELLAFORMA S.A.S."), 0, 0, "L");
     $pdf->SetFont("Arial", "B", 13);
-    $pdf->Cell(76, 7, t("PEDIDO No. " . numeroPedido($p["id"])), 0, 1, "R");
+    $pdf->Cell(76, 7, t(($claveDoc === "pedido" ? "PEDIDO DE CLIENTE" : $nombreDocPdf) . " No. " . numeroDocumento($p)), 0, 1, "R");
     $pdf->SetX(12);
     $pdf->SetFont("Arial", "", 9);
-    $pdf->Cell(110, 6, t("Pedido de ejecutivo de negocios - para digitar en Syscafe"), 0, 0, "L");
+    $pdf->Cell(110, 6, t(($claveDoc === "pedido" ? "Pedido" : etiquetaTipoDocumento($claveDoc)) . " de ejecutivo de negocios - para digitar en Syscafe"), 0, 0, "L");
     $pdf->Cell(76, 6, t(date("d/m/Y H:i", strtotime($p["creado_en"])) . "  |  " . etiquetaEstadoPedido($p["estado"])), 0, 1, "R");
     $pdf->SetTextColor(0, 0, 0);
     $pdf->SetY(29);
@@ -163,13 +165,13 @@ foreach ($pedidos as $p) {
     }
     $pdf->SetFont("Arial", "B", 10);
     $pdf->Cell(112, 8, t("Total unidades: " . $totalUnidades), 0, 0, "L");
-    $pdf->Cell(45, 8, "TOTAL PEDIDO", 0, 0, "R");
+    $pdf->Cell(45, 8, t("TOTAL " . $nombreDocPdf), 0, 0, "R");
     $pdf->Cell(29, 8, cop($p["total"]), 0, 1, "R");
 }
 
 $idUnico = (int) ($_GET["id"] ?? 0);
 $nombreArchivo = $idUnico > 0
-    ? "pedido_" . numeroPedido($idUnico) . ".pdf"
+    ? tiposDocumentoPedido()[tipoDocumentoValido($pedidos[0]["tipo_pedido"] ?? "pedido")][3] . "_" . numeroDocumento($pedidos[0]) . ".pdf"
     : "pedidos_" . date("Ymd_His") . ".pdf";
 
 ob_end_clean();
