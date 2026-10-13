@@ -7,7 +7,7 @@
 $accionesPropias = [
     "vend_crear", "vend_editar", "vend_estado",
     "prod_crear", "prod_editar", "prod_estado", "prod_eliminar",
-    "ped_estado",
+    "ped_estado", "ped_eliminar",
     "cli_guardar", "cli_estado", "cli_importar",
     "prod_importar",
 ];
@@ -264,6 +264,37 @@ if ($accion === "ped_estado") {
     $stmt->execute();
     $stmt->close();
     redireccionar("Pedido #" . numeroPedido($id) . " marcado como: " . etiquetaEstadoPedido($estado), "exito", "pedidos");
+}
+
+if ($accion === "ped_eliminar") {
+    $id = (int) ($_POST["id"] ?? 0);
+    if ($id <= 0) {
+        redireccionar("Pedido no válido.", "error", "pedidos");
+    }
+    $stmt = $conexion->prepare("SELECT id FROM pedidos_vendedores WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $existe = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$existe) {
+        redireccionar("El pedido ya no existe.", "error", "pedidos");
+    }
+    try {
+        $conexion->begin_transaction();
+        $stmt = $conexion->prepare("DELETE FROM pedido_vendedor_items WHERE pedido_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $stmt->close();
+        $stmt = $conexion->prepare("DELETE FROM pedidos_vendedores WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $stmt->close();
+        $conexion->commit();
+    } catch (Throwable $ex) {
+        $conexion->rollback();
+        redireccionar("No se pudo eliminar el pedido: " . substr($ex->getMessage(), 0, 140), "error", "pedidos");
+    }
+    redireccionar("Pedido #" . numeroPedido($id) . " eliminado definitivamente.", "exito", "pedidos");
 }
 
 /* ---------------- CLIENTES (una sola base; el campo tipo_cliente indica mayorista o detal) ---------------- */
