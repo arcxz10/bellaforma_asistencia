@@ -143,6 +143,13 @@ foreach ($pedidosAdmin as $pp) {
                                 <button type="button" class="btn-editar btn-fila" onclick="verPedidoAdmin(<?= (int) $ped["id"] ?>)">Ver</button>
                                 <a class="btn-editar btn-fila" style="text-decoration:none;" href="admin_pedido_editar.php?id=<?= (int) $ped["id"] ?>"
                                    <?= $ped["estado"] === "procesado" ? "onclick=\"return confirm('Este pedido ya está subido a Syscafe. ¿Editarlo de todos modos?')\"" : "" ?>>Editar</a>
+                                <button type="button" class="btn-eliminar btn-fila"
+                                    data-id="<?= (int) $ped["id"] ?>"
+                                    data-num="<?= escapar(numeroPedido($ped["id"])) ?>"
+                                    data-cliente="<?= escapar($ped["cliente_nombre"] ?: "Sin cliente") ?>"
+                                    data-total="<?= escapar(formatoCOP($ped["total"])) ?>"
+                                    data-estado="<?= escapar($ped["estado"]) ?>"
+                                    onclick="pedirEliminarPedido(this)">Eliminar</button>
                                 <?php if (!$esBorr): ?>
                                     <a class="btn-activar btn-fila" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>">PDF</a>
                                     <a class="btn-activar btn-fila" style="background:#00796B;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>" title="Archivo .XLS para importar en Syscafe">Syscafe</a>
@@ -207,6 +214,34 @@ foreach ($pedidosAdmin as $pp) {
     </div>
 </section>
 
+<!-- MODAL CONFIRMAR ELIMINAR PEDIDO -->
+<style>
+    .modal-contenido.modal-confirmar { max-width: 420px; text-align: center; border-top: 5px solid var(--peligro); }
+    .modal-confirmar .confirmar-icono { width: 58px; height: 58px; margin: 0 auto 12px; border-radius: 50%; background: var(--peligro-bg); display: flex; align-items: center; justify-content: center; font-size: 28px; }
+    .modal-confirmar h3 { margin-bottom: 10px; }
+    .modal-confirmar .confirmar-texto { margin: 0 0 8px; padding: 10px 12px; background: var(--lienzo); border-radius: var(--radio-sm); color: var(--azul-900); font-size: 14px; word-break: break-word; }
+    .modal-confirmar .confirmar-extra { margin: 0 0 8px; padding: 9px 12px; background: var(--aviso-bg); border-radius: var(--radio-sm); color: var(--aviso); font-size: 13px; font-weight: 600; }
+    .modal-confirmar .confirmar-aviso { margin: 0 0 18px; font-size: 13px; color: var(--tinta-suave); }
+    .botones-confirmar { justify-content: center; }
+    .btn-confirmar-elim { background: linear-gradient(180deg, #D63A4B, var(--peligro)); }
+    .btn-confirmar-elim:hover { background: linear-gradient(180deg, #E04A5B, #A81F2E); }
+</style>
+<div class="modal" id="modalEliminarPed">
+    <div class="modal-contenido modal-confirmar" role="alertdialog" aria-modal="true" aria-labelledby="elimPedTitulo" aria-describedby="elimPedTexto">
+        <div class="confirmar-icono">⚠️</div>
+        <h3 id="elimPedTitulo">¿Eliminar este pedido?</h3>
+        <p id="elimPedTexto" class="confirmar-texto"></p>
+        <p id="elimPedExtra" class="confirmar-extra" style="display:none;"></p>
+        <p class="confirmar-aviso">Se borrará de la base de datos con todos sus productos y <strong>no se puede deshacer</strong>.</p>
+        <form method="POST" action="admin.php" class="botones-modal botones-confirmar">
+            <input type="hidden" name="accion" value="ped_eliminar">
+            <input type="hidden" name="id" id="elimPedId" value="">
+            <button type="button" class="btn-editar btn-cancelar-elim-ped" onclick="cerrarEliminarPedido()">Cancelar</button>
+            <button type="submit" class="btn-nuevo btn-confirmar-elim">Sí, eliminar</button>
+        </form>
+    </div>
+</div>
+
 <!-- MODAL DETALLE PEDIDO -->
 <div class="modal" id="modalPedidoAdmin">
     <div class="modal-contenido" style="max-width: 850px; width: 95%; max-height: 90vh; overflow-y: auto;">
@@ -218,6 +253,29 @@ foreach ($pedidosAdmin as $pp) {
 </div>
 
 <script>
+    function pedirEliminarPedido(btn) {
+        document.getElementById("elimPedId").value = btn.dataset.id;
+        var t = document.getElementById("elimPedTexto");
+        t.innerHTML = "";
+        var b = document.createElement("strong");
+        b.textContent = "Pedido #" + btn.dataset.num;
+        t.appendChild(b);
+        t.appendChild(document.createTextNode(" — " + btn.dataset.cliente + " — " + btn.dataset.total));
+        var extra = document.getElementById("elimPedExtra");
+        if (btn.dataset.estado === "procesado") {
+            extra.textContent = "Este pedido ya está marcado como subido a Syscafe.";
+            extra.style.display = "block";
+        } else {
+            extra.style.display = "none";
+        }
+        document.getElementById("modalEliminarPed").style.display = "flex";
+        document.querySelector("#modalEliminarPed .btn-cancelar-elim-ped").focus();
+    }
+    function cerrarEliminarPedido() { document.getElementById("modalEliminarPed").style.display = "none"; }
+    document.getElementById("modalEliminarPed").addEventListener("click", function (e) { if (e.target === this) { cerrarEliminarPedido(); } });
+
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { cerrarEliminarPedido(); } });
+
     function verPedidoAdmin(id) {
         var origen = document.getElementById("detalle-ped-" + id);
         if (!origen) { return; }
