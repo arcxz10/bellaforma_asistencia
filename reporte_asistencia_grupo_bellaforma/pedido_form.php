@@ -117,7 +117,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             <label for="pfDepto">Departamento *</label>
             <select id="pfDepto"><option value="">Cargando…</option></select>
 
-            <label for="pfMuni">Municipio *</label>
+            <label for="pfMuni">Municipio</label>
             <select id="pfMuni"><option value="">Primero elija departamento</option></select>
 
             <label for="pfBarrio">Barrio</label>
@@ -694,7 +694,6 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (!d.telefono) { return [1, "Ingrese un teléfono de contacto.", "pfTelefono"]; }
         var ubicacionOpcional = S.pedidoId && !D.departamento && CFG.estadoPedido !== "borrador" && CFG.estadoPedido !== "nuevo";
         if (!ubicacionOpcional && !d.departamento) { return [1, "Seleccione el departamento.", "pfDepto"]; }
-        if (!ubicacionOpcional && !d.municipio) { return [1, "Seleccione el municipio.", "pfMuni"]; }
         if (!d.direccion) { return [1, "Ingrese la dirección de entrega.", "pfDireccion"]; }
         if (S.fe && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email_fe || d.email)) { return [1, "Ingrese un correo válido para la factura electrónica.", "pfEmailFe"]; }
         if (!Object.keys(S.items).length) { return [2, "Elija al menos un producto.", "pfBuscarProd"]; }
