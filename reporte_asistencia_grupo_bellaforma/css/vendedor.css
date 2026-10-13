@@ -117,6 +117,9 @@ button { cursor: pointer; }
 .pf-segmento button small { display: block; font-weight: 400; font-size: 12px; color: var(--tinta-suave); margin-top: 2px; }
 .pf-segmento button.activo { border-color: var(--azul-500); background: var(--azul-50); color: var(--azul-700); box-shadow: 0 0 0 3px rgba(30, 123, 216, .12); }
 .pf-seg-2 button { min-height: 52px; }
+.pf-seg-3 { grid-template-columns: repeat(3, 1fr); }
+.pf-seg-3 button { min-height: 58px; padding-left: 6px; padding-right: 6px; font-size: 14px; line-height: 1.2; }
+@media (max-width: 420px) { .pf-seg-3 { grid-template-columns: 1fr; } .pf-seg-3 button { min-height: 48px; } }
 
 .pf-doc-fila { display: flex; gap: 8px; }
 .pf-doc-fila input { flex: 1; min-width: 0; }
