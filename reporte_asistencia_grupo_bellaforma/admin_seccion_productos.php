@@ -340,4 +340,57 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
         });
         document.getElementById("contadorProd").textContent = visibles + " productos";
     });
+
+    /* ---- Conservar la posición al guardar, activar o eliminar ---- */
+    (function () {
+        var CLAVE = "bf_pos_productos";
+        function contenedor() { return document.querySelector("#productos_mayoristas .tabla-contenedor"); }
+
+        document.addEventListener("submit", function (e) {
+            var f = e.target;
+            var acc = f && f.querySelector ? f.querySelector('input[name="accion"]') : null;
+            if (!acc || acc.value.indexOf("prod_") !== 0) { return; }
+            try {
+                var c = contenedor();
+                sessionStorage.setItem(CLAVE, JSON.stringify({
+                    y: window.pageYOffset || document.documentElement.scrollTop || 0,
+                    t: c ? c.scrollTop : 0,
+                    q: document.getElementById("buscarProd").value,
+                    ts: Date.now()
+                }));
+            } catch (err) { /* sin almacenamiento: se ignora */ }
+        });
+
+        function avisoFlotante() {
+            var m = document.querySelector(".content > .mensaje");
+            if (!m) { return; }
+            var t = m.cloneNode(true);
+            t.style.cssText = "position:fixed; top:16px; right:16px; z-index:2000; max-width:420px; margin:0; box-shadow:0 12px 30px -10px rgba(7,27,64,.45); transition:opacity .4s;";
+            document.body.appendChild(t);
+            setTimeout(function () { t.style.opacity = "0"; }, 4000);
+            setTimeout(function () { if (t.parentNode) { t.parentNode.removeChild(t); } }, 4500);
+        }
+
+        window.addEventListener("load", function () {
+            var guardado = null;
+            try {
+                guardado = JSON.parse(sessionStorage.getItem(CLAVE) || "null");
+                sessionStorage.removeItem(CLAVE);
+            } catch (err) { guardado = null; }
+            if (!guardado || Date.now() - guardado.ts > 60000) { return; }
+            if (window.location.hash !== "#productos_mayoristas") { return; }
+
+            var buscar = document.getElementById("buscarProd");
+            if (guardado.q) {
+                buscar.value = guardado.q;
+                buscar.dispatchEvent(new Event("input"));
+            }
+            setTimeout(function () {
+                var c = contenedor();
+                if (c) { c.scrollTop = guardado.t; }
+                window.scrollTo(0, guardado.y);
+                avisoFlotante();
+            }, 60);
+        });
+    })();
 </script>
