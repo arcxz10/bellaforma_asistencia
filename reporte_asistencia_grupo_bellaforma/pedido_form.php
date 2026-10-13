@@ -9,6 +9,8 @@
 $ped = $pf["pedido"] ?? null;
 
 $datosIniciales = [
+    "tipo_documento" => tipoDocumentoValido($ped["tipo_pedido"] ?? "pedido"),
+    "numero" => $ped["numero_pedido"] ?? "",
     "tipo_persona" => $ped["cliente_tipo_persona"] ?? "juridica",
     "identificacion" => $ped["cliente_nit"] ?? "",
     "cliente_nombre" => $ped["cliente_nombre"] ?? "",
@@ -52,6 +54,7 @@ $cfgJs = [
     "urlBase" => $pf["url_base"] ?? "",
     "pedidoId" => $ped ? (int) $ped["id"] : null,
     "estadoPedido" => $ped["estado"] ?? "nuevo",
+    "numeroAuto" => $ped ? numeroPedido($ped["id"]) : "",
     "tipoCliente" => $ped ? ($ped["tipo_cliente"] ?? "mayorista") : "",
     "datos" => $datosIniciales,
     "items" => (object) $itemsIniciales,
@@ -71,6 +74,18 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     <!-- ============ PASO 1: CLIENTE ============ -->
     <section class="pf-seccion activo" data-paso="1">
 
+        <div class="pf-card" id="pfCardTipoDoc">
+            <h2>¿Qué documento va a generar?</h2>
+            <div class="pf-segmento pf-seg-3" id="pfDocTipo">
+                <button type="button" data-doc="pedido">🛒 Pedido de cliente</button>
+                <button type="button" data-doc="remision">🚚 Remisión</button>
+                <button type="button" data-doc="cotizacion">📝 Cotización</button>
+            </div>
+            <label for="pfNumero" id="pfNumeroLabel">Número de pedido</label>
+            <input type="text" id="pfNumero" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off" placeholder="Automático">
+            <p class="pf-nota" id="pfNumeroNota">Déjelo vacío y el sistema asigna el número solo. Si escribe uno, ese mismo saldrá en el PDF y en el archivo de Syscafe.</p>
+        </div>
+
         <div class="pf-card" id="pfCardTipoCliente">
             <h2>¿Qué tipo de cliente es?</h2>
             <p class="pf-nota" style="margin:0 0 10px;">Elija primero el tipo: define la lista de precios del pedido.</p>
@@ -82,6 +97,18 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         </div>
 
         <div id="pfResto" class="pf-bloqueado">
+
+        <div class="pf-card">
+            <h2>Factura electrónica</h2>
+            <div class="pf-segmento pf-seg-2" id="pfFE">
+                <button type="button" data-fe="0" class="activo">No requiere</button>
+                <button type="button" data-fe="1">Sí, factura electrónica</button>
+            </div>
+            <div id="pfFEBox" hidden>
+                <label for="pfEmailFe">Correo para factura electrónica *</label>
+                <input type="email" id="pfEmailFe" maxlength="150" autocomplete="off" inputmode="email">
+            </div>
+        </div>
 
         <div class="pf-card">
             <h2>Datos del cliente</h2>
@@ -128,18 +155,6 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 
             <label for="pfPuntos">Puntos de referencia</label>
             <textarea id="pfPuntos" rows="2" maxlength="255" placeholder="Ej: frente al parque, local 2, al lado de la droguería"></textarea>
-        </div>
-
-        <div class="pf-card">
-            <h2>Factura electrónica</h2>
-            <div class="pf-segmento pf-seg-2" id="pfFE">
-                <button type="button" data-fe="0" class="activo">No requiere</button>
-                <button type="button" data-fe="1">Sí, factura electrónica</button>
-            </div>
-            <div id="pfFEBox" hidden>
-                <label for="pfEmailFe">Correo para factura electrónica *</label>
-                <input type="email" id="pfEmailFe" maxlength="150" autocomplete="off" inputmode="email">
-            </div>
         </div>
 
         </div><!-- /pfResto -->
@@ -255,7 +270,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 (function () {
     var CFG = window.PF_CFG;
     var $ = function (id) { return document.getElementById(id); };
-    var S = { paso: 1, tipo: "juridica", lista: "", clienteId: null, fe: 0, cond: "contado", pedidoId: CFG.pedidoId, items: {},
+    var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, cond: "contado", pedidoId: CFG.pedidoId, items: {},
               ocupado: false, sucio: false, timer: null, ignorar: false, docOk: "" };
 
     var todasLasFilas = Array.prototype.slice.call(document.querySelectorAll(".pf-prod"));
@@ -302,6 +317,31 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         clearTimeout(toast._t);
         toast._t = setTimeout(function () { t.hidden = true; }, 4500);
     }
+
+    /* ---------- Tipo de documento: pedido de cliente / remisión / cotización ---------- */
+    var NOMBRE_DOC = { pedido: "pedido", remision: "remisión", cotizacion: "cotización" };
+    function setDoc(d) {
+        S.doc = NOMBRE_DOC[d] ? d : "pedido";
+        Array.prototype.forEach.call(document.querySelectorAll("#pfDocTipo button"), function (b) {
+            b.classList.toggle("activo", b.dataset.doc === S.doc);
+        });
+        var n = NOMBRE_DOC[S.doc];
+        $("pfNumeroLabel").textContent = "Número de " + n;
+        $("pfNumero").placeholder = CFG.numeroAuto ? "Automático: " + CFG.numeroAuto : "Automático";
+        // El botón final dice «Enviar remisión», «Enviar cotización»… (al editar sigue diciendo «Guardar cambios»)
+        if (S.paso === 3) { $("pfPrincipal").textContent = textoPrincipal(); }
+    }
+    function textoPrincipal() {
+        return CFG.textoEnviar === "Enviar pedido" ? "Enviar " + NOMBRE_DOC[S.doc] : CFG.textoEnviar;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("#pfDocTipo button"), function (b) {
+        b.addEventListener("click", function () { if (b.dataset.doc !== S.doc) { setDoc(b.dataset.doc); sucio(); } });
+    });
+    $("pfNumero").addEventListener("input", function () {
+        var limpio = this.value.replace(/\D+/g, "").slice(0, 10);
+        if (limpio !== this.value) { this.value = limpio; }
+        sucio();
+    });
 
     /* ---------- Tipo de persona ---------- */
     function setTipo(t) {
@@ -602,7 +642,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         Array.prototype.forEach.call(document.querySelectorAll(".pf-seccion"), function (s) { s.classList.toggle("activo", s.dataset.paso === String(n)); });
         Array.prototype.forEach.call(document.querySelectorAll(".pf-paso-btn"), function (b) { b.classList.toggle("activo", b.dataset.paso === String(n)); });
         $("pfAtras").style.visibility = n === 1 ? "hidden" : "visible";
-        $("pfPrincipal").textContent = n === 3 ? CFG.textoEnviar : "Siguiente →";
+        $("pfPrincipal").textContent = n === 3 ? textoPrincipal() : "Siguiente →";
         $("pfPrincipal").classList.toggle("pf-enviar", n === 3);
         if (n === 3) { renderResumen(); }
         if (n === 2) { filtrar(); }
@@ -619,6 +659,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     /* ---------- Datos y guardado ---------- */
     function datos() {
         return {
+            tipo_documento: S.doc, numero: $("pfNumero").value.trim(),
             tipo_cliente: S.lista, tipo_persona: S.tipo, cliente_id: S.clienteId,
             identificacion: $("pfDoc").value.trim(), cliente_nombre: $("pfNombre").value.trim(),
             cliente_nombre_comercial: $("pfComercial").value.trim(), telefono: $("pfTelefono").value.trim(),
@@ -692,6 +733,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     function validar() {
         var d = datos();
         var nat = S.tipo === "natural";
+        if (d.numero && !(/^\d{1,10}$/.test(d.numero) && parseInt(d.numero, 10) >= 1)) { return [1, "El número de la " + NOMBRE_DOC[S.doc] + " debe tener solo dígitos y ser mayor que 0.", "pfNumero"]; }
         if (!S.lista) { return [1, "Elija primero el tipo de cliente: mayorista o detal.", "pfListaTipo"]; }
         if (!soloDig(d.identificacion)) { return [1, nat ? "Ingrese la cédula del cliente." : "Ingrese el NIT del cliente.", "pfDoc"]; }
         if (!d.cliente_nombre) { return [1, nat ? "Ingrese el nombre completo del cliente." : "Ingrese la razón social.", "pfNombre"]; }
@@ -715,10 +757,10 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         var edicion = S.pedidoId && CFG.estadoPedido !== "borrador" && CFG.estadoPedido !== "nuevo";
         var total = $("pfTotal").textContent;
         var texto = edicion
-            ? "Se guardarán los cambios del pedido. Total: " + total + "."
-            : "Se enviará el pedido por " + total + "." + (CFG.rol === "vendedor" ? " Podrás editarlo hasta que la oficina lo suba a Syscafe." : "");
+            ? "Se guardarán los cambios de la " + NOMBRE_DOC[S.doc] + ". Total: " + total + "."
+            : "Se enviará la " + NOMBRE_DOC[S.doc] + " por " + total + "." + (CFG.rol === "vendedor" ? " Podrás editarla hasta que la oficina la suba a Syscafe." : "");
         pfConfirmar({
-            titulo: edicion ? "¿Guardar los cambios?" : "¿Enviar el pedido?",
+            titulo: edicion ? "¿Guardar los cambios?" : "¿Enviar " + (S.doc === "pedido" ? "el pedido" : "la " + NOMBRE_DOC[S.doc]) + "?",
             texto: texto,
             icono: edicion ? "✏️" : "🛒",
             si: edicion ? "Guardar cambios" : "Sí, enviar",
@@ -865,6 +907,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 
     /* ---------- Carga inicial ---------- */
     var D = CFG.datos;
+    $("pfNumero").value = D.numero || "";
+    setDoc(D.tipo_documento);
     setTipo(D.tipo_persona);
     $("pfDoc").value = D.identificacion || "";
     $("pfNombre").value = D.cliente_nombre || "";
