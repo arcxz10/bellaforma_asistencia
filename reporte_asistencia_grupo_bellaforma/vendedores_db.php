@@ -5,7 +5,7 @@
  * - Funciones de formato y consulta de pedidos (admin.php, pedido_pdf.php, pedido_excel.php, vendedor.php).
  */
 
-const ESQUEMA_VEND_VERSION = 8;
+const ESQUEMA_VEND_VERSION = 9;
 
 function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
 {
@@ -293,6 +293,9 @@ function asegurarTablasVendedores(mysqli $c): void
     $ok = agregarColumna($c, "pedidos_vendedores", "dias_credito", "INT NULL") && $ok;
     $ok = agregarColumna($c, "pedidos_vendedores", "actualizado_en", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP") && $ok;
     $ok = agregarColumna($c, "pedidos_vendedores", "tipo_cliente", "VARCHAR(10) NOT NULL DEFAULT 'mayorista'") && $ok;
+    // Tipo de documento (pedido de cliente / remisión / cotización) y número editable (vacío = automático, usa el id)
+    $ok = agregarColumna($c, "pedidos_vendedores", "tipo_pedido", "VARCHAR(12) NOT NULL DEFAULT 'pedido'") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "numero_pedido", "VARCHAR(12) NULL") && $ok;
 
     // Solo se marca como terminado si TODO se aplicó; si no, se reintenta en la próxima visita
     if ($ok && $okPrecios && $okClientes) {
@@ -332,6 +335,63 @@ function claseEstadoPedido(string $estado): string
 function numeroPedido($id): string
 {
     return str_pad((string) (int) $id, 6, "0", STR_PAD_LEFT);
+}
+
+/* ---------- Tipo de documento: pedido de cliente / remisión / cotización ---------- */
+
+/** clave => [etiqueta completa, nombre corto, MAYÚSCULAS sin tilde (PDF), prefijo de archivo] */
+function tiposDocumentoPedido(): array
+{
+    return [
+        "pedido"     => ["Pedido de cliente", "pedido",     "PEDIDO",     "pedido"],
+        "remision"   => ["Remisión",          "remisión",   "REMISION",   "remision"],
+        "cotizacion" => ["Cotización",        "cotización", "COTIZACION", "cotizacion"],
+    ];
+}
+
+function tipoDocumentoValido($t): string
+{
+    return array_key_exists((string) $t, tiposDocumentoPedido()) ? (string) $t : "pedido";
+}
+
+function etiquetaTipoDocumento($t): string
+{
+    return tiposDocumentoPedido()[tipoDocumentoValido($t)][0];
+}
+
+function nombreCortoDocumento($t): string
+{
+    return tiposDocumentoPedido()[tipoDocumentoValido($t)][1];
+}
+
+/** Número que se muestra y se exporta: el que escribió el usuario o, si lo dejó vacío, el automático (id con ceros). */
+function numeroDocumento(array $p): string
+{
+    $n = trim((string) ($p["numero_pedido"] ?? ""));
+    return $n !== "" ? $n : numeroPedido($p["id"] ?? 0);
+}
+
+/** Ej: "Remisión #4522" */
+function tituloDocumento(array $p): string
+{
+    return etiquetaTipoDocumento($p["tipo_pedido"] ?? "pedido") . " #" . numeroDocumento($p);
+}
+
+/** ¿Ya hay otro documento (no borrador) del mismo tipo con ese número? Compara como número: 0045 = 45. */
+function numeroDocumentoEnUso(mysqli $c, string $tipo, int $numero, int $excluirId): bool
+{
+    $st = $c->prepare(
+        "SELECT id FROM pedidos_vendedores
+         WHERE tipo_pedido = ? AND estado <> 'borrador' AND id <> ?
+           AND CAST(COALESCE(NULLIF(numero_pedido, ''), CAST(id AS CHAR)) AS UNSIGNED) = ?
+         LIMIT 1"
+    );
+    $st->bind_param("sii", $tipo, $excluirId, $numero);
+    $st->execute();
+    $res = $st->get_result();
+    $uso = $res && $res->fetch_assoc();
+    $st->close();
+    return (bool) $uso;
 }
 
 function etiquetaDocumento(string $tipoPersona): string
@@ -403,6 +463,13 @@ function obtenerPedidos(mysqli $c, array $f = [], ?int $limite = 300, ?int $id =
             $params[] = $tc;
         }
 
+        $td = $f["tipo_documento"] ?? "";
+        if (array_key_exists($td, tiposDocumentoPedido())) {
+            $where[] = "p.tipo_pedido = ?";
+            $tipos .= "s";
+            $params[] = $td;
+        }
+
         $estado = $f["estado"] ?? "";
         if (in_array($estado, ["borrador", "pendiente", "procesado", "anulado"], true)) {
             $where[] = "p.estado = ?";
@@ -427,10 +494,10 @@ function obtenerPedidos(mysqli $c, array $f = [], ?int $limite = 300, ?int $id =
 
         $buscar = trim($f["buscar"] ?? "");
         if ($buscar !== "") {
-            $where[] = "(p.cliente_nombre LIKE ? OR p.cliente_nombre_comercial LIKE ? OR p.cliente_nit LIKE ? OR p.cliente_ciudad LIKE ? OR p.id = ?)";
+            $where[] = "(p.cliente_nombre LIKE ? OR p.cliente_nombre_comercial LIKE ? OR p.cliente_nit LIKE ? OR p.cliente_ciudad LIKE ? OR p.numero_pedido = ? OR p.id = ?)";
             $like = "%" . $buscar . "%";
-            $tipos .= "ssssi";
-            array_push($params, $like, $like, $like, $like, (int) $buscar);
+            $tipos .= "sssssi";
+            array_push($params, $like, $like, $like, $like, ltrim($buscar, "#"), (int) $buscar);
         }
     }
 
