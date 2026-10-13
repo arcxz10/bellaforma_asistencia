@@ -111,6 +111,12 @@ function tarjetaPedido(array $ped, string $csrf): void
             <span class="p-cli"><?= e($nombre) ?> <span class="pf-tag-lista <?= e(listaValida($ped["tipo_cliente"] ?? "")) ?>"><?= e(etiquetaTipoCliente($ped["tipo_cliente"] ?? "mayorista")) ?></span></span>
             <span class="p-fecha"><?= date("d/m/Y H:i", strtotime($ped["actualizado_en"] ?? $ped["creado_en"])) ?></span>
             <span class="p-total"><?= formatoCOP($ped["total"]) ?></span>
+            <?php if ($esBorrador): ?>
+                <span style="grid-column:1 / -1; display:flex; gap:8px; margin-top:6px;">
+                    <button type="button" class="btn btn-rojo" style="min-height:40px; padding:6px 14px; font-size:14px;"
+                        onclick="event.preventDefault(); event.stopPropagation(); bfEliminarBorrador(document.getElementById('del-borrador-<?= (int) $ped["id"] ?>'));">🗑️ Eliminar borrador</button>
+                </span>
+            <?php endif; ?>
         </summary>
         <div class="cuerpo">
             <div class="datos">
@@ -137,7 +143,7 @@ function tarjetaPedido(array $ped, string $csrf): void
             <div class="acciones-ped">
                 <?php if ($esBorrador): ?>
                     <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Continuar</a>
-                    <form method="POST" action="vendedor.php" onsubmit="return pfConfirmarForm(this, 'Se eliminará este borrador y no se podrá recuperar.', '¿Eliminar borrador?')">
+                    <form method="POST" action="vendedor.php" id="del-borrador-<?= (int) $ped["id"] ?>" onsubmit="return bfEliminarBorrador(this)">
                         <input type="hidden" name="accion" value="eliminar_borrador">
                         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
                         <input type="hidden" name="pedido_id" value="<?= (int) $ped["id"] ?>">
@@ -211,7 +217,34 @@ function tarjetaPedido(array $ped, string $csrf): void
         </div>
     </div>
 
+    <div class="pf-dialogo" id="bfDialogo" hidden>
+        <div class="pf-dialogo-caja" role="dialog" aria-modal="true" aria-labelledby="bfDialogoTitulo">
+            <div class="pf-dialogo-icono">🗑️</div>
+            <h3 id="bfDialogoTitulo">¿Eliminar borrador?</h3>
+            <p>Se eliminará este borrador y no se podrá recuperar. Los pedidos ya enviados no se pueden eliminar.</p>
+            <div class="pf-dialogo-botones">
+                <button type="button" class="pf-dialogo-no" id="bfDialogoNo">Cancelar</button>
+                <button type="button" class="pf-dialogo-si peligro" id="bfDialogoSi">Sí, eliminar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        var bfFormBorrador = null;
+        function bfCerrarDialogo() { document.getElementById("bfDialogo").hidden = true; bfFormBorrador = null; }
+        function bfEliminarBorrador(form) {
+            bfFormBorrador = form;
+            document.getElementById("bfDialogo").hidden = false;
+            return false;
+        }
+        document.getElementById("bfDialogoNo").addEventListener("click", bfCerrarDialogo);
+        document.getElementById("bfDialogoSi").addEventListener("click", function () {
+            var f = bfFormBorrador;
+            bfCerrarDialogo();
+            if (f) { f.submit(); }
+        });
+        document.getElementById("bfDialogo").addEventListener("click", function (e) { if (e.target === this) { bfCerrarDialogo(); } });
+
         function abrirPanel(nombre) {
             var panel = document.getElementById("panel-" + nombre);
             if (!panel) { nombre = "nuevo"; panel = document.getElementById("panel-nuevo"); }
