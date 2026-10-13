@@ -21,6 +21,14 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
     .modal-contenido.modal-scroll { max-height: 90vh; overflow-y: auto; }
     .caja-carga { background: #fff; border: 1px dashed #90CAF9; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
     .sin-precio { color: #b00020; font-size: 12px; }
+    .modal-contenido.modal-confirmar { max-width: 420px; text-align: center; border-top: 5px solid var(--peligro); }
+    .modal-confirmar .confirmar-icono { width: 58px; height: 58px; margin: 0 auto 12px; border-radius: 50%; background: var(--peligro-bg); display: flex; align-items: center; justify-content: center; font-size: 28px; }
+    .modal-confirmar h3 { margin-bottom: 10px; }
+    .modal-confirmar .confirmar-texto { margin: 0 0 8px; padding: 10px 12px; background: var(--lienzo); border-radius: var(--radio-sm); color: var(--azul-900); font-size: 14px; word-break: break-word; }
+    .modal-confirmar .confirmar-aviso { margin: 0 0 18px; font-size: 13px; color: var(--tinta-suave); }
+    .botones-confirmar { justify-content: center; }
+    .btn-confirmar-elim { background: linear-gradient(180deg, #D63A4B, var(--peligro)); }
+    .btn-confirmar-elim:hover { background: linear-gradient(180deg, #E04A5B, #A81F2E); }
 </style>
 
 <section id="productos_mayoristas" class="section">
@@ -106,16 +114,20 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
                                     ], JSON_UNESCAPED_UNICODE)) ?>"
                                     onclick="editarProducto(this)">Editar</button>
 
-                                <form method="POST" action="admin.php" class="form-inline">
-                                    <input type="hidden" name="accion" value="prod_estado">
-                                    <input type="hidden" name="id" value="<?= (int) $p["id"] ?>">
-                                    <input type="hidden" name="activo" value="<?= (int) $p["activo"] === 1 ? 0 : 1 ?>">
-                                    <?php if ((int) $p["activo"] === 1): ?>
-                                        <button type="submit" class="btn-eliminar btn-fila">Desactivar</button>
-                                    <?php else: ?>
+                                <?php if ((int) $p["activo"] !== 1): ?>
+                                    <form method="POST" action="admin.php" class="form-inline">
+                                        <input type="hidden" name="accion" value="prod_estado">
+                                        <input type="hidden" name="id" value="<?= (int) $p["id"] ?>">
+                                        <input type="hidden" name="activo" value="1">
                                         <button type="submit" class="btn-activar btn-fila">Activar</button>
-                                    <?php endif; ?>
-                                </form>
+                                    </form>
+                                <?php endif; ?>
+
+                                <button type="button" class="btn-eliminar btn-fila"
+                                    data-id="<?= (int) $p["id"] ?>"
+                                    data-ref="<?= escapar($p["referencia"]) ?>"
+                                    data-nombre="<?= escapar($p["nombre"]) ?>"
+                                    onclick="pedirEliminarProducto(this)">Eliminar</button>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -165,6 +177,39 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
         </form>
     </div>
 </div>
+
+<!-- MODAL CONFIRMAR ELIMINAR PRODUCTO -->
+<div class="modal" id="modalEliminarProd">
+    <div class="modal-contenido modal-confirmar" role="alertdialog" aria-modal="true" aria-labelledby="elimTitulo" aria-describedby="elimTexto">
+        <div class="confirmar-icono">⚠️</div>
+        <h3 id="elimTitulo">¿Eliminar este producto?</h3>
+        <p id="elimTexto" class="confirmar-texto"></p>
+        <p class="confirmar-aviso">Se borrará de la base de datos junto con su foto y <strong>no se puede deshacer</strong>.</p>
+        <form method="POST" action="admin.php" class="botones-modal botones-confirmar">
+            <input type="hidden" name="accion" value="prod_eliminar">
+            <input type="hidden" name="id" id="elimId" value="">
+            <button type="button" class="btn-editar btn-cancelar-elim" onclick="cerrarEliminarProd()">Cancelar</button>
+            <button type="submit" class="btn-nuevo btn-confirmar-elim">Sí, eliminar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function pedirEliminarProducto(btn) {
+        document.getElementById("elimId").value = btn.dataset.id;
+        document.getElementById("elimTexto").innerHTML = "";
+        var t = document.getElementById("elimTexto");
+        var b = document.createElement("strong");
+        b.textContent = btn.dataset.ref;
+        t.appendChild(b);
+        t.appendChild(document.createTextNode(" — " + btn.dataset.nombre));
+        document.getElementById("modalEliminarProd").style.display = "flex";
+        document.querySelector("#modalEliminarProd .btn-cancelar-elim").focus();
+    }
+    function cerrarEliminarProd() { document.getElementById("modalEliminarProd").style.display = "none"; }
+    document.getElementById("modalEliminarProd").addEventListener("click", function (e) { if (e.target === this) { cerrarEliminarProd(); } });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { cerrarEliminarProd(); } });
+</script>
 
 <script>
     function mostrarPrevProd(url) {
