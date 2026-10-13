@@ -10,8 +10,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 $tipo = $_POST["tipo"] ?? "";
 
 if ($tipo !== "admin") {
-    $_SESSION["error"] = "Tipo de acceso no válido.";
-    header("Location: login.html");
+    header("Location: login.html?error=tipo");
     exit;
 }
 
@@ -19,8 +18,7 @@ $usuario = trim($_POST["usuario"] ?? "");
 $password = $_POST["password"] ?? "";
 
 if ($usuario === "" || $password === "") {
-    $_SESSION["error"] = "Debe ingresar usuario y contraseña.";
-    header("Location: login.html");
+    header("Location: login.html?error=vacio&u=" . urlencode($usuario));
     exit;
 }
 
@@ -28,8 +26,7 @@ $sql = "SELECT id, usuario, contraseña, activo FROM administradores WHERE usuar
 $stmt = $conexion->prepare($sql);
 
 if (!$stmt) {
-    $_SESSION["error"] = "No se pudo procesar el inicio de sesión.";
-    header("Location: login.html");
+    header("Location: login.html?error=sistema");
     exit;
 }
 
@@ -39,8 +36,7 @@ $resultado = $stmt->get_result();
 
 if ($resultado->num_rows !== 1) {
     $stmt->close();
-    $_SESSION["error"] = "Usuario o contraseña incorrectos.";
-    header("Location: login.html");
+    header("Location: login.html?error=credenciales&u=" . urlencode($usuario));
     exit;
 }
 
@@ -68,8 +64,7 @@ if (password_verify($password, $contraseñaGuardada)) {
 }
 
 if (!$contraseñaCorrecta) {
-    $_SESSION["error"] = "Usuario o contraseña incorrectos.";
-    header("Location: login.html");
+    header("Location: login.html?error=credenciales&u=" . urlencode($usuario));
     exit;
 }
 
