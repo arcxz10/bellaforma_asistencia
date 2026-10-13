@@ -53,16 +53,27 @@ function syscafe_mayusculas(string $s): string
     return strtr(strtoupper($s), ["á" => "Á", "é" => "É", "í" => "Í", "ó" => "Ó", "ú" => "Ú", "ü" => "Ü", "ñ" => "Ñ"]);
 }
 
+/** NIT / cédula del cliente solo con números y sin dígito de verificación (900123456-7 -> 900123456). */
+function syscafe_nit(array $pedido): string
+{
+    $raw = trim((string) ($pedido["cliente_nit"] ?? ""));
+    if (strpos($raw, "-") !== false) {
+        $raw = explode("-", $raw)[0];
+    }
+    return preg_replace('/\D+/', "", $raw) ?? "";
+}
+
 /** Filas de un pedido en el formato de Syscafe (más la fila final vacía que Syscafe siempre exporta). */
 function syscafe_filas_pedido(array $pedido): array
 {
     $filas = [];
+    $nit = syscafe_nit($pedido);
     foreach ($pedido["items"] as $it) {
         $precio = (float) $it["precio_unitario"];
         $filas[] = [
             (string) $it["referencia"], "", syscafe_mayusculas((string) $it["nombre"]),
             (float) $it["cantidad"], 0.0, $precio, $precio, (float) $it["subtotal"], 0.0, 0.0,
-            "", "", "", "", "", "A",
+            $nit, "", "", "", "", "A",   // tercero3 = NIT / cédula del cliente
         ];
     }
     $filas[] = ["", "", "", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "", "", "", "", "", ""];
