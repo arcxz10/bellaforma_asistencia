@@ -2,6 +2,13 @@
 session_start();
 
 if (empty($_SESSION["vendedor_id"])) {
+    // Las llamadas del formulario de pedidos esperan JSON, no una redirección a la pantalla de ingreso
+    if (isset($_GET["api"])) {
+        http_response_code(401);
+        header("Content-Type: application/json; charset=utf-8");
+        echo json_encode(["ok" => false, "sesion_expirada" => true, "error" => "Su sesión expiró (puede pasar cuando se actualiza el sistema). Abra el ingreso de ejecutivos en otra pestaña, inicie sesión y vuelva a abrir el pedido. Lo que ya se guardó automáticamente se conserva."], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     header("Location: login_vendedor.php");
     exit;
 }
