@@ -29,6 +29,9 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
     .botones-confirmar { justify-content: center; }
     .btn-confirmar-elim { background: linear-gradient(180deg, #D63A4B, var(--peligro)); }
     .btn-confirmar-elim:hover { background: linear-gradient(180deg, #E04A5B, #A81F2E); }
+    .zona-pegar { margin-top: 8px; padding: 12px 14px; border: 2px dashed #90CAF9; border-radius: 10px; background: #F1F7FE; color: #0D47A1; font-size: 13px; text-align: center; cursor: pointer; transition: background .15s, border-color .15s; }
+    .zona-pegar:hover, .zona-pegar:focus, .zona-pegar.arrastrando { background: #DCEBFB; border-color: #1E7BD8; outline: none; }
+    .zona-pegar.listo { background: #E4F5E7; border-color: #33B540; color: #1D6821; }
 </style>
 
 <section id="productos_mayoristas" class="section">
@@ -164,6 +167,9 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
             <div>
                 <label for="prodFoto">Foto del producto (sirve para mayorista y detal)</label>
                 <input type="file" id="prodFoto" name="foto" accept="image/jpeg,image/png,image/webp">
+                <div id="zonaPegar" class="zona-pegar" tabindex="0" role="button" aria-label="Pegar o arrastrar una imagen">
+                    📋 <strong>Pegue la imagen aquí</strong> (Ctrl + V) o arrástrela desde otra pestaña
+                </div>
                 <img id="prodPrev" class="prev-foto" alt="Vista previa">
                 <label id="prodQuitarBox" style="display:none; margin-top:8px; font-weight:normal;">
                     <input type="checkbox" name="quitar_foto" value="1" style="width:auto;"> Quitar la foto actual
@@ -224,6 +230,7 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
         ["prodRef", "prodNom", "prodMay", "prodDet", "prodFoto"].forEach(function (id) { document.getElementById(id).value = ""; });
         document.getElementById("prodQuitarBox").style.display = "none";
         mostrarPrevProd("");
+        reiniciarZonaPegar();
         document.getElementById("modalProd").style.display = "flex";
     }
 
@@ -240,17 +247,24 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
         document.getElementById("prodQuitarBox").style.display = d.foto ? "block" : "none";
         document.querySelector("#prodQuitarBox input").checked = false;
         mostrarPrevProd(d.foto);
+        reiniciarZonaPegar();
         document.getElementById("modalProd").style.display = "flex";
     }
 
     function cerrarModalProd() { document.getElementById("modalProd").style.display = "none"; }
 
     // Reduce la foto en el navegador (máx. 800 px) antes de subirla
-    document.getElementById("prodFoto").addEventListener("change", function () {
-        var input = this, f = input.files && input.files[0];
+    function procesarFotoProd(f) {
+        var input = document.getElementById("prodFoto");
         if (!f) { return; }
+        if (!f.type.match(/^image\/(jpeg|png|webp)$/)) {
+            alert("La imagen debe ser JPG, PNG o WEBP.");
+            return;
+        }
         mostrarPrevProd(URL.createObjectURL(f));
-        if (!f.type.match(/^image\/(jpeg|png|webp)$/) || typeof DataTransfer === "undefined") { return; }
+        if (typeof DataTransfer === "undefined") { return; }
+        // deja la imagen original en el campo por si falla la reducción
+        try { var dt0 = new DataTransfer(); dt0.items.add(f); input.files = dt0.files; } catch (e) { /* se ignora */ }
         var img = new Image();
         img.onload = function () {
             var max = 800, w = img.naturalWidth, h = img.naturalHeight;
@@ -268,7 +282,53 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
             }, "image/jpeg", 0.82);
         };
         img.src = URL.createObjectURL(f);
+        var zona = document.getElementById("zonaPegar");
+        zona.classList.add("listo");
+        zona.innerHTML = "✅ Imagen lista. Puede pegar otra para reemplazarla.";
+    }
+
+    function reiniciarZonaPegar() {
+        var zona = document.getElementById("zonaPegar");
+        zona.classList.remove("listo", "arrastrando");
+        zona.innerHTML = "📋 <strong>Pegue la imagen aquí</strong> (Ctrl + V) o arrástrela desde otra pestaña";
+    }
+
+    function imagenDeTransfer(dt) {
+        if (!dt) { return null; }
+        var items = dt.items || [];
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].kind === "file" && items[i].type.indexOf("image/") === 0) { return items[i].getAsFile(); }
+        }
+        var files = dt.files || [];
+        for (var j = 0; j < files.length; j++) {
+            if (files[j].type.indexOf("image/") === 0) { return files[j]; }
+        }
+        return null;
+    }
+
+    document.getElementById("prodFoto").addEventListener("change", function () {
+        procesarFotoProd(this.files && this.files[0]);
     });
+
+    // Pegar con Ctrl+V mientras el formulario de producto está abierto
+    document.addEventListener("paste", function (e) {
+        if (document.getElementById("modalProd").style.display !== "flex") { return; }
+        var f = imagenDeTransfer(e.clipboardData);
+        if (f) { e.preventDefault(); procesarFotoProd(f); }
+    });
+
+    // Arrastrar y soltar una imagen sobre la zona
+    (function () {
+        var zona = document.getElementById("zonaPegar");
+        ["dragenter", "dragover"].forEach(function (ev) {
+            zona.addEventListener(ev, function (e) { e.preventDefault(); zona.classList.add("arrastrando"); });
+        });
+        ["dragleave", "drop"].forEach(function (ev) {
+            zona.addEventListener(ev, function (e) { e.preventDefault(); zona.classList.remove("arrastrando"); });
+        });
+        zona.addEventListener("drop", function (e) { procesarFotoProd(imagenDeTransfer(e.dataTransfer)); });
+        zona.addEventListener("click", function () { zona.focus(); });
+    })();
 
     document.getElementById("buscarProd").addEventListener("input", function () {
         var q = this.value.trim().toLowerCase();
