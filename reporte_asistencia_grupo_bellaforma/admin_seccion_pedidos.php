@@ -49,7 +49,7 @@ foreach ($pedidosAdmin as $pp) {
         <?php if ($pedidosAdmin): ?>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <a class="btn-nuevo" style="text-decoration:none;" href="pedido_pdf.php?<?= escapar($qsDescarga) ?>">⬇ PDF (<?= count($pedidosAdmin) ?>)</a>
-                <a class="btn-nuevo" style="text-decoration:none; background:#00796B;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>">⬇ Syscafe .XLS (<?= count($pedidosAdmin) ?>)</a>
+                <a class="btn-nuevo" style="text-decoration:none; background:#00796B;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>">⬇ Syscafe .XLSX (<?= count($pedidosAdmin) ?>)</a>
                 <a class="btn-nuevo" style="text-decoration:none; background:#1D6F42;" href="pedido_excel.php?<?= escapar($qsDescarga) ?>">⬇ Excel detallado</a>
             </div>
         <?php endif; ?>
@@ -152,7 +152,7 @@ foreach ($pedidosAdmin as $pp) {
                                     onclick="pedirEliminarPedido(this)">Eliminar</button>
                                 <?php if (!$esBorr): ?>
                                     <a class="btn-activar btn-fila" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>">PDF</a>
-                                    <a class="btn-activar btn-fila" style="background:#00796B;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>" title="Archivo .XLS para importar en Syscafe">Syscafe</a>
+                                    <a class="btn-activar btn-fila" style="background:#00796B;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>" title="Archivo .xlsx con la plantilla de pedidos de Syscafe">Syscafe</a>
                                     <form method="POST" action="admin.php" class="form-inline">
                                         <input type="hidden" name="accion" value="ped_estado">
                                         <input type="hidden" name="id" value="<?= (int) $ped["id"] ?>">
