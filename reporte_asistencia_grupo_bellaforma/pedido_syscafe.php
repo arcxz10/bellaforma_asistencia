@@ -1,9 +1,9 @@
 <?php
 /**
- * Descarga de pedidos en formato Syscafe (.xlsx) para importarlos en Syscafe.
+ * Descarga de pedidos en formato Syscafe (.XLS) para importarlos en Syscafe (origen "Archivo estandar (xls)").
  * Usa la plantilla de pedidos de Syscafe (PEDIDOS.xlsx, 60 columnas): ver syscafe_pedidos_xlsx.php
- *   pedido_syscafe.php?id=12   -> un archivo .xlsx con ese pedido
- *   pedido_syscafe.php?vendedor_p=..&estado_p=..&desde_p=..&hasta_p=..&buscar_p=..  -> un solo .xlsx con todos los pedidos filtrados
+ *   pedido_syscafe.php?id=12   -> un archivo .XLS con ese pedido
+ *   pedido_syscafe.php?vendedor_p=..&estado_p=..&desde_p=..&hasta_p=..&buscar_p=..  -> un solo .XLS con todos los pedidos filtrados
  */
 session_start();
 
@@ -29,16 +29,16 @@ if (!$pedidos) {
 }
 
 $idUnico = (int) ($_GET["id"] ?? 0);
-$tipoMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+$tipoMime = "application/vnd.ms-excel";
 
 if ($idUnico > 0 || count($pedidos) === 1) {
     $p = $pedidos[0];
-    $binario = syscafe_pedidos_xlsx([$p]);
+    $binario = syscafe_pedidos_xls([$p]);
     $nombre = syscafe_pe_nombre_archivo($p);
 } else {
     // varios pedidos: un solo archivo, del más antiguo al más reciente
-    $binario = syscafe_pedidos_xlsx(array_reverse($pedidos));
-    $nombre = "PEDIDOS_SYSCAFE_" . date("Ymd_His") . ".xlsx";
+    $binario = syscafe_pedidos_xls(array_reverse($pedidos));
+    $nombre = "PEDIDOS_SYSCAFE_" . date("Ymd_His") . ".XLS";
 }
 
 ob_end_clean();
