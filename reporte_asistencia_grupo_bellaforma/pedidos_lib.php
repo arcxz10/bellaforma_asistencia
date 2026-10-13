@@ -100,7 +100,8 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         ? (string) $d["tipo_documento"]
         : ($existente["tipo_pedido"] ?? "pedido");
     $nombreDoc = nombreCortoDocumento($tipoDoc);
-    $numeroDoc = trim((string) ($d["numero"] ?? ""));
+    // Solo el administrador puede escribir o cambiar el número; el vendedor conserva el que ya tenga (vacío = automático)
+    $numeroDoc = $rol === "admin" ? trim((string) ($d["numero"] ?? "")) : trim((string) ($existente["numero_pedido"] ?? ""));
     if ($numeroDoc !== "" && (!preg_match('/^\d{1,10}$/', $numeroDoc) || (int) $numeroDoc < 1)) {
         return $falla("El número de la " . $nombreDoc . " solo puede tener dígitos (máximo 10) y debe ser mayor que 0.");
     }
