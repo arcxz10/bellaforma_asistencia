@@ -804,6 +804,29 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         }, 120);
     });
 
+    /* Al cerrar el teclado (gesto "atrás", botón de ocultar teclado, etc.) el campo puede seguir enfocado y "focusout"
+       nunca se dispara: la barra se quedaba escondida. Se detecta el cierre por el tamaño de la pantalla visible. */
+    (function () {
+        var vv = window.visualViewport;
+        if (!vv) { return; }
+        var base = Math.max(window.innerHeight, vv.height);
+        function tecladoAbierto() { return vv.height < base - 120; }
+        function revisarTeclado() {
+            if (!tecladoAbierto()) {
+                // Pantalla completa de nuevo: el teclado se cerró
+                base = Math.max(base, window.innerHeight, vv.height);
+                if (document.body.classList.contains("pf-kb")) {
+                    document.body.classList.remove("pf-kb");
+                    var a = document.activeElement;
+                    if (a && a.matches && a.matches("input,textarea,select")) { a.blur(); }   // así volverá a ocultarse la próxima vez que escriban
+                    ajustarBarra();
+                }
+            }
+        }
+        vv.addEventListener("resize", function () { setTimeout(revisarTeclado, 150); });
+        window.addEventListener("orientationchange", function () { setTimeout(function () { base = Math.max(window.innerHeight, vv.height); }, 500); });
+    })();
+
     /* ---------- Cambios en cualquier campo ---------- */
     ["pfNombre", "pfComercial", "pfTelefono", "pfEmail", "pfBarrio", "pfDireccion", "pfPuntos", "pfEmailFe", "pfDias", "pfObs", "pfDoc"].forEach(function (id) {
         $(id).addEventListener("input", sucio);
