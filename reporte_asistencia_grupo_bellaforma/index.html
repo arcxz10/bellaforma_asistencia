@@ -2,116 +2,128 @@
 <html lang="es">
 
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acceso administrativo | Grupo Bellaforma</title>
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Grupo Bellaforma | Control de Asistencia
+    </title>
 
     <link rel="icon" type="image/x-icon" href="img/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
     <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-    <link rel="stylesheet" href="css/login.css">
+
+    <link
+        rel="stylesheet"
+        href="css/index.css"
+    >
+
 </head>
+
 
 <body>
     <script src="js/bellaforma-ui.js" data-splash></script>
 
-    <div class="container-login">
-        <div class="form-container">
 
-            <div class="header-login">
-                <img src="img/logo-azul.png" alt="Grupo Bella Forma S.A.S." class="logo-marca">
-                <p>Sistema de Asistencia y Control</p>
-            </div>
+    <div class="contenedor">
 
-            <div class="login-card">
-                <h2>Acceso administrativo</h2>
-                <p class="login-description">
-                    Ingrese sus credenciales para acceder al panel administrativo.
-                </p>
 
-                <div id="mensaje-error" class="mensaje-error" role="alert" aria-live="assertive" style="display: none;"></div>
+        <!-- ENCABEZADO -->
 
-                <form method="POST" action="login.php" class="form-login">
+        <div class="encabezado">
 
-                    <input type="hidden" name="tipo" value="admin">
+            <img src="img/logo-azul.png" alt="Grupo Bella Forma S.A.S." class="logo-marca">
 
-                    <div class="form-group">
-                        <label for="usuario">Usuario</label>
-                        <input type="text" id="usuario" name="usuario" placeholder="Ingrese su usuario" autocomplete="username" required>
-                    </div>
+            <p>
+                Sistema de control de asistencia
+            </p>
 
-                    <div class="form-group">
-                        <label for="password">Contraseña</label>
-                        <div class="campo-password">
-                            <input type="password" id="password" name="password" placeholder="Ingrese su contraseña" autocomplete="current-password" required>
-                            <button type="button" class="btn-ojo" id="btnOjo" aria-label="Mostrar contraseña" aria-pressed="false" title="Mostrar contraseña">
-                                <svg class="ojo-abierto" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                <svg class="ojo-cerrado" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                            </button>
-                        </div>
-                    </div>
+        </div>
 
-                    <button type="submit" class="btn-submit">
-                        Iniciar sesión
-                    </button>
 
-                </form>
 
-                <div class="registro-asistencia">
-                    <p>¿Desea registrar su asistencia?</p>
-                    <a href="registro.html" class="btn-asistencia">
-                        Registrar asistencia
-                    </a>
-                </div>
+        <!-- TARJETA PRINCIPAL -->
 
-                <a href="index.html" class="volver">
-                    ← Volver al inicio
+        <div class="tarjeta">
+
+
+            <h2>
+                Bienvenido
+            </h2>
+
+
+            <p class="descripcion">
+
+                Seleccione la opción correspondiente
+                para continuar.
+
+            </p>
+
+
+
+            <div class="opciones">
+
+                <!-- EMPLEADO -->
+
+                <a
+                    href="registro.html"
+                    class="boton boton-empleado"
+                >
+
+                    Registrar mi asistencia
+
                 </a>
 
+
+
+                <!-- VENDEDORES -->
+
+                <a
+                    href="login_vendedor.php"
+                    class="boton boton-vendedor"
+                >
+
+                    Acceso Ejecutivos de Negocios
+
+                </a>
+
+
+
+                <!-- ADMINISTRADOR -->
+
+                <a
+                    href="login.html"
+                    class="boton boton-admin"
+                >
+
+                    Acceso administrativo
+
+                </a>
+
+
             </div>
+
+
         </div>
+
+        <!-- PIE -->
+
+        <div class="pie">
+
+            Sistema de control de asistencia
+            <br>
+            Grupo Bellaforma
+
+        </div>
+
+
     </div>
 
-    <script>
-        (function () {
-            var mensajes = {
-                credenciales: "Usuario o contraseña incorrectos. Verifique sus datos e intente de nuevo.",
-                vacio: "Debe ingresar usuario y contraseña.",
-                tipo: "Tipo de acceso no válido.",
-                sistema: "No se pudo procesar el inicio de sesión. Intente nuevamente."
-            };
-            var params = new URLSearchParams(window.location.search);
-            var codigo = params.get("error");
-            if (codigo) {
-                var caja = document.getElementById("mensaje-error");
-                caja.textContent = mensajes[codigo] || mensajes.credenciales;
-                caja.style.display = "flex";
-                var u = params.get("u");
-                if (u) { document.getElementById("usuario").value = u; }
-                // limpia la dirección para que el aviso no reaparezca al recargar
-                window.history.replaceState(null, "", window.location.pathname);
-                document.getElementById(codigo === "vacio" || !u ? "usuario" : "password").focus();
-            }
-        })();
-    </script>
-
-    <script>
-        (function () {
-            var btn = document.getElementById("btnOjo");
-            var campo = document.getElementById("password");
-            if (btn && campo) {
-                btn.addEventListener("click", function () {
-                    var ver = campo.type === "password";
-                    campo.type = ver ? "text" : "password";
-                    btn.classList.toggle("activo", ver);
-                    btn.setAttribute("aria-pressed", ver ? "true" : "false");
-                    btn.setAttribute("aria-label", ver ? "Ocultar contraseña" : "Mostrar contraseña");
-                    btn.title = ver ? "Ocultar contraseña" : "Mostrar contraseña";
-                    campo.focus();
-                });
-            }
-        })();
-    </script>
 
 </body>
 
