@@ -158,8 +158,13 @@ foreach ($pedidosAdmin as $pp) {
                             <td><span class="estado <?= claseEstadoPedido($ped["estado"]) ?>"><?= escapar(etiquetaEstadoPedido($ped["estado"])) ?></span></td>
                             <td>
                                 <button type="button" class="btn-editar btn-fila" onclick="verPedidoAdmin(<?= (int) $ped["id"] ?>)">Ver</button>
-                                <a class="btn-editar btn-fila" style="text-decoration:none;" href="admin_pedido_editar.php?id=<?= (int) $ped["id"] ?>"
-                                   <?= $ped["estado"] === "procesado" ? "onclick=\"return confirm('Este pedido ya está subido a Syscafe. ¿Editarlo de todos modos?')\"" : "" ?>>Editar</a>
+                                <button type="button" class="btn-editar btn-fila"
+                                    data-id="<?= (int) $ped["id"] ?>"
+                                    data-tipo="<?= escapar(tipoDocumentoValido($ped["tipo_pedido"] ?? "pedido")) ?>"
+                                    data-numero="<?= escapar(trim((string) ($ped["numero_pedido"] ?? ""))) ?>"
+                                    data-auto="<?= escapar(numeroPedido($ped["id"])) ?>"
+                                    data-estado="<?= escapar($ped["estado"]) ?>"
+                                    onclick="abrirEditarNumero(this)">Editar</button>
                                 <button type="button" class="btn-eliminar btn-fila"
                                     data-id="<?= (int) $ped["id"] ?>"
                                     data-num="<?= escapar(numeroDocumento($ped)) ?>"
@@ -262,6 +267,33 @@ foreach ($pedidosAdmin as $pp) {
     </div>
 </div>
 
+<!-- MODAL EDITAR TIPO Y NÚMERO -->
+<div class="modal" id="modalEditarNum">
+    <div class="modal-contenido" style="max-width: 440px; width: 95%;">
+        <h3 id="edNumTitulo">Editar documento</h3>
+        <form method="POST" action="admin.php">
+            <input type="hidden" name="accion" value="ped_numero">
+            <input type="hidden" name="id" id="edNumId" value="">
+            <label for="edNumTipo" style="display:block; margin:10px 0 4px; font-weight:600;">Tipo de documento</label>
+            <select name="tipo_documento" id="edNumTipo" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                <?php foreach (tiposDocumentoPedido() as $clave => $infoDoc): ?>
+                    <option value="<?= $clave ?>"><?= escapar($infoDoc[0]) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <label for="edNumNumero" style="display:block; margin:12px 0 4px; font-weight:600;">Número</label>
+            <input type="text" name="numero" id="edNumNumero" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off"
+                   style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+            <p style="margin:6px 0 0; font-size:12px; color:#667;">Solo dígitos. Déjelo vacío para usar el número automático. Este mismo número saldrá en el PDF y en el archivo de Syscafe.</p>
+            <p id="edNumAviso" style="display:none; margin:10px 0 0; padding:8px 10px; background:#FFF3E0; color:#E65100; border-radius:6px; font-size:13px; font-weight:600;">Este pedido ya está marcado como subido a Syscafe.</p>
+            <div class="botones-modal" style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+                <button type="button" class="btn-editar" onclick="cerrarEditarNumero()">Cancelar</button>
+                <button type="submit" class="btn-nuevo">Guardar</button>
+            </div>
+        </form>
+        <p style="margin:14px 0 0; text-align:center; font-size:13px;"><a id="edNumCompleto" href="#">Editar también productos y datos del cliente →</a></p>
+    </div>
+</div>
+
 <!-- MODAL DETALLE PEDIDO -->
 <div class="modal" id="modalPedidoAdmin">
     <div class="modal-contenido" style="max-width: 850px; width: 95%; max-height: 90vh; overflow-y: auto;">
@@ -294,7 +326,27 @@ foreach ($pedidosAdmin as $pp) {
     function cerrarEliminarPedido() { document.getElementById("modalEliminarPed").style.display = "none"; }
     document.getElementById("modalEliminarPed").addEventListener("click", function (e) { if (e.target === this) { cerrarEliminarPedido(); } });
 
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { cerrarEliminarPedido(); } });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { cerrarEliminarPedido(); cerrarEditarNumero(); } });
+
+    function abrirEditarNumero(btn) {
+        document.getElementById("edNumId").value = btn.dataset.id;
+        document.getElementById("edNumTipo").value = btn.dataset.tipo;
+        var n = document.getElementById("edNumNumero");
+        n.value = btn.dataset.numero;
+        n.placeholder = "Automático: " + btn.dataset.auto;
+        document.getElementById("edNumTitulo").textContent = "Editar documento (id " + btn.dataset.auto + ")";
+        document.getElementById("edNumAviso").style.display = btn.dataset.estado === "procesado" ? "block" : "none";
+        document.getElementById("edNumCompleto").href = "admin_pedido_editar.php?id=" + encodeURIComponent(btn.dataset.id);
+        document.getElementById("modalEditarNum").style.display = "flex";
+        n.focus();
+        n.select();
+    }
+    function cerrarEditarNumero() { document.getElementById("modalEditarNum").style.display = "none"; }
+    document.getElementById("modalEditarNum").addEventListener("click", function (e) { if (e.target === this) { cerrarEditarNumero(); } });
+    document.getElementById("edNumNumero").addEventListener("input", function () {
+        var l = this.value.replace(/\D+/g, "").slice(0, 10);
+        if (l !== this.value) { this.value = l; }
+    });
 
     function verPedidoAdmin(id) {
         var origen = document.getElementById("detalle-ped-" + id);
