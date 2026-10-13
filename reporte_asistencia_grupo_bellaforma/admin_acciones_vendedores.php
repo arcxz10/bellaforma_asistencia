@@ -6,7 +6,7 @@
 
 $accionesPropias = [
     "vend_crear", "vend_editar", "vend_estado",
-    "prod_crear", "prod_editar", "prod_estado",
+    "prod_crear", "prod_editar", "prod_estado", "prod_eliminar",
     "ped_estado",
     "cli_guardar", "cli_estado", "cli_importar",
     "prod_importar",
@@ -201,6 +201,37 @@ if ($accion === "prod_estado") {
     $stmt->execute();
     $stmt->close();
     redireccionar($activo ? "Producto activado." : "Producto desactivado (ya no aparece a los ejecutivos).", "exito", $seccionProd);
+}
+
+if ($accion === "prod_eliminar") {
+    $id = (int) ($_POST["id"] ?? 0);
+    if ($id <= 0) {
+        redireccionar("Producto no válido.", "error", $seccionProd);
+    }
+    $stmt = $conexion->prepare("SELECT referencia FROM productos_mayoristas WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $fila = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$fila) {
+        redireccionar("El producto ya no existe.", "error", $seccionProd);
+    }
+    try {
+        $conexion->begin_transaction();
+        $stmt = $conexion->prepare("DELETE FROM producto_fotos WHERE producto_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $stmt->close();
+        $stmt = $conexion->prepare("DELETE FROM productos_mayoristas WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $stmt->close();
+        $conexion->commit();
+    } catch (Throwable $ex) {
+        $conexion->rollback();
+        redireccionar("No se pudo eliminar el producto: " . substr($ex->getMessage(), 0, 140), "error", $seccionProd);
+    }
+    redireccionar("Producto " . $fila["referencia"] . " eliminado definitivamente.", "exito", $seccionProd);
 }
 
 if ($accion === "prod_importar") {
