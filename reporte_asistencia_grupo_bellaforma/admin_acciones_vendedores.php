@@ -260,18 +260,23 @@ if ($accion === "cli_estado") {
 }
 
 if ($accion === "cli_importar") {
-    @set_time_limit(300);
+    require_once __DIR__ . "/clientes_importar.php";
+    @set_time_limit(600);
     $f = $_FILES["archivo"] ?? null;
-    if (!$f || ($f["error"] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        redireccionar("Seleccione el archivo CSV de clientes (si es muy pesado, divídalo en partes).", "error", $seccionCli);
+    $err = $f["error"] ?? UPLOAD_ERR_NO_FILE;
+    if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
+        redireccionar("El archivo es demasiado pesado para el servidor. Divídalo en partes más pequeñas.", "error", $seccionCli);
     }
-    $r = importarClientesCSV($conexion, (string) ($_POST["tipo_defecto"] ?? "mayorista"), $f["tmp_name"]);
+    if (!$f || $err !== UPLOAD_ERR_OK) {
+        redireccionar("Seleccione el archivo de clientes (.xlsx o .csv).", "error", $seccionCli);
+    }
+    $r = importarClientesArchivo($conexion, (string) ($_POST["tipo_defecto"] ?? "mayorista"), $f["tmp_name"]);
     if (!$r["ok"]) {
         redireccionar($r["error"], "error", $seccionCli);
     }
     $txt = "Importación lista: " . $r["nuevos"] . " clientes nuevos y " . $r["actualizados"] . " actualizados.";
-    if ($r["errores"]) {
-        $txt .= " Filas omitidas por datos incompletos: " . implode(", ", $r["errores"]) . ".";
+    if (!empty($r["total_omitidos"])) {
+        $txt .= " Se omitieron " . $r["total_omitidos"] . " por NIT/cédula inválido o sin nombre, por ejemplo: " . implode("; ", $r["omitidos"]) . ".";
     }
     redireccionar($txt, "exito", $seccionCli);
 }
