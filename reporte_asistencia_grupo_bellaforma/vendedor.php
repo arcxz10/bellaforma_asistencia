@@ -78,11 +78,11 @@ if ($idEditar > 0) {
         if (in_array($p["estado"], ["borrador", "pendiente"], true)) {
             $pedidoEditar = $p;
             $avisoEdicion = $p["estado"] === "borrador"
-                ? "Continúas el borrador #" . numeroPedido($p["id"]) . "."
-                : "Editando el pedido #" . numeroPedido($p["id"]) . ". Podrás cambiarlo hasta que la oficina lo suba a Syscafe.";
+                ? "Continúas el borrador #" . numeroDocumento($p) . "."
+                : "Editando: " . tituloDocumento($p) . ". Podrás cambiarlo hasta que la oficina lo suba a Syscafe.";
             $avisoEdicion .= " (Productos guardados en este pedido: " . count($p["items"]) . ")";
         } else {
-            $_SESSION["msg_vendedor"] = "El pedido #" . numeroPedido($p["id"]) . " ya fue subido a Syscafe o anulado y no se puede editar.";
+            $_SESSION["msg_vendedor"] = tituloDocumento($p) . " ya fue subido a Syscafe o anulado y no se puede editar.";
             $_SESSION["msg_vendedor_tipo"] = "error";
             header("Location: vendedor.php#mis-pedidos");
             exit;
@@ -113,7 +113,7 @@ function tarjetaPedido(array $ped, string $csrf): void
     ?>
     <details class="pedido-item">
         <summary>
-            <span class="p-num"><?= $esBorrador ? "Borrador" : "Pedido" ?> #<?= numeroPedido($ped["id"]) ?></span>
+            <span class="p-num"><?= $esBorrador ? "Borrador" : e(etiquetaTipoDocumento($ped["tipo_pedido"] ?? "pedido")) ?> #<?= e(numeroDocumento($ped)) ?></span>
             <span class="estado <?= claseEstadoPedido($ped["estado"]) ?>"><?= e(etiquetaEstadoPedido($ped["estado"])) ?></span>
             <span class="p-cli"><?= e($nombre) ?> <span class="pf-tag-lista <?= e(listaValida($ped["tipo_cliente"] ?? "")) ?>"><?= e(etiquetaTipoCliente($ped["tipo_cliente"] ?? "mayorista")) ?></span></span>
             <span class="p-fecha"><?= date("d/m/Y H:i", strtotime($ped["actualizado_en"] ?? $ped["creado_en"])) ?></span>
@@ -157,7 +157,7 @@ function tarjetaPedido(array $ped, string $csrf): void
                         <button type="submit" class="btn btn-rojo">🗑️ Eliminar</button>
                     </form>
                 <?php elseif ($ped["estado"] === "pendiente"): ?>
-                    <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Editar pedido</a>
+                    <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Editar <?= e(nombreCortoDocumento($ped["tipo_pedido"] ?? "pedido")) ?></a>
                 <?php else: ?>
                     <p class="bloqueado">🔒 <?= $ped["estado"] === "procesado" ? "Ya fue subido a Syscafe: no se puede editar." : "Pedido anulado." ?></p>
                 <?php endif; ?>
