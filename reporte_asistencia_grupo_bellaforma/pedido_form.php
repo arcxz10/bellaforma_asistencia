@@ -81,9 +81,11 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                 <button type="button" data-doc="remision">🚚 Remisión</button>
                 <button type="button" data-doc="cotizacion">📝 Cotización</button>
             </div>
-            <label for="pfNumero" id="pfNumeroLabel">Número de pedido</label>
-            <input type="text" id="pfNumero" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off" placeholder="Automático">
-            <p class="pf-nota" id="pfNumeroNota">Déjelo vacío y el sistema asigna el número solo. Si escribe uno, ese mismo saldrá en el PDF y en el archivo de Syscafe.</p>
+            <div id="pfNumeroBox" <?= $pf["rol"] === "admin" ? "" : "hidden" ?>>
+                <label for="pfNumero" id="pfNumeroLabel">Número de pedido</label>
+                <input type="text" id="pfNumero" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off" placeholder="Automático">
+                <p class="pf-nota" id="pfNumeroNota">Déjelo vacío para que el número sea automático. Si escribe uno, ese mismo saldrá en el PDF y en el archivo de Syscafe.</p>
+            </div>
         </div>
 
         <div class="pf-card" id="pfCardTipoCliente">
