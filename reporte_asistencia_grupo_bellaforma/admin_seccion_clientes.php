@@ -83,7 +83,7 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
     <div style="background:#fff; border:1px dashed #90CAF9; border-radius:10px; padding:14px; margin-bottom:16px;">
         <strong>📥 Cargar clientes desde Excel</strong>
         <p style="margin:6px 0 10px; font-size:13px; color:#556;">
-            Suba el Excel (.xlsx) o un CSV directamente. Si el NIT/cédula ya existe, se actualizan sus datos.
+            Suba el Excel (.xlsx) o un CSV directamente. Si el Excel tiene hojas llamadas <em>mayoristas</em> y <em>detal</em>, cada una se carga con su tipo (y se ignoran las demás hojas). Si el NIT/cédula ya existe, se actualizan sus datos.
             <a href="clientes_plantilla.php">Descargar plantilla de ejemplo</a>. Si el archivo trae la columna <em>tipo_cliente</em> (mayorista / detal) se respeta; si no, se usa el tipo que elija aquí.
         </p>
         <form method="POST" action="admin.php" enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
