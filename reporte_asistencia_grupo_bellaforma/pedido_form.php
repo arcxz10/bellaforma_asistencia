@@ -352,6 +352,10 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         var o = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "same-origin" };
         if (opciones && opciones.keepalive) { o.keepalive = true; }
         return fetch(CFG.api, o).then(function (r) {
+            // Si la sesión se perdió, el servidor puede mandar a la pantalla de ingreso: se avisa con claridad
+            if (r.redirected && /login/i.test(r.url)) {
+                return { ok: false, sesion_expirada: true, error: "Su sesión expiró (puede pasar cuando se actualiza el sistema). Abra el ingreso de ejecutivos en otra pestaña, inicie sesión y vuelva a abrir el pedido. Lo que ya se guardó automáticamente se conserva." };
+            }
             return r.text().then(function (t) {
                 try { return JSON.parse(t); }
                 catch (e) {
