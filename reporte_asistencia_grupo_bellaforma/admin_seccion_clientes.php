@@ -83,7 +83,7 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
     <div style="background:#fff; border:1px dashed #90CAF9; border-radius:10px; padding:14px; margin-bottom:16px;">
         <strong>📥 Cargar clientes desde Excel</strong>
         <p style="margin:6px 0 10px; font-size:13px; color:#556;">
-            En Excel use <em>Guardar como → CSV</em> y súbalo aquí. Si el NIT/cédula ya existe, se actualizan sus datos.
+            Suba el Excel (.xlsx) o un CSV directamente. Si el NIT/cédula ya existe, se actualizan sus datos.
             <a href="clientes_plantilla.php">Descargar plantilla de ejemplo</a>. Si el archivo trae la columna <em>tipo_cliente</em> (mayorista / detal) se respeta; si no, se usa el tipo que elija aquí.
         </p>
         <form method="POST" action="admin.php" enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
@@ -92,7 +92,7 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
                 <option value="mayorista">Estos clientes son MAYORISTAS</option>
                 <option value="detal">Estos clientes son DETAL</option>
             </select>
-            <input type="file" name="archivo" accept=".csv,text/csv,text/plain" required>
+            <input type="file" name="archivo" accept=".xlsx,.csv,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
             <button type="submit" class="btn-nuevo">Importar clientes</button>
         </form>
     </div>
