@@ -55,7 +55,7 @@ $pf = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Editar pedido #<?= numeroPedido($pedido["id"]) ?> | Admin</title>
+    <title>Editar <?= e(nombreCortoDocumento($pedido["tipo_pedido"] ?? "pedido")) ?> #<?= e(numeroDocumento($pedido)) ?> | Admin</title>
     <link rel="icon" type="image/x-icon" href="img/favicon.ico">
     <link rel="stylesheet" href="css/vendedor.css">
 </head>
@@ -71,7 +71,7 @@ $pf = [
 
     <div class="wrap">
         <div class="aviso-edicion">
-            Pedido <b>#<?= numeroPedido($pedido["id"]) ?></b> de <b><?= e($pedido["vendedor_nombre"]) ?></b> ·
+            <?= e(etiquetaTipoDocumento($pedido["tipo_pedido"] ?? "pedido")) ?> <b>#<?= e(numeroDocumento($pedido)) ?></b> de <b><?= e($pedido["vendedor_nombre"]) ?></b> ·
             Estado: <b><?= e(etiquetaEstadoPedido($pedido["estado"])) ?></b>
             <?php if ($pedido["estado"] === "procesado"): ?>
                 <br>⚠️ Ya está marcado como «Subido a Syscafe»: el ejecutivo ya no puede editarlo, pero usted sí.
