@@ -95,9 +95,27 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         $tipoCliente = $existente["tipo_cliente"] ?? "mayorista";
     }
 
+    // ---- Tipo de documento (pedido de cliente / remisión / cotización) y número ----
+    $tipoDoc = isset($d["tipo_documento"]) && array_key_exists((string) $d["tipo_documento"], tiposDocumentoPedido())
+        ? (string) $d["tipo_documento"]
+        : ($existente["tipo_pedido"] ?? "pedido");
+    $nombreDoc = nombreCortoDocumento($tipoDoc);
+    $numeroDoc = trim((string) ($d["numero"] ?? ""));
+    if ($numeroDoc !== "" && (!preg_match('/^\d{1,10}$/', $numeroDoc) || (int) $numeroDoc < 1)) {
+        return $falla("El número de la " . $nombreDoc . " solo puede tener dígitos (máximo 10) y debe ser mayor que 0.");
+    }
+    $mensajeNumeroEnUso = fn(string $n) => "El número " . $n . " ya está en uso por otra " . $nombreDoc . ". Escriba un número distinto.";
+    if ($modo === "enviar") {
+        // Número escrito a mano, o el automático de un documento que ya existe (un borrador al enviarse, por ejemplo)
+        $numeroARevisar = $numeroDoc !== "" ? (int) $numeroDoc : ($existente ? (int) $existente["id"] : 0);
+        if ($numeroARevisar > 0 && numeroDocumentoEnUso($c, $tipoDoc, $numeroARevisar, (int) ($existente["id"] ?? 0))) {
+            return $falla($mensajeNumeroEnUso($numeroDoc !== "" ? $numeroDoc : numeroPedido($numeroARevisar)));
+        }
+    }
+
     // ---- Datos del cliente ----
     $tipo = (($d["tipo_persona"] ?? "") === "natural") ? "natural" : "juridica";
-    $tipoDoc = $tipo === "natural" ? "CC" : "NIT";
+    $tipoDocCliente = $tipo === "natural" ? "CC" : "NIT";
     $nombre = textoCorto($d["cliente_nombre"] ?? "", 200);
     $comercial = textoCorto($d["cliente_nombre_comercial"] ?? "", 200);
     $ident = textoCorto($d["identificacion"] ?? "", 40);
@@ -222,9 +240,11 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
 
     $campos = [
         "tipo_cliente"              => ["s", $tipoCliente],
+        "tipo_pedido"               => ["s", $tipoDoc],
+        "numero_pedido"             => ["s", $numeroDoc !== "" ? $numeroDoc : null],
         "cliente_id"                => ["i", $clienteId],
         "cliente_tipo_persona"      => ["s", $tipo],
-        "cliente_tipo_documento"    => ["s", $tipoDoc],
+        "cliente_tipo_documento"    => ["s", $tipoDocCliente],
         "cliente_nombre"            => ["s", $nombre],
         "cliente_nombre_comercial"  => ["s", $comercial],
         "cliente_nit"               => ["s", $ident],
@@ -268,6 +288,10 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
             $st->execute();
             $st->close();
             $idFinal = (int) $c->insert_id;
+            // Documento nuevo sin número escrito: su número automático es el id; no puede chocar con uno escrito a mano
+            if ($modo === "enviar" && $numeroDoc === "" && numeroDocumentoEnUso($c, $tipoDoc, $idFinal, $idFinal)) {
+                throw new RuntimeException("NUMERO_EN_USO");
+            }
         }
 
         $insItem = $c->prepare(
@@ -283,11 +307,15 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         $c->commit();
     } catch (Throwable $e) {
         $c->rollback();
+        if ($e->getMessage() === "NUMERO_EN_USO") {
+            return $falla("El número que el sistema iba a asignar ya está en uso por otra " . $nombreDoc . ". Escriba un número manualmente en el paso 1.");
+        }
         $detalle = trim(preg_replace('/\s+/', " ", $e->getMessage()) ?? "");
         return $falla("No se pudo guardar el pedido. Detalle técnico: " . substr($detalle, 0, 180));
     }
 
-    return ["ok" => true, "id" => $idFinal, "total" => $total, "estado" => $estado];
+    $titulo = etiquetaTipoDocumento($tipoDoc) . " #" . ($numeroDoc !== "" ? $numeroDoc : numeroPedido($idFinal));
+    return ["ok" => true, "id" => $idFinal, "total" => $total, "estado" => $estado, "titulo" => $titulo];
 }
 
 /**
@@ -340,6 +368,7 @@ function pedidosParaExportar(mysqli $c): array
         "vendedor" => (int) ($_GET["vendedor_p"] ?? 0),
         "estado"   => $_GET["estado_p"] ?? "",
         "tipo_cliente" => $_GET["tipo_p"] ?? "",
+        "tipo_documento" => $_GET["doc_p"] ?? "",
         "desde"    => $_GET["desde_p"] ?? "",
         "hasta"    => $_GET["hasta_p"] ?? "",
         "buscar"   => $_GET["buscar_p"] ?? "",
@@ -447,12 +476,12 @@ function manejarApiPedido(mysqli $conexion): void
             }
 
             if ($modo === "enviar" && $rol === "vendedor") {
-                $_SESSION["msg_vendedor"] = ($pedidoId ? "Pedido #" : "Pedido #") . numeroPedido($r["id"]) .
+                $_SESSION["msg_vendedor"] = $r["titulo"] .
                     ($pedidoId ? " actualizado" : " enviado") . " por " . formatoCOP($r["total"]) . ".";
                 $_SESSION["msg_vendedor_tipo"] = "exito";
             }
             if ($rol === "admin") {
-                $_SESSION["mensaje"] = "Pedido #" . numeroPedido($r["id"]) . " actualizado.";
+                $_SESSION["mensaje"] = $r["titulo"] . " actualizado.";
                 $_SESSION["tipo_mensaje"] = "exito";
             }
             api_responder($r);
