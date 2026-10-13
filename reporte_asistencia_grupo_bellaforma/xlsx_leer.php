@@ -73,8 +73,53 @@ function xlsx_columna_a_indice(string $letras): int
     return $n - 1;
 }
 
-/** Recorre las filas de la primera hoja. $porFila recibe un arreglo [columna => valor]; si devuelve false, se detiene. */
-function xlsx_recorrer(string $ruta, callable $porFila): void
+/** Hojas del libro en orden: [ ["nombre" => ..., "ruta" => "xl/worksheets/sheetN.xml"], ... ] */
+function xlsx_lista_hojas(string $bin, array $ent): array
+{
+    $hojas = [];
+    if (isset($ent["xl/workbook.xml"], $ent["xl/_rels/workbook.xml.rels"])) {
+        $wb = zip_extraer($bin, $ent["xl/workbook.xml"]);
+        $rels = zip_extraer($bin, $ent["xl/_rels/workbook.xml.rels"]);
+        $destinos = [];
+        if (preg_match_all('/<Relationship\b[^>]*>/', $rels, $tags)) {
+            foreach ($tags[0] as $tag) {
+                if (preg_match('/\bId="([^"]+)"/', $tag, $id) && preg_match('/\bTarget="([^"]+)"/', $tag, $t)) {
+                    $destino = ltrim($t[1], "/");
+                    $destinos[$id[1]] = strpos($destino, "xl/") === 0 ? $destino : "xl/" . $destino;
+                }
+            }
+        }
+        if (preg_match_all('/<sheet\b[^>]*>/', $wb, $tags)) {
+            foreach ($tags[0] as $tag) {
+                if (preg_match('/\br:id="([^"]+)"/', $tag, $rid) && isset($destinos[$rid[1]]) && isset($ent[$destinos[$rid[1]]])) {
+                    $nombre = preg_match('/\bname="([^"]*)"/', $tag, $n) ? xlsx_texto_xml($n[1]) : "";
+                    $hojas[] = ["nombre" => $nombre, "ruta" => $destinos[$rid[1]]];
+                }
+            }
+        }
+    }
+    if (!$hojas) {
+        foreach (array_keys($ent) as $nombre) {
+            if (preg_match('#^xl/worksheets/[^/]+\.xml$#', $nombre)) {
+                $hojas[] = ["nombre" => basename($nombre, ".xml"), "ruta" => $nombre];
+            }
+        }
+    }
+    return $hojas;
+}
+
+/** Nombres de las hojas del libro, en orden. */
+function xlsx_nombres_hojas(string $ruta): array
+{
+    $bin = file_get_contents($ruta);
+    if ($bin === false || strlen($bin) < 100) {
+        throw new RuntimeException("No se pudo leer el archivo.");
+    }
+    return array_column(xlsx_lista_hojas($bin, zip_entradas($bin)), "nombre");
+}
+
+/** Recorre las filas de una hoja (por defecto la primera; $indiceHoja = 0, 1, 2...). $porFila recibe un arreglo [columna => valor]; si devuelve false, se detiene. */
+function xlsx_recorrer(string $ruta, callable $porFila, int $indiceHoja = 0): void
 {
     $bin = file_get_contents($ruta);
     if ($bin === false || strlen($bin) < 100) {
@@ -82,36 +127,11 @@ function xlsx_recorrer(string $ruta, callable $porFila): void
     }
     $ent = zip_entradas($bin);
 
-    // Hoja a leer: la primera del libro
-    $rutaHoja = null;
-    if (isset($ent["xl/workbook.xml"], $ent["xl/_rels/workbook.xml.rels"])) {
-        $wb = zip_extraer($bin, $ent["xl/workbook.xml"]);
-        $rels = zip_extraer($bin, $ent["xl/_rels/workbook.xml.rels"]);
-        if (preg_match('/<sheet\b[^>]*?\br:id="([^"]+)"/', $wb, $m)) {
-            if (preg_match_all('/<Relationship\b[^>]*>/', $rels, $tags)) {
-                foreach ($tags[0] as $tag) {
-                    if (preg_match('/\bId="' . preg_quote($m[1], "/") . '"/', $tag) && preg_match('/\bTarget="([^"]+)"/', $tag, $t)) {
-                        $destino = ltrim($t[1], "/");
-                        $rutaHoja = strpos($destino, "xl/") === 0 ? $destino : "xl/" . $destino;
-                    }
-                }
-            }
-        }
-    }
-    if ($rutaHoja === null || !isset($ent[$rutaHoja])) {
-        $rutaHoja = isset($ent["xl/worksheets/sheet1.xml"]) ? "xl/worksheets/sheet1.xml" : null;
-        if ($rutaHoja === null) {
-            foreach (array_keys($ent) as $nombre) {
-                if (preg_match('#^xl/worksheets/[^/]+\.xml$#', $nombre)) {
-                    $rutaHoja = $nombre;
-                    break;
-                }
-            }
-        }
-    }
-    if ($rutaHoja === null) {
+    $hojas = xlsx_lista_hojas($bin, $ent);
+    if (!isset($hojas[$indiceHoja])) {
         throw new RuntimeException("El Excel no tiene hojas con datos.");
     }
+    $rutaHoja = $hojas[$indiceHoja]["ruta"];
 
     $textos = isset($ent["xl/sharedStrings.xml"]) ? xlsx_textos_compartidos(zip_extraer($bin, $ent["xl/sharedStrings.xml"])) : [];
     $xml = zip_extraer($bin, $ent[$rutaHoja]);
