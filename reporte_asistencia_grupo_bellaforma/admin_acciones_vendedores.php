@@ -275,6 +275,13 @@ if ($accion === "cli_importar") {
         redireccionar($r["error"], "error", $seccionCli);
     }
     $txt = "Importación lista: " . $r["nuevos"] . " clientes nuevos y " . $r["actualizados"] . " actualizados.";
+    if (!empty($r["por_hoja"]) && count($r["por_hoja"]) > 1) {
+        $partes = [];
+        foreach ($r["por_hoja"] as $h) {
+            $partes[] = "hoja «" . $h["hoja"] . "» (" . $h["tipo"] . "): " . ($h["nuevos"] + $h["actualizados"]);
+        }
+        $txt .= " Por hoja → " . implode("; ", $partes) . ".";
+    }
     if (!empty($r["total_omitidos"])) {
         $txt .= " Se omitieron " . $r["total_omitidos"] . " por NIT/cédula inválido o sin nombre, por ejemplo: " . implode("; ", $r["omitidos"]) . ".";
     }
