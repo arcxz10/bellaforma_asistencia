@@ -5,11 +5,11 @@
  *
  * Qué va en cada columna (las que no se mencionan van vacías o en 0, igual que la plantilla):
  *   Tipo        -> tipo de documento de Syscafe (SYSCAFE_PE_TIPO, ej. PE5)
- *   Numero      -> N° del pedido de la página (+ SYSCAFE_PE_NUMERO_BASE) a 10 dígitos
+ *   Numero      -> N° que el ejecutivo escribió en el pedido/remisión/cotización (si lo dejó vacío, el id automático + SYSCAFE_PE_NUMERO_BASE), a 10 dígitos
  *   Tercero2    -> cédula del VENDEDOR (ejecutivo)          Tercero1 -> NIT / cédula del CLIENTE
  *   Ano/Mes/Dia -> fecha del pedido                         AnoE/MesE/DiaE -> fecha + plazo
  *   Plazo       -> días de crédito (0 si es de contado)     Anulado -> TRUE si el pedido está anulado
- *   Detalle     -> observaciones del pedido                 Numexterno -> N° del pedido de la página
+ *   Detalle     -> observaciones del pedido                 Numexterno -> el mismo N° del documento
  *   Referencia, Cantidad, VrSubtot (total de la línea), Descritem (nombre del producto)
  *   Fpago       -> forma de pago (SYSCAFE_PE_FPAGO)         Periodo -> AAAAMM
  */
@@ -18,6 +18,13 @@ require_once __DIR__ . "/xls_syscafe.php";   // syscafe_mayusculas()
 
 /* ---- Ajustes de Syscafe (cámbielos aquí si en Syscafe usan otros) ---- */
 const SYSCAFE_PE_TIPO = "PE5";        // tipo de documento del pedido (en pantalla de Syscafe: PE5)
+/* Tipo de documento de Syscafe según lo que elige el ejecutivo y si el pedido lleva factura electrónica:
+   [sin factura electrónica, con factura electrónica] */
+const SYSCAFE_PE_TIPOS = [
+    "pedido"     => ["PE5", "PE1"],
+    "remision"   => ["RM1", "RM2"],
+    "cotizacion" => ["CT1", "CT2"],
+];
 const SYSCAFE_PE_NUMERO_BASE = 0;     // se suma al N° de pedido de la página. Ej: 4500 -> el pedido 22 sale como 0000004522
 const SYSCAFE_PE_FPAGO = "001";       // código de forma de pago
 
@@ -102,14 +109,15 @@ function syscafe_pe_filas(array $p): array
     $plazo = $credito ? max(0, (int) ($p["dias_credito"] ?? 0)) : 0;
     $tsVence = strtotime("+" . $plazo . " days", $ts) ?: $ts;
 
-    $tipo = SYSCAFE_PE_TIPO;
-    $numero = str_pad((string) (SYSCAFE_PE_NUMERO_BASE + (int) $p["id"]), 10, "0", STR_PAD_LEFT);
+    $tipo = SYSCAFE_PE_TIPOS[tipoDocumentoValido($p["tipo_pedido"] ?? "pedido")][!empty($p["factura_electronica"]) ? 1 : 0];
+    $numeroPropio = trim((string) ($p["numero_pedido"] ?? ""));
+    $numero = str_pad($numeroPropio !== "" ? $numeroPropio : (string) (SYSCAFE_PE_NUMERO_BASE + (int) $p["id"]), 10, "0", STR_PAD_LEFT);
     $vendedor = syscafe_pe_digitos((string) ($p["vendedor_identificacion"] ?? ""));
     $cliente = syscafe_pe_digitos((string) ($p["cliente_nit"] ?? ""));
     $anulado = ($p["estado"] ?? "") === "anulado";
     $detalle = trim(preg_replace('/\s+/', " ", (string) ($p["observaciones"] ?? "")) ?? "");
     $detalle = syscafe_mayusculas(function_exists("mb_substr") ? mb_substr($detalle, 0, 100, "UTF-8") : substr($detalle, 0, 100));
-    $numExterno = numeroPedido($p["id"]);
+    $numExterno = numeroDocumento($p);
 
     $filas = [];
     foreach ($p["items"] as $it) {
@@ -332,5 +340,5 @@ function syscafe_pe_nombre_archivo(array $pedido): string
                                                      "Á" => "A", "É" => "E", "Í" => "I", "Ó" => "O", "Ú" => "U", "Ü" => "U", "Ñ" => "N"]);
     $base = trim(preg_replace('/[^A-Za-z0-9]+/', "_", strtoupper($base)) ?? "", "_");
     $base = substr($base, 0, 24);
-    return "PEDIDO_" . numeroPedido($pedido["id"]) . ($base !== "" ? "_" . $base : "") . ".XLS";
+    return strtoupper(tiposDocumentoPedido()[tipoDocumentoValido($pedido["tipo_pedido"] ?? "pedido")][3]) . "_" . numeroDocumento($pedido) . ($base !== "" ? "_" . $base : "") . ".XLS";
 }
