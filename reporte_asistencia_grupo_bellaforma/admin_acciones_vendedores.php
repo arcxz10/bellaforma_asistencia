@@ -263,7 +263,8 @@ if ($accion === "ped_estado") {
     $stmt->bind_param("si", $estado, $id);
     $stmt->execute();
     $stmt->close();
-    redireccionar("Pedido #" . numeroPedido($id) . " marcado como: " . etiquetaEstadoPedido($estado), "exito", "pedidos");
+    $filaDoc = obtenerPedidos($conexion, ["con_borradores" => true], null, $id)[0] ?? ["id" => $id];
+    redireccionar(tituloDocumento($filaDoc) . " marcado como: " . etiquetaEstadoPedido($estado), "exito", "pedidos");
 }
 
 if ($accion === "ped_eliminar") {
@@ -271,7 +272,7 @@ if ($accion === "ped_eliminar") {
     if ($id <= 0) {
         redireccionar("Pedido no válido.", "error", "pedidos");
     }
-    $stmt = $conexion->prepare("SELECT id FROM pedidos_vendedores WHERE id = ?");
+    $stmt = $conexion->prepare("SELECT id, tipo_pedido, numero_pedido FROM pedidos_vendedores WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $existe = $stmt->get_result()->fetch_assoc();
@@ -294,7 +295,7 @@ if ($accion === "ped_eliminar") {
         $conexion->rollback();
         redireccionar("No se pudo eliminar el pedido: " . substr($ex->getMessage(), 0, 140), "error", "pedidos");
     }
-    redireccionar("Pedido #" . numeroPedido($id) . " eliminado definitivamente.", "exito", "pedidos");
+    redireccionar(tituloDocumento($existe) . " eliminado definitivamente.", "exito", "pedidos");
 }
 
 /* ---------------- CLIENTES (una sola base; el campo tipo_cliente indica mayorista o detal) ---------------- */
