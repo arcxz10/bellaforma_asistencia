@@ -310,8 +310,9 @@ function biff2_logico(int $fila, int $col, bool $v): string
     return biff2_rec(5, pack("vv", $fila, $col) . "\x40\x00\x00" . chr($v ? 1 : 0) . "\x00");
 }
 
-/** Genera el .XLS (BIFF2) con la plantilla de pedidos de Syscafe. $pedidos: pedidos con su arreglo "items". */
-function syscafe_pedidos_xls(array $pedidos): string
+/** Genera el .XLS (BIFF2) con la plantilla de pedidos de Syscafe. $pedidos: pedidos con su arreglo "items".
+ *  $conEncabezado = false -> sin la fila de títulos (para probar si Syscafe lee la 1.ª fila como un pedido más). */
+function syscafe_pedidos_xls(array $pedidos, bool $conEncabezado = true): string
 {
     $cols = SYSCAFE_PE_COLUMNAS;
     $n = count($cols);
@@ -323,15 +324,18 @@ function syscafe_pedidos_xls(array $pedidos): string
     }
 
     $out = biff2_rec(9, pack("vv", 2, 0x10)) . biff2_rec(0x42, pack("v", 1252));
-    $out .= biff2_rec(0, pack("vvvv", 0, count($datos) + 1, 0, $n));
+    $desp = $conEncabezado ? 1 : 0;     // filas ocupadas por el encabezado
+    $out .= biff2_rec(0, pack("vvvv", 0, count($datos) + $desp, 0, $n));
     foreach ($cols as $i => $c) {
         $out .= biff2_rec(0x24, pack("CCv", $i, $i, syscafe_pe_ancho($i, $c[1]) * 256));
     }
-    foreach ($cols as $i => $c) {
-        $out .= biff2_label(0, $i, $c[0]);
+    if ($conEncabezado) {
+        foreach ($cols as $i => $c) {
+            $out .= biff2_label(0, $i, $c[0]);
+        }
     }
     foreach ($datos as $k => $fila) {
-        $r = $k + 1;
+        $r = $k + $desp;
         foreach ($cols as $i => $c) {
             $v = $fila[$i];
             if ($c[1] === "T") {
