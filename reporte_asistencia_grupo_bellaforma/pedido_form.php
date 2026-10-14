@@ -87,7 +87,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                 <button type="button" data-doc="remision">🚚 Remisión</button>
                 <button type="button" data-doc="cotizacion">📝 Cotización</button>
             </div>
-            <div id="pfNumeroBox" <?= $pf["rol"] === "admin" ? "" : "hidden" ?>>
+            <div id="pfNumeroBox" <?= ($pf["rol"] === "admin" || !empty($pf["editar_numero"])) ? "" : "hidden" ?>>
                 <label for="pfNumero" id="pfNumeroLabel">Número de pedido</label>
                 <input type="text" id="pfNumero" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off" placeholder="Automático">
                 <p class="pf-nota" id="pfNumeroNota">Déjelo vacío para que el número sea automático. Si escribe uno, ese mismo saldrá en el PDF y en el archivo de Syscafe.</p>
@@ -452,7 +452,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         $("pfDias").value = c.dias_credito || "";
         colombiaSet($("pfDepto"), $("pfMuni"), c.departamento, c.municipio).then(function () { S.ignorar = false; sucio(); });
         if (c.inactivo) { msgCliente("⚠️ Cliente encontrado, pero está INACTIVO en el sistema. Consulte con la oficina.", "alerta"); }
-        else { msgCliente("✔ Cliente encontrado. Se cargaron sus datos; revíselos y corrija si hace falta.", "ok"); }
+        else { msgCliente("✔ Cliente encontrado. Se cargaron sus datos; revíselos y corrija si hace falta. Los datos que le faltaban y usted complete quedarán guardados para los próximos pedidos.", "ok"); }
     }
 
     function buscarCliente() {
@@ -470,7 +470,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                 msgCliente("⚠️ Este cliente está registrado como " + (r.otro_tipo === "detal" ? "DETAL" : "MAYORISTA") +
                            ". Elija arriba «Cliente " + (r.otro_tipo === "detal" ? "detal" : "mayorista") + "» para cargar sus datos y su lista de precios.", "alerta");
             }
-            else { S.clienteId = null; msgCliente("Cliente nuevo: complete sus datos para el pedido.", ""); }
+            else { S.clienteId = null; msgCliente("Cliente nuevo: complete sus datos. Al enviar el pedido quedará guardado en la base de clientes y la próxima vez aparecerá al buscar su NIT / cédula.", ""); }
         }).catch(function () { msgCliente("Sin conexión: no se pudo buscar el cliente.", "alerta"); });
     }
     var tBuscar = null;
