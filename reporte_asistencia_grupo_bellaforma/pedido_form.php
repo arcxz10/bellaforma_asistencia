@@ -30,6 +30,7 @@ $datosIniciales = [
     "cliente_id" => $ped["cliente_id"] ?? null,
 ];
 $itemsIniciales = [];
+$bonosIniciales = [];   // productos bonificados (sin costo)
 if ($ped) {
     $idsProductos = [];
     $idPorRef = [];
@@ -42,7 +43,11 @@ if ($ped) {
         if (!isset($idsProductos[$pid]) && isset($idPorRef[$it["referencia"]])) {
             $pid = $idPorRef[$it["referencia"]];   // respaldo: si el id no coincide, se une por referencia
         }
-        $itemsIniciales[$pid] = (int) $it["cantidad"];
+        if (!empty($it["bonificado"])) {
+            $bonosIniciales[$pid] = ($bonosIniciales[$pid] ?? 0) + (int) $it["cantidad"];
+        } else {
+            $itemsIniciales[$pid] = (int) $it["cantidad"];
+        }
     }
 }
 $cfgJs = [
@@ -58,6 +63,7 @@ $cfgJs = [
     "tipoCliente" => $ped ? ($ped["tipo_cliente"] ?? "mayorista") : "",
     "datos" => $datosIniciales,
     "items" => (object) $itemsIniciales,
+    "bonos" => (object) $bonosIniciales,
     "textoEnviar" => $pf["texto_enviar"] ?? "Enviar pedido",
 ];
 $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
@@ -192,10 +198,22 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                         <span><?= htmlspecialchars($p["nombre"], ENT_QUOTES, "UTF-8") ?><?= (int) $p["activo"] !== 1 ? " (desactivado)" : "" ?></span>
                         <em></em>
                     </div>
-                    <div class="pf-step">
+                    <div class="pf-step pf-step-main">
                         <button type="button" class="menos" aria-label="Quitar uno">−</button>
                         <input type="number" class="cant" inputmode="numeric" min="0" max="100000" step="1" value="0" aria-label="Cantidad">
                         <button type="button" class="mas" aria-label="Agregar uno">+</button>
+                        <button type="button" class="bonif" aria-pressed="false" title="Agregar unidades de este producto sin costo (100 % de descuento)">🎁 Bonificado</button>
+                    </div>
+                    <div class="pf-bonif" hidden>
+                        <div class="pf-bonif-info">
+                            <b>🎁 Bonificado</b>
+                            <span>Sin costo · 100 % de descuento · precio lista <s class="pf-bonif-precio"></s></span>
+                        </div>
+                        <div class="pf-step">
+                            <button type="button" class="bmenos" aria-label="Quitar un bonificado">−</button>
+                            <input type="number" class="cantb" inputmode="numeric" min="0" max="100000" step="1" value="0" aria-label="Cantidad bonificada">
+                            <button type="button" class="bmas" aria-label="Agregar un bonificado">+</button>
+                        </div>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -272,7 +290,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 (function () {
     var CFG = window.PF_CFG;
     var $ = function (id) { return document.getElementById(id); };
-    var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, cond: "contado", pedidoId: CFG.pedidoId, items: {},
+    var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, cond: "contado", pedidoId: CFG.pedidoId, items: {}, bonos: {}, abiertos: {},
               ocupado: false, sucio: false, timer: null, ignorar: false, docOk: "" };
 
     var todasLasFilas = Array.prototype.slice.call(document.querySelectorAll(".pf-prod"));
@@ -294,6 +312,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                 PRECIO[id] = precio;
                 INFO[id] = { ref: f.querySelector(".pf-prod-info b").textContent, nombre: f.querySelector(".pf-prod-info span").textContent };
                 f.querySelector(".pf-prod-info em").textContent = dinero(precio);
+                f.querySelector(".pf-bonif-precio").textContent = dinero(precio);
             }
         });
         $("pfListaEtq").textContent = S.lista ? "Lista de precios: " + (S.lista === "detal" ? "DETAL" : "MAYORISTA") : "";
@@ -466,11 +485,21 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     /* ---------- Catálogo ---------- */
     function cantidadDe(id) { return S.items[id] || 0; }
 
+    function bonoDe(id) { return S.bonos[id] || 0; }
+
     function pintarFila(f) {
-        var q = cantidadDe(f.dataset.id);
+        var id = f.dataset.id, q = cantidadDe(id), qb = bonoDe(id);
         var inp = f.querySelector(".cant");
         if (document.activeElement !== inp) { inp.value = q; }
-        f.classList.toggle("sel", q > 0);
+        f.classList.toggle("sel", q > 0 || qb > 0);
+        // Bonificado: el panel se muestra al pulsar el botón (o si ya hay unidades bonificadas)
+        var abierto = !!S.abiertos[id] || qb > 0;
+        f.querySelector(".pf-bonif").hidden = !abierto;
+        var btn = f.querySelector(".bonif");
+        btn.classList.toggle("activo", abierto);
+        btn.setAttribute("aria-pressed", abierto ? "true" : "false");
+        var inb = f.querySelector(".cantb");
+        if (document.activeElement !== inb) { inb.value = qb; }
     }
 
     function fijarCantidad(id, q) {
@@ -482,12 +511,22 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         sucio();
     }
 
+    function fijarBono(id, q) {
+        q = Math.max(0, Math.min(100000, parseInt(q, 10) || 0));
+        if (q > 0) { S.bonos[id] = q; } else { delete S.bonos[id]; }
+        var f = document.querySelector('#pfLista .pf-prod[data-id="' + id + '"]');
+        if (f) { pintarFila(f); }
+        totales();
+        sucio();
+    }
+
+    // El total NO incluye los bonificados (100 % de descuento)
     function totales() {
-        var total = 0, n = 0;
+        var total = 0, n = 0, nb = Object.keys(S.bonos).length;
         Object.keys(S.items).forEach(function (id) { total += S.items[id] * (PRECIO[id] || 0); n++; });
         $("pfTotal").textContent = dinero(total);
         $("pfTotal2").textContent = dinero(total);
-        $("pfCuantos").textContent = n + (n === 1 ? " producto" : " productos");
+        $("pfCuantos").textContent = n + (n === 1 ? " producto" : " productos") + (nb ? " + " + nb + " bonif." : "");
     }
 
     todasLasFilas.forEach(function (f) {
@@ -497,6 +536,25 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         inp.addEventListener("input", function () { fijarCantidad(id, inp.value); });
         inp.addEventListener("focus", function () { if (inp.value === "0") { inp.value = ""; } });
         inp.addEventListener("blur", function () { pintarFila(f); });
+
+        // Bonificado
+        var inb = f.querySelector(".cantb");
+        f.querySelector(".bonif").addEventListener("click", function () {
+            if (S.abiertos[id] || bonoDe(id) > 0) {
+                var tenia = bonoDe(id) > 0;
+                S.abiertos[id] = false;
+                if (tenia) { fijarBono(id, 0); toast("Se quitó el bonificado de " + INFO[id].ref + ".", ""); }
+                else { pintarFila(f); }
+            } else {
+                S.abiertos[id] = true;
+                pintarFila(f);
+            }
+        });
+        f.querySelector(".bmas").addEventListener("click", function () { fijarBono(id, bonoDe(id) + 1); });
+        f.querySelector(".bmenos").addEventListener("click", function () { fijarBono(id, bonoDe(id) - 1); });
+        inb.addEventListener("input", function () { fijarBono(id, inb.value); });
+        inb.addEventListener("focus", function () { if (inb.value === "0") { inb.value = ""; } });
+        inb.addEventListener("blur", function () { pintarFila(f); });
     });
 
     /* ---------- Búsqueda inteligente ----------
@@ -570,7 +628,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     function filtrar() {
         var q = norm($("pfBuscarProd").value).replace(/[^a-z0-9]+/g, " ").trim();
         var terminos = q ? q.split(" ").filter(function (t) { return t.length >= 2 || /\d/.test(t); }) : [];
-        var candidatos = filas.filter(function (f) { return !soloSel || cantidadDe(f.dataset.id) > 0; });
+        var candidatos = filas.filter(function (f) { return !soloSel || cantidadDe(f.dataset.id) > 0 || bonoDe(f.dataset.id) > 0; });
         var res = [];
         if (!terminos.length) {
             res = candidatos.map(function (f) { return { f: f, score: 1, full: true }; });
@@ -609,25 +667,36 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     function renderResumen() {
         var cont = $("pfResumen");
         cont.innerHTML = "";
-        var ids = Object.keys(S.items);
-        if (!ids.length) {
+        var lineas = [];
+        Object.keys(S.items).forEach(function (id) { lineas.push({ id: id, bon: false }); });
+        Object.keys(S.bonos).forEach(function (id) { lineas.push({ id: id, bon: true }); });
+        if (!lineas.length) {
             var p = document.createElement("p");
             p.className = "pf-vacio"; p.textContent = "Aún no ha elegido productos. Vaya al paso 2.";
             cont.appendChild(p); return;
         }
-        ids.forEach(function (id) {
-            var fila = document.createElement("div"); fila.className = "pf-res-fila";
+        lineas.forEach(function (l) {
+            var id = l.id, bon = l.bon;
+            var cant = bon ? S.bonos[id] : S.items[id];
+            var fila = document.createElement("div"); fila.className = "pf-res-fila" + (bon ? " bonif" : "");
             var info = document.createElement("div"); info.className = "pf-res-info";
             var b = document.createElement("b"); b.textContent = INFO[id].ref;
+            if (bon) {
+                var tag = document.createElement("small"); tag.className = "pf-tag-bonif"; tag.textContent = "🎁 BONIFICADO";
+                b.appendChild(tag);
+            }
             var s = document.createElement("span"); s.textContent = INFO[id].nombre;
-            var e = document.createElement("em"); e.textContent = S.items[id] + " × " + dinero(PRECIO[id]) + " = " + dinero(S.items[id] * PRECIO[id]);
+            var e = document.createElement("em");
+            e.textContent = bon
+                ? cant + " × " + dinero(PRECIO[id]) + " = " + dinero(0) + " (100 % de descuento)"
+                : cant + " × " + dinero(PRECIO[id]) + " = " + dinero(cant * PRECIO[id]);
             info.appendChild(b); info.appendChild(s); info.appendChild(e);
             var st = document.createElement("div"); st.className = "pf-step";
             var m = document.createElement("button"); m.type = "button"; m.textContent = "−";
-            var q = document.createElement("span"); q.className = "pf-qty"; q.textContent = S.items[id];
+            var q = document.createElement("span"); q.className = "pf-qty"; q.textContent = cant;
             var a = document.createElement("button"); a.type = "button"; a.textContent = "+";
-            m.addEventListener("click", function () { fijarCantidad(id, cantidadDe(id) - 1); renderResumen(); });
-            a.addEventListener("click", function () { fijarCantidad(id, cantidadDe(id) + 1); renderResumen(); });
+            m.addEventListener("click", function () { if (bon) { fijarBono(id, bonoDe(id) - 1); } else { fijarCantidad(id, cantidadDe(id) - 1); } renderResumen(); });
+            a.addEventListener("click", function () { if (bon) { fijarBono(id, bonoDe(id) + 1); } else { fijarCantidad(id, cantidadDe(id) + 1); } renderResumen(); });
             st.appendChild(m); st.appendChild(q); st.appendChild(a);
             fila.appendChild(info); fila.appendChild(st);
             cont.appendChild(fila);
@@ -677,7 +746,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     function hayContenido() {
         if (!S.lista) { return false; }
         var d = datos();
-        return Object.keys(S.items).length > 0 || d.identificacion || d.cliente_nombre || d.telefono || d.direccion;
+        return Object.keys(S.items).length > 0 || Object.keys(S.bonos).length > 0 || d.identificacion || d.cliente_nombre || d.telefono || d.direccion;
     }
 
     function estadoTexto(t) { $("pfEstado").textContent = t || ""; }
@@ -686,7 +755,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         opciones = opciones || {};
         if (S.ocupado && !opciones.keepalive) { return Promise.resolve(null); }
         S.ocupado = true;
-        var payload = { accion: "guardar", modo: modo, pedido_id: S.pedidoId, datos: datos(), items: S.items };
+        var payload = { accion: "guardar", modo: modo, pedido_id: S.pedidoId, datos: datos(), items: S.items, bonos: S.bonos };
         return llamar(payload, opciones).then(function (r) {
             S.ocupado = false;
             return r;
@@ -744,7 +813,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (!ubicacionOpcional && !d.departamento) { return [1, "Seleccione el departamento.", "pfDepto"]; }
         if (!d.direccion) { return [1, "Ingrese la dirección de entrega.", "pfDireccion"]; }
         if (S.fe && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email_fe || d.email)) { return [1, "Ingrese un correo válido para la factura electrónica.", "pfEmailFe"]; }
-        if (!Object.keys(S.items).length) { return [2, "Elija al menos un producto.", "pfBuscarProd"]; }
+        if (!Object.keys(S.items).length && !Object.keys(S.bonos).length) { return [2, "Elija al menos un producto.", "pfBuscarProd"]; }
         if (S.cond === "credito" && !(d.dias_credito >= 1 && d.dias_credito <= 365)) { return [3, "Indique cuántos días de crédito.", "pfDias"]; }
         return null;
     }
@@ -893,6 +962,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         // Los productos se conservan; solo cambian los precios. Se quitan los que no tengan precio en la nueva lista.
         var quitados = 0;
         Object.keys(S.items).forEach(function (id) { if (PRECIO[id] === undefined) { delete S.items[id]; quitados++; } });
+        Object.keys(S.bonos).forEach(function (id) { if (PRECIO[id] === undefined) { delete S.bonos[id]; quitados++; } });
         todasLasFilas.forEach(pintarFila);
         totales();
         aplicarBloqueo();
@@ -931,6 +1001,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     reconstruirLista();
     aplicarBloqueo();
     Object.keys(CFG.items).forEach(function (id) { if (PRECIO[id] !== undefined) { S.items[id] = CFG.items[id]; } });
+    Object.keys(CFG.bonos || {}).forEach(function (id) { if (PRECIO[id] !== undefined) { S.bonos[id] = CFG.bonos[id]; } });
     todasLasFilas.forEach(pintarFila);
     totales();
 
