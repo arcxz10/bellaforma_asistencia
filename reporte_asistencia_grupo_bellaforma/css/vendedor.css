@@ -232,3 +232,31 @@ body.pf-kb .pf-barra { display: none; }
 /* ---- Buscador de productos ---- */
 .pf-busq-nota { font-size: 13px; color: #6B4A00; background: var(--aviso-bg); border-radius: var(--radio-md); padding: 9px 13px; margin: 0 0 8px; }
 .pf-lista { display: flex; flex-direction: column; }
+
+/* ---- Bonificados (sin costo, 100 % de descuento) ---- */
+.pf-step.pf-step-main { flex-wrap: wrap; justify-content: flex-end; }
+.pf-step button.bonif {
+    width: auto; height: 36px; border-radius: 999px; padding: 0 12px; margin-left: 6px;
+    font-size: 13px; font-weight: 700; white-space: nowrap;
+    background: #fff; border: 1.5px solid #E6B84A; color: #8A5A00;
+}
+.pf-step button.bonif:active { background: #FFF1CC; }
+.pf-step button.bonif.activo { background: #F5A623; border-color: #E08E00; color: #fff; }
+.pf-bonif[hidden] { display: none !important; }
+.pf-bonif {
+    grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    background: #FFF8E6; border: 1.5px dashed #E6B84A; border-radius: 12px; padding: 8px 10px;
+}
+.pf-bonif-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-bonif-info b { color: #8A5A00; font-size: 14px; }
+.pf-bonif-info span { font-size: 12.5px; color: var(--tinta-suave); }
+.pf-step input.cantb { width: 56px !important; min-height: 44px !important; padding: 4px !important; text-align: center; font-weight: 700; -moz-appearance: textfield; }
+.pf-step input.cantb::-webkit-outer-spin-button, .pf-step input.cantb::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pf-tag-bonif { display: inline-block; background: #FFF1CC; color: #8A5A00; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; margin-left: 6px; vertical-align: middle; }
+.pf-res-fila.bonif { background: #FFF8E6; border-radius: 10px; padding-left: 8px; padding-right: 8px; }
+.p-items tr.bonif td { background: #FFF8E6; }
+@media (max-width: 520px) {
+    /* en celular el botón «Bonificado» baja debajo de los botones − y + */
+    .pf-step.pf-step-main { max-width: 152px; }
+    .pf-step button.bonif { flex-basis: 100%; margin: 6px 0 0; }
+}
