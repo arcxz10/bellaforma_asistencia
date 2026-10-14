@@ -45,11 +45,12 @@ const SYSCAFE_PE_FPAGO = [
    Ej:       "PE1" => ["contado" => "110505001", "credito" => "130505001"],
    Lo que no esté aquí usa SYSCAFE_PE_FPAGO. */
 const SYSCAFE_PE_FPAGO_POR_TIPO = [
-    // PE1: crédito = 006 (CUENTAS X COBRAR CLIENTES / CTASXCOBRAR, visto en Syscafe). Falta el código de CONTADO:
-    // reemplace AQUI_CODIGO_CONTADO por el número que aparece en "Forma de pago" de un PE1 de contado (PAGO CONTRAENTREGA).
-    "PE1" => ["contado" => "AQUI_CODIGO_CONTADO", "credito" => "006"],
-    // "RM2" => ["contado" => "AQUI_CODIGO_SYSCAFE", "credito" => "AQUI_CODIGO_SYSCAFE"],
-    // "CT2" => ["contado" => "AQUI_CODIGO_SYSCAFE", "credito" => "AQUI_CODIGO_SYSCAFE"],
+    // 006 = CUENTAS X COBRAR CLIENTES (CTASXCOBRAR), tal como lo muestra Syscafe en PE1, RM2 y CT2.
+    // El contado también usa 006 porque así los registran hoy en Syscafe (vencimiento el mismo día, forma de pago CTASXCOBRAR).
+    // Si algún día el contado debe ir por otra forma de pago, cambie solo ese código.
+    "PE1" => ["contado" => "006", "credito" => "006"],
+    "RM2" => ["contado" => "006", "credito" => "006"],
+    "CT2" => ["contado" => "006", "credito" => "006"],
 ];
 
 /* IVA: el pedido sale SIN IVA (pIva y VrIva en 0) tenga o no factura electrónica.
