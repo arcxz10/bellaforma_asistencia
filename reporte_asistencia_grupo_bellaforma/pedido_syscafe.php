@@ -44,16 +44,22 @@ if (!$pedidos) {
 }
 
 $idUnico = (int) ($_GET["id"] ?? 0);
-$tipoMime = "application/vnd.ms-excel";
+
+// formato=xlsx -> Excel moderno, idéntico a la plantilla PEDIDOS.xlsx que entrega Syscafe. Por defecto: .XLS antiguo.
+$esXlsx = strtolower((string) ($_GET["formato"] ?? "")) === "xlsx";
+$tipoMime = $esXlsx ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "application/vnd.ms-excel";
 
 if ($idUnico > 0 || count($pedidos) === 1) {
     $p = $pedidos[0];
-    $binario = syscafe_pedidos_xls([$p]);
+    $binario = $esXlsx ? syscafe_pedidos_xlsx([$p]) : syscafe_pedidos_xls([$p]);
     $nombre = syscafe_pe_nombre_archivo($p);
 } else {
     // varios pedidos: un solo archivo, del más antiguo al más reciente
-    $binario = syscafe_pedidos_xls(array_reverse($pedidos));
+    $binario = $esXlsx ? syscafe_pedidos_xlsx(array_reverse($pedidos)) : syscafe_pedidos_xls(array_reverse($pedidos));
     $nombre = "PEDIDOS_SYSCAFE_" . date("Ymd_His") . ".XLS";
+}
+if ($esXlsx) {
+    $nombre = preg_replace('/\.XLS$/i', ".xlsx", $nombre);
 }
 
 ob_end_clean();
