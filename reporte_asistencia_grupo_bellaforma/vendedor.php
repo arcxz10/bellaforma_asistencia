@@ -99,6 +99,7 @@ $enviados = array_values(array_filter($misPedidos, fn($p) => $p["estado"] !== "b
 
 $pf = [
     "rol" => "vendedor",
+    "editar_numero" => $puedeDescargar,   // ejecutivo autorizado: puede escribir el número del documento
     "csrf" => $_SESSION["csrf_pedido"],
     "pedido" => $pedidoEditar,
     "productos" => productosParaFormulario($conexion, $pedidoEditar),
