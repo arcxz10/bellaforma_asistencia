@@ -149,7 +149,7 @@ if ($accion === "vend_descargas") {
     $stmt->bind_param("ii", $permiso, $id);
     $stmt->execute();
     $stmt->close();
-    redireccionar($permiso ? "Ese ejecutivo ahora puede descargar el PDF y el Excel de sus pedidos." : "Se quitó el permiso de descargas a ese ejecutivo.", "exito", "vendedores");
+    redireccionar($permiso ? "Ese ejecutivo ahora puede descargar el PDF y el Excel de sus pedidos y editar el número del documento." : "Se quitaron los permisos extra (descargas y número) a ese ejecutivo.", "exito", "vendedores");
 }
 
 /* ---------------- PRODUCTOS (un solo catálogo con precio mayorista y precio detal) ---------------- */
