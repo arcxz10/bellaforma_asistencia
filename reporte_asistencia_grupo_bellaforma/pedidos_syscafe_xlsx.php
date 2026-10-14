@@ -5,11 +5,11 @@
  *
  * Qué va en cada columna (las que no se mencionan van vacías o en 0, igual que la plantilla):
  *   Tipo        -> tipo de documento de Syscafe (SYSCAFE_PE_TIPO, ej. PE5)
- *   Numero      -> N° del pedido de la página (+ SYSCAFE_PE_NUMERO_BASE) a 10 dígitos
+ *   Numero      -> N° que el ejecutivo escribió en el pedido/remisión/cotización (si lo dejó vacío, el id automático + SYSCAFE_PE_NUMERO_BASE), a 10 dígitos
  *   Tercero2    -> cédula del VENDEDOR (ejecutivo)          Tercero1 -> NIT / cédula del CLIENTE
  *   Ano/Mes/Dia -> fecha del pedido                         AnoE/MesE/DiaE -> fecha + plazo
  *   Plazo       -> días de crédito (0 si es de contado)     Anulado -> TRUE si el pedido está anulado
- *   Detalle     -> observaciones del pedido                 Numexterno -> N° del pedido de la página
+ *   Detalle     -> observaciones del pedido                 Numexterno -> el mismo N° del documento
  *   Referencia, Cantidad, VrSubtot (total de la línea), Descritem (nombre del producto)
  *   Fpago       -> forma de pago (SYSCAFE_PE_FPAGO)         Periodo -> AAAAMM
  */
@@ -18,6 +18,13 @@ require_once __DIR__ . "/xls_syscafe.php";   // syscafe_mayusculas()
 
 /* ---- Ajustes de Syscafe (cámbielos aquí si en Syscafe usan otros) ---- */
 const SYSCAFE_PE_TIPO = "PE5";        // tipo de documento del pedido (en pantalla de Syscafe: PE5)
+/* Tipo de documento de Syscafe según lo que elige el ejecutivo y si el pedido lleva factura electrónica:
+   [sin factura electrónica, con factura electrónica] */
+const SYSCAFE_PE_TIPOS = [
+    "pedido"     => ["PE5", "PE1"],
+    "remision"   => ["RM1", "RM2"],
+    "cotizacion" => ["CT1", "CT2"],
+];
 const SYSCAFE_PE_NUMERO_BASE = 0;     // se suma al N° de pedido de la página. Ej: 4500 -> el pedido 22 sale como 0000004522
 const SYSCAFE_PE_FPAGO = "001";       // código de forma de pago
 
@@ -102,14 +109,15 @@ function syscafe_pe_filas(array $p): array
     $plazo = $credito ? max(0, (int) ($p["dias_credito"] ?? 0)) : 0;
     $tsVence = strtotime("+" . $plazo . " days", $ts) ?: $ts;
 
-    $tipo = SYSCAFE_PE_TIPO;
-    $numero = str_pad((string) (SYSCAFE_PE_NUMERO_BASE + (int) $p["id"]), 10, "0", STR_PAD_LEFT);
+    $tipo = SYSCAFE_PE_TIPOS[tipoDocumentoValido($p["tipo_pedido"] ?? "pedido")][!empty($p["factura_electronica"]) ? 1 : 0];
+    $numeroPropio = trim((string) ($p["numero_pedido"] ?? ""));
+    $numero = str_pad($numeroPropio !== "" ? $numeroPropio : (string) (SYSCAFE_PE_NUMERO_BASE + (int) $p["id"]), 10, "0", STR_PAD_LEFT);
     $vendedor = syscafe_pe_digitos((string) ($p["vendedor_identificacion"] ?? ""));
     $cliente = syscafe_pe_digitos((string) ($p["cliente_nit"] ?? ""));
     $anulado = ($p["estado"] ?? "") === "anulado";
     $detalle = trim(preg_replace('/\s+/', " ", (string) ($p["observaciones"] ?? "")) ?? "");
-    $detalle = syscafe_mayusculas(function_exists("mb_substr") ? mb_substr($detalle, 0, 250, "UTF-8") : substr($detalle, 0, 250));
-    $numExterno = numeroPedido($p["id"]);
+    $detalle = syscafe_mayusculas(function_exists("mb_substr") ? mb_substr($detalle, 0, 100, "UTF-8") : substr($detalle, 0, 100));
+    $numExterno = numeroDocumento($p);
 
     $filas = [];
     foreach ($p["items"] as $it) {
@@ -163,7 +171,7 @@ function syscafe_pe_filas(array $p): array
             0.0,                            // AV Descuento Gral
             "",                             // AW Razon Dto
             0.0,                            // AX Vrpropina
-            syscafe_mayusculas((string) $it["nombre"]),   // AY Descritem
+            syscafe_mayusculas(function_exists("mb_substr") ? mb_substr((string) $it["nombre"], 0, 100, "UTF-8") : substr((string) $it["nombre"], 0, 100)),   // AY Descritem
             0.0,                            // AZ VrInc
             "", "", "", "", "",             // BA..BE  Ref1, Ref2, Ref3, Ref4, Agente
             0.0, 0.0, 0.0,                  // BF..BH  VrIBUA, VrICUI, pICUI
@@ -269,11 +277,68 @@ function syscafe_pedidos_xlsx(array $pedidos): string
     ]);
 }
 
+/* ================= Versión .XLS (la que lee Syscafe en "Archivo estandar (xls)") =================
+ * Syscafe no abre .xlsx ("El formato del archivo Microsoft Excel no es válido"): necesita el .XLS antiguo (Excel 2.0 / BIFF2),
+ * el mismo que ya usaba este sistema. Lleva las MISMAS 60 columnas de la plantilla.
+ */
+
+/** Ancho de cada columna en caracteres: en el .XLS define el tamaño del campo que crea Syscafe. */
+function syscafe_pe_ancho(int $i, string $tipo): int
+{
+    $texto = [0 => 6, 1 => 12, 2 => 20, 6 => 8, 7 => 6, 11 => 100, 12 => 20, 14 => 22, 22 => 6, 24 => 20, 29 => 20, 30 => 6,
+              35 => 6, 37 => 6, 43 => 8, 48 => 30, 50 => 100, 52 => 30, 53 => 30, 54 => 30, 55 => 30, 56 => 20];
+    if (isset($texto[$i])) {
+        return $texto[$i];
+    }
+    return $tipo === "T" ? 10 : 14;
+}
+
+function biff2_logico(int $fila, int $col, bool $v): string
+{
+    return biff2_rec(5, pack("vv", $fila, $col) . "\x40\x00\x00" . chr($v ? 1 : 0) . "\x00");
+}
+
+/** Genera el .XLS (BIFF2) con la plantilla de pedidos de Syscafe. $pedidos: pedidos con su arreglo "items". */
+function syscafe_pedidos_xls(array $pedidos): string
+{
+    $cols = SYSCAFE_PE_COLUMNAS;
+    $n = count($cols);
+    $datos = [];
+    foreach ($pedidos as $p) {
+        foreach (syscafe_pe_filas($p) as $fila) {
+            $datos[] = $fila;
+        }
+    }
+
+    $out = biff2_rec(9, pack("vv", 2, 0x10)) . biff2_rec(0x42, pack("v", 1252));
+    $out .= biff2_rec(0, pack("vvvv", 0, count($datos) + 1, 0, $n));
+    foreach ($cols as $i => $c) {
+        $out .= biff2_rec(0x24, pack("CCv", $i, $i, syscafe_pe_ancho($i, $c[1]) * 256));
+    }
+    foreach ($cols as $i => $c) {
+        $out .= biff2_label(0, $i, $c[0]);
+    }
+    foreach ($datos as $k => $fila) {
+        $r = $k + 1;
+        foreach ($cols as $i => $c) {
+            $v = $fila[$i];
+            if ($c[1] === "T") {
+                $out .= biff2_label($r, $i, (string) $v);
+            } elseif ($c[1] === "B") {
+                $out .= biff2_logico($r, $i, (bool) $v);
+            } else {
+                $out .= biff2_numero($r, $i, (float) $v);
+            }
+        }
+    }
+    return $out . biff2_rec(0x0A, "") . "\x00\x00";
+}
+
 function syscafe_pe_nombre_archivo(array $pedido): string
 {
     $base = strtr((string) $pedido["cliente_nombre"], ["á" => "a", "é" => "e", "í" => "i", "ó" => "o", "ú" => "u", "ü" => "u", "ñ" => "n",
                                                      "Á" => "A", "É" => "E", "Í" => "I", "Ó" => "O", "Ú" => "U", "Ü" => "U", "Ñ" => "N"]);
     $base = trim(preg_replace('/[^A-Za-z0-9]+/', "_", strtoupper($base)) ?? "", "_");
     $base = substr($base, 0, 24);
-    return "PEDIDO_" . numeroPedido($pedido["id"]) . ($base !== "" ? "_" . $base : "") . ".xlsx";
+    return strtoupper(tiposDocumentoPedido()[tipoDocumentoValido($pedido["tipo_pedido"] ?? "pedido")][3]) . "_" . numeroDocumento($pedido) . ($base !== "" ? "_" . $base : "") . ".XLS";
 }
