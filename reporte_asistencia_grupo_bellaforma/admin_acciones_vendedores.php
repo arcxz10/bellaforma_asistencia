@@ -5,7 +5,7 @@
  */
 
 $accionesPropias = [
-    "vend_crear", "vend_editar", "vend_estado",
+    "vend_crear", "vend_editar", "vend_estado", "vend_descargas",
     "prod_crear", "prod_editar", "prod_estado", "prod_eliminar",
     "ped_estado", "ped_eliminar", "ped_numero",
     "cli_guardar", "cli_estado", "cli_importar",
@@ -140,6 +140,16 @@ if ($accion === "vend_estado") {
     $stmt->execute();
     $stmt->close();
     redireccionar($activo ? "Ejecutivo activado." : "Ejecutivo desactivado.", "exito", "vendedores");
+}
+
+if ($accion === "vend_descargas") {
+    $id = (int) ($_POST["id"] ?? 0);
+    $permiso = ((int) ($_POST["permiso"] ?? 0)) === 1 ? 1 : 0;
+    $stmt = $conexion->prepare("UPDATE vendedores SET puede_descargar = ? WHERE id = ?");
+    $stmt->bind_param("ii", $permiso, $id);
+    $stmt->execute();
+    $stmt->close();
+    redireccionar($permiso ? "Ese ejecutivo ahora puede descargar el PDF y el Excel de sus pedidos." : "Se quitó el permiso de descargas a ese ejecutivo.", "exito", "vendedores");
 }
 
 /* ---------------- PRODUCTOS (un solo catálogo con precio mayorista y precio detal) ---------------- */
