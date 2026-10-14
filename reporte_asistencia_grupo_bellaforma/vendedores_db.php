@@ -5,7 +5,7 @@
  * - Funciones de formato y consulta de pedidos (admin.php, pedido_pdf.php, pedido_excel.php, vendedor.php).
  */
 
-const ESQUEMA_VEND_VERSION = 10;
+const ESQUEMA_VEND_VERSION = 11;
 
 function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
 {
@@ -298,6 +298,8 @@ function asegurarTablasVendedores(mysqli $c): void
     $ok = agregarColumna($c, "pedidos_vendedores", "numero_pedido", "VARCHAR(12) NULL") && $ok;
     // Productos bonificados (se entregan sin costo: 100 % de descuento)
     $ok = agregarColumna($c, "pedido_vendedor_items", "bonificado", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
+    // Permiso para que el ejecutivo descargue el PDF y el Excel de sus pedidos (lo autoriza el administrador)
+    $ok = agregarColumna($c, "vendedores", "puede_descargar", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
 
     // Solo se marca como terminado si TODO se aplicó; si no, se reintenta en la próxima visita
     if ($ok && $okPrecios && $okClientes) {
