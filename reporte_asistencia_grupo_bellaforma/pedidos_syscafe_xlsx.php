@@ -10,7 +10,7 @@
  *   Ano/Mes/Dia -> fecha del pedido                         AnoE/MesE/DiaE -> fecha + plazo
  *   Plazo       -> días de crédito (0 si es de contado)     Anulado -> TRUE si el pedido está anulado
  *   Detalle     -> observaciones del pedido                 Numexterno -> el mismo N° del documento
- *   Referencia, Cantidad, VrSubtot (total de la línea), Descritem (nombre del producto)
+ *   Referencia, Cantidad, VrSubtot (valor UNITARIO: Syscafe lo multiplica por Cantidad), Descritem (nombre del producto)
  *   Fpago       -> forma de pago (SYSCAFE_PE_FPAGO)         Periodo -> AAAAMM
  */
 require_once __DIR__ . "/xlsx_simple.php";   // xlsx_col(), xlsx_texto(), xlsx_zip()
@@ -134,7 +134,8 @@ function syscafe_pe_filas(array $p): array
     $filas = [];
     foreach ($p["items"] as $it) {
         $cant = (float) $it["cantidad"];
-        $subtotal = isset($it["subtotal"]) ? (float) $it["subtotal"] : $cant * (float) $it["precio_unitario"];
+        // Syscafe toma VrSubtot como valor UNITARIO y lo multiplica por Cantidad (vr.total = cant x VrSubtot)
+        $subtotal = (float) $it["precio_unitario"];
         $filas[] = [
             $tipo,                          // A  Tipo
             $numero,                        // B  Numero
@@ -152,7 +153,7 @@ function syscafe_pe_filas(array $p): array
             "",                             // N  Area
             (string) $it["referencia"],     // O  Referencia
             $cant,                          // P  Cantidad
-            $subtotal,                      // Q  VrSubtot
+            $subtotal,                      // Q  VrSubtot (valor unitario)
             0.0,                            // R  VrIva
             0.0,                            // S  pIva
             "",                             // T  CodServ
