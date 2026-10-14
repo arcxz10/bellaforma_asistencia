@@ -44,7 +44,16 @@ function zip_extraer(string $bin, array $entrada): string
 
 function xlsx_texto_xml(string $s): string
 {
-    return html_entity_decode($s, ENT_QUOTES | ENT_XML1, "UTF-8");
+    $s = html_entity_decode($s, ENT_QUOTES | ENT_XML1, "UTF-8");
+    // Excel guarda los caracteres de control como _xHHHH_ (ej. _x000D_ = salto de línea, _x0002_ = carácter invisible).
+    // Se decodifican: los de control se eliminan y el resto se convierte en su letra.
+    return preg_replace_callback('/_x([0-9A-Fa-f]{4})_/', function ($m) {
+        $cod = hexdec($m[1]);
+        if ($cod < 0x20 || $cod === 0x7F) {
+            return "";
+        }
+        return function_exists("mb_chr") ? (string) mb_chr($cod, "UTF-8") : html_entity_decode("&#" . $cod . ";", ENT_QUOTES, "UTF-8");
+    }, $s) ?? $s;
 }
 
 /** Textos compartidos (sharedStrings.xml) */
