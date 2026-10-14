@@ -6,7 +6,9 @@
  */
 session_start();
 
-if (!isset($_SESSION["admin_id"])) {
+// Entra el administrador, o un ejecutivo (solo a sus propios pedidos y si tiene permiso: ver descargas_vendedor.php)
+$esAdmin = isset($_SESSION["admin_id"]);
+if (!$esAdmin && empty($_SESSION["vendedor_id"])) {
     header("Location: login.html");
     exit;
 }
@@ -19,6 +21,10 @@ require_once "vendedores_db.php";
 require_once "pedidos_lib.php";
 date_default_timezone_set("America/Bogota");
 asegurarTablasVendedores($conexion);
+if (!$esAdmin) {
+    require_once __DIR__ . "/descargas_vendedor.php";
+    autorizarDescargaVendedor($conexion, "pdf");
+}
 
 $autoload = __DIR__ . "/vendor/autoload.php";
 if (!file_exists($autoload)) {
