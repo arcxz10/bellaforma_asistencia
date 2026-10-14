@@ -28,6 +28,15 @@ const SYSCAFE_PE_TIPOS = [
 const SYSCAFE_PE_NUMERO_BASE = 0;     // se suma al N° de pedido de la página. Ej: 4500 -> el pedido 22 sale como 0000004522
 const SYSCAFE_PE_FPAGO = "001";       // código de forma de pago
 
+/* CÉDULA DEL VENDEDOR EN SYSCAFE (columna Tercero2).
+   Debe ser la cédula con la que el vendedor existe como tercero en Syscafe. Si la cédula registrada en esta página
+   es de prueba (ej. 101010) o distinta a la de Syscafe, Syscafe no encuentra al vendedor y rechaza el archivo.
+   Formato:  "cédula en esta página" => "cédula en Syscafe".   Ej: "101010" => "1234567890"
+   Si un ejecutivo no está en la lista, se usa la cédula registrada en la página. */
+const SYSCAFE_PE_VENDEDORES = [
+    // "101010" => "AQUI_LA_CEDULA_REAL_EN_SYSCAFE",
+];
+
 /* [encabezado, tipo (T texto, N número, B verdadero/falso), estilo de datos, estilo del encabezado] — igual que la plantilla */
 const SYSCAFE_PE_COLUMNAS = [
     ["Tipo", "T", 1, 1],
@@ -113,6 +122,9 @@ function syscafe_pe_filas(array $p): array
     $numeroPropio = trim((string) ($p["numero_pedido"] ?? ""));
     $numero = str_pad($numeroPropio !== "" ? $numeroPropio : (string) (SYSCAFE_PE_NUMERO_BASE + (int) $p["id"]), 10, "0", STR_PAD_LEFT);
     $vendedor = syscafe_pe_digitos((string) ($p["vendedor_identificacion"] ?? ""));
+    if (isset(SYSCAFE_PE_VENDEDORES[$vendedor]) && SYSCAFE_PE_VENDEDORES[$vendedor] !== "") {
+        $vendedor = syscafe_pe_digitos((string) SYSCAFE_PE_VENDEDORES[$vendedor]);
+    }
     $cliente = syscafe_pe_digitos((string) ($p["cliente_nit"] ?? ""));
     $anulado = ($p["estado"] ?? "") === "anulado";
     $detalle = trim(preg_replace('/\s+/', " ", (string) ($p["observaciones"] ?? "")) ?? "");
