@@ -54,11 +54,12 @@ function buscarClientePorDocumento(mysqli $c, string $raw): ?array
  * Guarda un pedido.
  *  $d      datos del cliente y condiciones
  *  $items  [producto_id => cantidad]
+ *  $bonos  [producto_id => cantidad] productos BONIFICADOS (se entregan sin costo)
  *  $modo   'borrador' | 'enviar'
  *  $rol    'vendedor' | 'admin'
  * Devuelve ['ok'=>bool, 'error'=>string, 'id'=>int, 'total'=>float, 'estado'=>string]
  */
-function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, array $items, string $modo, string $rol = "vendedor"): array
+function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, array $items, string $modo, string $rol = "vendedor", array $bonos = []): array
 {
     $falla = fn(string $m) => ["ok" => false, "error" => $m];
 
@@ -180,7 +181,15 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
             $cantidades[$pid] = $cant;
         }
     }
-    if ($modo === "enviar" && !$cantidades) {
+    $cantBonos = [];
+    foreach ($bonos as $pid => $cant) {
+        $pid = (int) $pid;
+        $cant = (int) $cant;
+        if ($pid > 0 && $cant > 0 && $cant <= 100000) {
+            $cantBonos[$pid] = $cant;
+        }
+    }
+    if ($modo === "enviar" && !$cantidades && !$cantBonos) {
         return $falla("Seleccione al menos un producto con cantidad.");
     }
 
@@ -198,8 +207,9 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
 
     $lineas = [];
     $total = 0.0;
-    if ($cantidades) {
-        $idsLista = implode(",", array_map("intval", array_keys($cantidades)));
+    if ($cantidades || $cantBonos) {
+        $idsTodos = array_values(array_unique(array_merge(array_keys($cantidades), array_keys($cantBonos))));
+        $idsLista = implode(",", array_map("intval", $idsTodos));
         $tablaProd = tablaProductos($tipoCliente);
         $colPrecio = columnaPrecio($tipoCliente);   // precio_mayorista o precio_detal
         $res = $c->query("SELECT id, referencia, nombre, `$colPrecio` AS precio, activo FROM `$tablaProd` WHERE id IN ($idsLista)");
@@ -207,7 +217,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         while ($res && ($p = $res->fetch_assoc())) {
             $porId[(int) $p["id"]] = $p;
         }
-        foreach ($cantidades as $pid => $cant) {
+        foreach ($idsTodos as $pid) {
             if (!isset($porId[$pid])) {
                 continue;
             }
@@ -219,10 +229,18 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
             if ($precio <= 0) {
                 continue;   // sin precio en esta lista: no se puede pedir
             }
-            $sub = round($precio * $cant, 2);
-            $total += $sub;
-            $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
-                         "precio" => $precio, "cantidad" => $cant, "subtotal" => $sub];
+            if (isset($cantidades[$pid])) {
+                $cant = $cantidades[$pid];
+                $sub = round($precio * $cant, 2);
+                $total += $sub;
+                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
+                             "precio" => $precio, "cantidad" => $cant, "subtotal" => $sub, "bonificado" => 0];
+            }
+            if (isset($cantBonos[$pid])) {
+                // Bonificado: queda el precio de lista como referencia, pero no se cobra (subtotal 0)
+                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
+                             "precio" => $precio, "cantidad" => $cantBonos[$pid], "subtotal" => 0.0, "bonificado" => 1];
+            }
         }
         if ($modo === "enviar" && !$lineas) {
             return $falla("Los productos seleccionados ya no están disponibles.");
@@ -296,11 +314,11 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         }
 
         $insItem = $c->prepare(
-            "INSERT INTO pedido_vendedor_items (pedido_id, producto_id, referencia, nombre, precio_unitario, cantidad, subtotal)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO pedido_vendedor_items (pedido_id, producto_id, referencia, nombre, precio_unitario, cantidad, subtotal, bonificado)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         foreach ($lineas as $l) {
-            $insItem->bind_param("iissdid", $idFinal, $l["id"], $l["referencia"], $l["nombre"], $l["precio"], $l["cantidad"], $l["subtotal"]);
+            $insItem->bind_param("iissdidi", $idFinal, $l["id"], $l["referencia"], $l["nombre"], $l["precio"], $l["cantidad"], $l["subtotal"], $l["bonificado"]);
             $insItem->execute();
         }
         $insItem->close();
@@ -466,12 +484,13 @@ function manejarApiPedido(mysqli $conexion): void
             $pedidoId = (int) ($in["pedido_id"] ?? 0) ?: null;
             $datos = is_array($in["datos"] ?? null) ? $in["datos"] : [];
             $items = is_array($in["items"] ?? null) ? $in["items"] : [];
+            $bonos = is_array($in["bonos"] ?? null) ? $in["bonos"] : [];
 
             if ($rol === "admin" && !$pedidoId) {
                 api_responder(["ok" => false, "error" => "Falta el pedido a editar."], 400);
             }
 
-            $r = guardarPedido($conexion, $vendedorId, $pedidoId, $datos, $items, $modo, $rol);
+            $r = guardarPedido($conexion, $vendedorId, $pedidoId, $datos, $items, $modo, $rol, $bonos);
             if (!$r["ok"]) {
                 api_responder($r, 422);
             }
