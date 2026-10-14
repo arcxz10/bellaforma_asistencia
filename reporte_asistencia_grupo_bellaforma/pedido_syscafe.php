@@ -33,7 +33,7 @@ register_shutdown_function(function () {
 require_once "conexion.php";
 require_once "vendedores_db.php";
 require_once "pedidos_lib.php";
-require_once "syscafe_pedidos_xlsx.php";
+require_once "pedidos_syscafe_xlsx.php";
 date_default_timezone_set("America/Bogota");
 asegurarTablasVendedores($conexion);
 
