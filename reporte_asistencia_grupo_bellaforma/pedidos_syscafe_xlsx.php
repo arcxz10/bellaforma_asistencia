@@ -156,7 +156,8 @@ function syscafe_pe_filas(array $p): array
         $cant = (float) $it["cantidad"];
         // Syscafe toma VrSubtot como el TOTAL de la línea y calcula el unitario dividiendo entre Cantidad
         $precio = (float) $it["precio_unitario"];
-        $subtotal = round($cant * $precio, 2);
+        $esBon = !empty($it["bonificado"]);                 // bonificado: 100 % de descuento -> total de la línea en 0 (y sin IVA)
+        $subtotal = $esBon ? 0.0 : round($cant * $precio, 2);
         $vrIva = $pIva > 0 ? round($subtotal * $pIva / 100, 2) : 0.0;
         $filas[] = [
             $tipo,                          // A  Tipo
@@ -206,7 +207,9 @@ function syscafe_pe_filas(array $p): array
             0.0,                            // AV Descuento Gral
             "",                             // AW Razon Dto
             0.0,                            // AX Vrpropina
-            syscafe_mayusculas(function_exists("mb_substr") ? mb_substr((string) $it["nombre"], 0, 100, "UTF-8") : substr((string) $it["nombre"], 0, 100)),   // AY Descritem
+            syscafe_mayusculas($esBon
+                ? (function_exists("mb_substr") ? mb_substr((string) $it["nombre"], 0, 86, "UTF-8") : substr((string) $it["nombre"], 0, 86)) . " (BONIFICADO)"
+                : (function_exists("mb_substr") ? mb_substr((string) $it["nombre"], 0, 100, "UTF-8") : substr((string) $it["nombre"], 0, 100))),   // AY Descritem
             0.0,                            // AZ VrInc
             "", "", "", "", "",             // BA..BE  Ref1, Ref2, Ref3, Ref4, Agente
             0.0, 0.0, 0.0,                  // BF..BH  VrIBUA, VrICUI, pICUI
