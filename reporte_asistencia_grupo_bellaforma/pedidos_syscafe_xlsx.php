@@ -10,8 +10,10 @@
  *   Ano/Mes/Dia -> fecha del pedido                         AnoE/MesE/DiaE -> fecha + plazo
  *   Plazo       -> días de crédito (0 si es de contado)     Anulado -> TRUE si el pedido está anulado
  *   Detalle     -> observaciones del pedido                 Numexterno -> el mismo N° del documento
- *   Referencia, Cantidad, VrSubtot (valor UNITARIO: Syscafe lo multiplica por Cantidad), Descritem (nombre del producto)
- *   Fpago       -> forma de pago (SYSCAFE_PE_FPAGO)         Periodo -> AAAAMM
+ *   Referencia, Cantidad, VrSubtot (TOTAL de la línea = cantidad x precio; Syscafe lo divide entre la cantidad), Descritem (nombre del producto)
+ *   Fpago       -> forma de pago (SYSCAFE_PE_FPAGO: contado / crédito)         Periodo -> AAAAMM
+ *   pIva/VrIva  -> solo en documentos con factura electrónica (SYSCAFE_PE_IVA)
+ *   Sugerido    -> precio unitario (para que Syscafe no calcule descuentos)
  */
 require_once __DIR__ . "/xlsx_simple.php";   // xlsx_col(), xlsx_texto(), xlsx_zip()
 require_once __DIR__ . "/xls_syscafe.php";   // syscafe_mayusculas()
@@ -26,7 +28,22 @@ const SYSCAFE_PE_TIPOS = [
     "cotizacion" => ["CT1", "CT2"],
 ];
 const SYSCAFE_PE_NUMERO_BASE = 0;     // se suma al N° de pedido de la página. Ej: 4500 -> el pedido 22 sale como 0000004522
-const SYSCAFE_PE_FPAGO = "001";       // código de forma de pago
+/* Forma de pago (columna Fpago) para TODOS los documentos, con o sin factura electrónica (PE5, PE1, RM1, RM2, CT1, CT2).
+   Son las cuentas que muestra Syscafe en FPago:
+     130505001 = CUENTAS X COBRAR CLIENTES  (pedido a crédito)
+     130505002 = PAGO CONTRAENTREGA          (pedido de contado)
+   Si prefiere otra combinación, solo intercambie los códigos. */
+const SYSCAFE_PE_FPAGO = [
+    "contado" => "130505002",
+    "credito" => "130505001",
+];
+
+/* IVA que se agrega SOLO cuando el pedido lleva factura electrónica (se asume que los precios de la página NO incluyen IVA).
+   Ponga 0 para no enviar IVA. */
+const SYSCAFE_PE_IVA = 19;
+
+/* true -> el precio unitario también va en la columna Sugerido, para que Syscafe use ese valor como precio y no calcule descuentos. */
+const SYSCAFE_PE_USAR_SUGERIDO = true;
 
 /* CÉDULA DEL VENDEDOR EN SYSCAFE (columna Tercero2).
    Debe ser la cédula con la que el vendedor existe como tercero en Syscafe. Si la cédula registrada en esta página
@@ -118,7 +135,10 @@ function syscafe_pe_filas(array $p): array
     $plazo = $credito ? max(0, (int) ($p["dias_credito"] ?? 0)) : 0;
     $tsVence = strtotime("+" . $plazo . " days", $ts) ?: $ts;
 
-    $tipo = SYSCAFE_PE_TIPOS[tipoDocumentoValido($p["tipo_pedido"] ?? "pedido")][!empty($p["factura_electronica"]) ? 1 : 0];
+    $conFE = !empty($p["factura_electronica"]);
+    $tipo = SYSCAFE_PE_TIPOS[tipoDocumentoValido($p["tipo_pedido"] ?? "pedido")][$conFE ? 1 : 0];
+    $fpago = SYSCAFE_PE_FPAGO[$credito ? "credito" : "contado"] ?? "";
+    $pIva = $conFE ? (float) SYSCAFE_PE_IVA : 0.0;
     $numeroPropio = trim((string) ($p["numero_pedido"] ?? ""));
     $numero = str_pad($numeroPropio !== "" ? $numeroPropio : (string) (SYSCAFE_PE_NUMERO_BASE + (int) $p["id"]), 10, "0", STR_PAD_LEFT);
     $vendedor = syscafe_pe_digitos((string) ($p["vendedor_identificacion"] ?? ""));
@@ -134,8 +154,10 @@ function syscafe_pe_filas(array $p): array
     $filas = [];
     foreach ($p["items"] as $it) {
         $cant = (float) $it["cantidad"];
-        // Syscafe toma VrSubtot como valor UNITARIO y lo multiplica por Cantidad (vr.total = cant x VrSubtot)
-        $subtotal = (float) $it["precio_unitario"];
+        // Syscafe toma VrSubtot como el TOTAL de la línea y calcula el unitario dividiendo entre Cantidad
+        $precio = (float) $it["precio_unitario"];
+        $subtotal = round($cant * $precio, 2);
+        $vrIva = $pIva > 0 ? round($subtotal * $pIva / 100, 2) : 0.0;
         $filas[] = [
             $tipo,                          // A  Tipo
             $numero,                        // B  Numero
@@ -153,20 +175,20 @@ function syscafe_pe_filas(array $p): array
             "",                             // N  Area
             (string) $it["referencia"],     // O  Referencia
             $cant,                          // P  Cantidad
-            $subtotal,                      // Q  VrSubtot (valor unitario)
-            0.0,                            // R  VrIva
-            0.0,                            // S  pIva
+            $subtotal,                      // Q  VrSubtot (total de la línea sin IVA)
+            $vrIva,                         // R  VrIva
+            $pIva,                          // S  pIva
             "",                             // T  CodServ
             0.0,                            // U  vrretef
             0.0,                            // V  pretefte
-            SYSCAFE_PE_FPAGO,               // W  Fpago
+            $fpago,                         // W  Fpago
             "",                             // X  Condipago
             "",                             // Y  Tercero3
             0.0, 0.0, 0.0, 0.0,             // Z..AC  vrreIva, PReIva, vrreIca, PReIca
             $numExterno,                    // AD Numexterno
             "",                             // AE Talla
             0.0,                            // AF VrIpocon
-            0.0,                            // AG Sugerido
+            SYSCAFE_PE_USAR_SUGERIDO ? $precio : 0.0,   // AG Sugerido (precio unitario)
             0.0,                            // AH VrRetec
             0.0,                            // AI PRetec
             "",                             // AJ Fpago2
