@@ -15,6 +15,21 @@ if (!isset($_SESSION["admin_id"])) {
 ini_set("display_errors", 0);
 ob_start();
 
+// Si algo falla (archivo faltante, función no encontrada...), se muestra el motivo en texto en vez de un "HTTP 500" en blanco
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if ($e && in_array($e["type"], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        if (!headers_sent()) {
+            http_response_code(500);
+            header("Content-Type: text/plain; charset=utf-8");
+        }
+        echo "No se pudo generar el archivo de Syscafe.\n\nMotivo: " . $e["message"] . "\nArchivo: " . basename($e["file"]) . " (línea " . $e["line"] . ")";
+    }
+});
+
 require_once "conexion.php";
 require_once "vendedores_db.php";
 require_once "pedidos_lib.php";
