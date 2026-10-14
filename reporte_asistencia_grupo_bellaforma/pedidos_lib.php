@@ -51,6 +51,106 @@ function buscarClientePorDocumento(mysqli $c, string $raw): ?array
 }
 
 /**
+ * Mantiene la base de clientes al enviar un pedido:
+ *  - Si el NIT / cédula NO existe, crea el cliente con los datos que se llenaron en el pedido.
+ *  - Si ya existe (y es de la misma lista: mayorista / detal), solo COMPLETA los datos que tenía vacíos; nunca pisa los que ya tiene.
+ * Devuelve el id del cliente o null. Si algo falla no interrumpe el guardado del pedido.
+ */
+function sincronizarClienteDesdePedido(mysqli $c, array $d): ?int
+{
+    try {
+        require_once __DIR__ . "/clientes_lib.php";
+        $raw = trim((string) ($d["identificacion"] ?? ""));
+        $partes = explode("-", $raw);
+        $norm = soloDigitos($partes[0]);
+        $dv = isset($partes[1]) ? soloDigitos($partes[1]) : "";
+        if (strlen($norm) < 5 || trim((string) ($d["razon_social"] ?? "")) === "") {
+            return null;
+        }
+        $lista = listaValida($d["tipo_cliente"] ?? "");
+        $cli = buscarClientePorDocumento($c, $raw);
+
+        if (!$cli) {
+            $r = guardarCliente($c, [
+                "tipo_cliente" => $lista,
+                "tipo_persona" => $d["tipo_persona"] ?? "",
+                "identificacion" => $norm,
+                "dv" => $dv,
+                "razon_social" => $d["razon_social"],
+                "nombre_comercial" => $d["nombre_comercial"] ?? "",
+                "telefono1" => $d["telefono"] ?? "",
+                "email" => $d["email"] ?? "",
+                "email_fe" => $d["email_fe"] ?? "",
+                "departamento" => $d["departamento"] ?? "",
+                "municipio" => $d["municipio"] ?? "",
+                "barrio" => $d["barrio"] ?? "",
+                "direccion" => $d["direccion"] ?? "",
+                "puntos_referencia" => $d["puntos_referencia"] ?? "",
+                "condicion_pago" => $d["condicion_pago"] ?? "contado",
+                "dias_credito" => $d["dias_credito"] ?? "",
+            ], null);
+            return !empty($r["ok"]) ? (int) $r["id"] : null;
+        }
+
+        // Cliente registrado con la otra lista de precios: no se mezcla ni se modifica
+        if (($cli["tipo_cliente"] ?? "mayorista") !== $lista) {
+            return null;
+        }
+
+        // Cliente existente: se llenan solo los campos que estaban vacíos
+        $sets = [];
+        $tipos = "";
+        $vals = [];
+        foreach (["nombre_comercial", "email", "email_fe", "departamento", "municipio", "barrio", "direccion", "puntos_referencia"] as $col) {
+            $nuevo = trim((string) ($d[$col] ?? ""));
+            if ($nuevo !== "" && trim((string) ($cli[$col] ?? "")) === "") {
+                $sets[] = "`$col` = ?";
+                $tipos .= "s";
+                $vals[] = $nuevo;
+            }
+        }
+        $tel = trim((string) ($d["telefono"] ?? ""));
+        if ($tel !== "" && trim((string) ($cli["telefono1"] ?? "")) === "" && trim((string) ($cli["movil"] ?? "")) === "") {
+            $sets[] = "`telefono1` = ?";
+            $tipos .= "s";
+            $vals[] = $tel;
+        }
+        if ($dv !== "" && trim((string) ($cli["dv"] ?? "")) === "") {
+            $sets[] = "`dv` = ?";
+            $tipos .= "s";
+            $vals[] = $dv;
+        }
+        if ($sets) {
+            $tabla = tablaClientes();
+            $st = $c->prepare("UPDATE `$tabla` SET " . implode(", ", $sets) . " WHERE id = ?");
+            $tipos .= "i";
+            $vals[] = (int) $cli["id"];
+            $st->bind_param($tipos, ...$vals);
+            $st->execute();
+            $st->close();
+        }
+        return (int) $cli["id"];
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** ¿El administrador autorizó a este ejecutivo (descargas + editar el número del documento)? */
+function vendedorPuedeEditarNumero(mysqli $c, int $vendedorId): bool
+{
+    if ($vendedorId <= 0) {
+        return false;
+    }
+    $st = $c->prepare("SELECT puede_descargar FROM vendedores WHERE id = ? AND activo = 1 LIMIT 1");
+    $st->bind_param("i", $vendedorId);
+    $st->execute();
+    $res = $st->get_result();
+    $f = $res ? $res->fetch_assoc() : null;
+    $st->close();
+    return $f && (int) $f["puede_descargar"] === 1;
+}
+
+/**
  * Guarda un pedido.
  *  $d      datos del cliente y condiciones
  *  $items  [producto_id => cantidad]
@@ -101,8 +201,9 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         ? (string) $d["tipo_documento"]
         : ($existente["tipo_pedido"] ?? "pedido");
     $nombreDoc = nombreCortoDocumento($tipoDoc);
-    // Solo el administrador puede escribir o cambiar el número; el vendedor conserva el que ya tenga (vacío = automático)
-    $numeroDoc = $rol === "admin" ? trim((string) ($d["numero"] ?? "")) : trim((string) ($existente["numero_pedido"] ?? ""));
+    // Pueden escribir o cambiar el número el administrador y los ejecutivos autorizados; los demás conservan el que ya tengan (vacío = automático)
+    $puedeNumero = $rol === "admin" || (array_key_exists("numero", $d) && vendedorPuedeEditarNumero($c, $vendedorId));
+    $numeroDoc = $puedeNumero ? trim((string) ($d["numero"] ?? "")) : trim((string) ($existente["numero_pedido"] ?? ""));
     if ($numeroDoc !== "" && (!preg_match('/^\d{1,10}$/', $numeroDoc) || (int) $numeroDoc < 1)) {
         return $falla("El número de la " . $nombreDoc . " solo puede tener dígitos (máximo 10) y debe ser mayor que 0.");
     }
@@ -255,6 +356,19 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         $estado = "borrador";
     } else {
         $estado = "pendiente";
+    }
+
+    // ---- Base de clientes: al ENVIAR se crea el cliente nuevo y se completan los datos que le falten (los borradores no) ----
+    if ($modo === "enviar") {
+        $idCliente = sincronizarClienteDesdePedido($c, [
+            "tipo_cliente" => $tipoCliente, "tipo_persona" => $tipo, "identificacion" => $ident, "razon_social" => $nombre,
+            "nombre_comercial" => $comercial, "telefono" => $telefono, "email" => $email, "email_fe" => $emailFe,
+            "departamento" => $depto, "municipio" => $muni, "barrio" => $barrio, "direccion" => $direccion,
+            "puntos_referencia" => $puntos, "condicion_pago" => $condicion, "dias_credito" => $dias,
+        ]);
+        if ($idCliente) {
+            $clienteId = $idCliente;
+        }
     }
 
     $campos = [
