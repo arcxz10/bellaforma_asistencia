@@ -140,6 +140,7 @@ foreach ($pedidos as $p) {
     encabezadoTabla($pdf);
     $fill = false;
     $totalUnidades = 0;
+    $unidadesBonificadas = 0;
 
     foreach ($p["items"] as $it) {
         if ($pdf->GetY() > 262) {
@@ -147,16 +148,26 @@ foreach ($pedidos as $p) {
             $pdf->SetY(14);
             encabezadoTabla($pdf);
         }
+        $esBon = !empty($it["bonificado"]);   // bonificado: 100 % de descuento, no se cobra
         $totalUnidades += (int) $it["cantidad"];
-        $pdf->SetFillColor(245, 249, 255);
+        if ($esBon) {
+            $unidadesBonificadas += (int) $it["cantidad"];
+            $pdf->SetFillColor(255, 244, 214);
+            $relleno = true;
+        } else {
+            $pdf->SetFillColor(245, 249, 255);
+            $relleno = $fill;
+        }
         $pdf->SetFont("Arial", "B", 9);
-        $pdf->Cell(32, 6.5, recortar($pdf, $it["referencia"], 30), "LRB", 0, "L", $fill);
+        $pdf->Cell(32, 6.5, recortar($pdf, $it["referencia"], 30), "LRB", 0, "L", $relleno);
         $pdf->SetFont("Arial", "", 9);
-        $pdf->Cell(80, 6.5, recortar($pdf, $it["nombre"], 78), "RB", 0, "L", $fill);
-        $pdf->Cell(16, 6.5, (string) (int) $it["cantidad"], "RB", 0, "R", $fill);
-        $pdf->Cell(29, 6.5, cop($it["precio_unitario"]), "RB", 0, "R", $fill);
-        $pdf->Cell(29, 6.5, cop($it["subtotal"]), "RB", 1, "R", $fill);
-        $fill = !$fill;
+        $pdf->Cell(80, 6.5, recortar($pdf, $it["nombre"] . ($esBon ? " (BONIFICADO)" : ""), 78), "RB", 0, "L", $relleno);
+        $pdf->Cell(16, 6.5, (string) (int) $it["cantidad"], "RB", 0, "R", $relleno);
+        $pdf->Cell(29, 6.5, cop($it["precio_unitario"]), "RB", 0, "R", $relleno);
+        $pdf->Cell(29, 6.5, $esBon ? cop(0) : cop($it["subtotal"]), "RB", 1, "R", $relleno);
+        if (!$esBon) {
+            $fill = !$fill;
+        }
     }
 
     if ($pdf->GetY() > 262) {
@@ -167,6 +178,10 @@ foreach ($pedidos as $p) {
     $pdf->Cell(112, 8, t("Total unidades: " . $totalUnidades), 0, 0, "L");
     $pdf->Cell(45, 8, t("TOTAL " . $nombreDocPdf), 0, 0, "R");
     $pdf->Cell(29, 8, cop($p["total"]), 0, 1, "R");
+    if ($unidadesBonificadas > 0) {
+        $pdf->SetFont("Arial", "", 9);
+        $pdf->Cell(0, 6, t("Incluye " . $unidadesBonificadas . " unidad(es) BONIFICADA(S): 100% de descuento, sin costo."), 0, 1, "L");
+    }
 }
 
 $idUnico = (int) ($_GET["id"] ?? 0);
