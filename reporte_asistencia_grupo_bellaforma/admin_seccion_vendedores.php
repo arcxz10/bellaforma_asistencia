@@ -21,7 +21,7 @@ if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $hastaV)) {
     $paramsV[] = $hastaV;
 }
 
-$sqlV = "SELECT v.id, v.nombre, v.identificacion, v.ciudad, v.telefono, v.usuario, v.activo,
+$sqlV = "SELECT v.id, v.nombre, v.identificacion, v.ciudad, v.telefono, v.usuario, v.activo, v.puede_descargar,
                 COUNT(p.id) AS total_pedidos,
                 COALESCE(SUM(p.total), 0) AS total_valor
          FROM vendedores v
@@ -35,7 +35,7 @@ if ($buscarV !== "") {
     array_push($paramsV, $likeV, $likeV, $likeV);
 }
 
-$sqlV .= " GROUP BY v.id, v.nombre, v.identificacion, v.ciudad, v.telefono, v.usuario, v.activo";
+$sqlV .= " GROUP BY v.id, v.nombre, v.identificacion, v.ciudad, v.telefono, v.usuario, v.activo, v.puede_descargar";
 $sqlV .= $ordenV === "pedidos"
     ? " ORDER BY total_pedidos DESC, total_valor DESC, v.nombre ASC"
     : " ORDER BY total_valor DESC, total_pedidos DESC, v.nombre ASC";
@@ -114,12 +114,13 @@ $datosGraficoVend = array_map(function ($v) {
                     <th class="num-der">Pedidos</th>
                     <th class="num-der">Valor total</th>
                     <th>Estado</th>
+                    <th>Descargas</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (!$vendedoresLista): ?>
-                    <tr><td colspan="9" class="sin-resultados">No hay vendedores registrados.</td></tr>
+                    <tr><td colspan="10" class="sin-resultados">No hay vendedores registrados.</td></tr>
                 <?php else: ?>
                     <?php foreach ($vendedoresLista as $i => $v): ?>
                         <tr>
@@ -136,6 +137,20 @@ $datosGraficoVend = array_map(function ($v) {
                                 <?php else: ?>
                                     <span class="estado estado-inactivo">Inactivo</span>
                                 <?php endif; ?>
+                            </td>
+                            <td>
+                                <form method="POST" action="admin.php" class="form-inline">
+                                    <input type="hidden" name="accion" value="vend_descargas">
+                                    <input type="hidden" name="id" value="<?= (int) $v["id"] ?>">
+                                    <input type="hidden" name="permiso" value="<?= (int) ($v["puede_descargar"] ?? 0) === 1 ? 0 : 1 ?>">
+                                    <?php if ((int) ($v["puede_descargar"] ?? 0) === 1): ?>
+                                        <span class="estado estado-activo">PDF + Excel: Sí</span>
+                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return confirm('¿Quitar el permiso de descargar PDF y Excel a este ejecutivo?')">Quitar</button>
+                                    <?php else: ?>
+                                        <span class="estado estado-inactivo">No</span>
+                                        <button type="submit" class="btn-activar btn-fila">Permitir</button>
+                                    <?php endif; ?>
+                                </form>
                             </td>
                             <td>
                                 <button type="button" class="btn-editar btn-fila"
