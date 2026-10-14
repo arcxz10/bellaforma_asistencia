@@ -214,13 +214,13 @@ foreach ($pedidosAdmin as $pp) {
                                             <tr><th>Referencia</th><th>Producto</th><th class="num-der">Cant.</th><th class="num-der">Precio</th><th class="num-der">Subtotal</th></tr>
                                         </thead>
                                         <tbody>
-                                            <?php foreach ($ped["items"] as $it): ?>
-                                                <tr>
+                                            <?php foreach ($ped["items"] as $it): $esBon = !empty($it["bonificado"]); ?>
+                                                <tr<?= $esBon ? ' style="background:#FFF8E6"' : "" ?>>
                                                     <td><strong><?= escapar($it["referencia"]) ?></strong></td>
-                                                    <td><?= escapar($it["nombre"]) ?></td>
+                                                    <td><?= escapar($it["nombre"]) ?><?= $esBon ? ' <span style="background:#FFF1CC;color:#8A5A00;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;">🎁 BONIFICADO · 100 % dto.</span>' : "" ?></td>
                                                     <td class="num-der"><?= (int) $it["cantidad"] ?></td>
                                                     <td class="num-der"><?= formatoCOP($it["precio_unitario"]) ?></td>
-                                                    <td class="num-der"><?= formatoCOP($it["subtotal"]) ?></td>
+                                                    <td class="num-der"><?= formatoCOP($esBon ? 0 : $it["subtotal"]) ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
                                             <tr>
