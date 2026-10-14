@@ -51,6 +51,10 @@ const SYSCAFE_PE_FPAGO_POR_TIPO = [
     "PE1" => ["contado" => "006", "credito" => "006"],
     "RM2" => ["contado" => "006", "credito" => "006"],
     "CT2" => ["contado" => "006", "credito" => "006"],
+    // Documentos SIN factura electrónica: también usan la forma de pago 006 (130505001 es la cuenta contable, no la forma de pago)
+    "PE5" => ["contado" => "006", "credito" => "006"],
+    "RM1" => ["contado" => "006", "credito" => "006"],
+    "CT1" => ["contado" => "006", "credito" => "006"],
 ];
 
 /* IVA: el pedido sale SIN IVA (pIva y VrIva en 0) tenga o no factura electrónica.
