@@ -20,9 +20,18 @@ function biff2_cp1252(string $s): string
     return $r === false ? preg_replace('/[^\x20-\x7E]/', "?", $s) : $r;
 }
 
+/** Quita lo que Syscafe no tolera dentro de una celda: saltos de línea, tabulaciones, caracteres de control y restos de Excel (_x000D_). */
+function biff2_limpiar(string $s): string
+{
+    $s = preg_replace('/_x[0-9A-F]{4}_/i', " ", $s) ?? $s;
+    $limpio = preg_replace('/[\x00-\x1F\x7F\x{80}-\x{9F}]+/u', " ", $s);
+    $s = $limpio ?? $s;
+    return trim(preg_replace('/ {2,}/', " ", $s) ?? $s);
+}
+
 function biff2_label(int $fila, int $col, string $s): string
 {
-    $b = substr(biff2_cp1252($s), 0, 255);
+    $b = substr(biff2_cp1252(biff2_limpiar($s)), 0, 255);
     return biff2_rec(4, pack("vv", $fila, $col) . "\x40\x00\x00" . chr(strlen($b)) . $b);
 }
 
