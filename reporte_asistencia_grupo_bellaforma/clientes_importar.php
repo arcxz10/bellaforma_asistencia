@@ -94,6 +94,27 @@ function clientePlanDeHojas(string $ruta, string $tipoDefecto): array
     return $plan ?: [["indice" => 0, "hoja" => "", "tipo" => $tipoDefecto]];
 }
 
+/**
+ * Limpia en la base los restos de Excel (_x000D_, _x0002_...) que quedaron en cargas anteriores.
+ * Se ejecuta después de cada importación; si el servidor no soporta REGEXP_REPLACE usa un reemplazo simple.
+ */
+function limpiarRestosExcelClientes(mysqli $c): void
+{
+    $tabla = tablaClientes();
+    $campos = array_merge(array_keys(CLIENTE_TEXTOS), ["observaciones"]);
+    foreach ($campos as $campo) {
+        try {
+            $c->query("UPDATE `$tabla` SET `$campo` = TRIM(REGEXP_REPLACE(`$campo`, '_x[0-9A-Fa-f]{4}_', ' ')) WHERE `$campo` REGEXP '_x[0-9A-Fa-f]{4}_'");
+        } catch (Throwable $e) {
+            try {
+                $c->query("UPDATE `$tabla` SET `$campo` = TRIM(REPLACE(REPLACE(`$campo`, '_x000D_', ' '), '_x0002_', '')) WHERE `$campo` LIKE '%\\_x0%'");
+            } catch (Throwable $e2) {
+                // no es crítico: la importación ya quedó guardada
+            }
+        }
+    }
+}
+
 /** Importa clientes desde .xlsx o .csv. Devuelve ["ok", "nuevos", "actualizados", "por_hoja", "omitidos", "total_omitidos", "separadores"] o ["ok"=>false, "error"]. */
 function importarClientesArchivo(mysqli $c, string $tipoDefecto, string $ruta): array
 {
@@ -204,6 +225,7 @@ function importarClientesArchivo(mysqli $c, string $tipoDefecto, string $ruta): 
             $st->close();
         }
         $c->commit();
+        limpiarRestosExcelClientes($c);
     } catch (Throwable $e) {
         $c->rollback();
         return ["ok" => false, "error" => "Falló la importación y no se guardó nada: " . substr($e->getMessage(), 0, 160)];
