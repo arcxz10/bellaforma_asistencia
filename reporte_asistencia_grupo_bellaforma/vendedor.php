@@ -26,7 +26,7 @@ function e($v)
 
 $vendedorId = (int) $_SESSION["vendedor_id"];
 
-$stmt = $conexion->prepare("SELECT id, nombre, identificacion FROM vendedores WHERE id = ? AND activo = 1 LIMIT 1");
+$stmt = $conexion->prepare("SELECT id, nombre, identificacion, puede_descargar FROM vendedores WHERE id = ? AND activo = 1 LIMIT 1");
 $stmt->bind_param("i", $vendedorId);
 $stmt->execute();
 $res = $stmt->get_result();
@@ -38,6 +38,9 @@ if (!$vendedor) {
     header("Location: login_vendedor.php");
     exit;
 }
+
+// ¿El administrador le autorizó descargar el PDF y el Excel de sus pedidos?
+$puedeDescargar = (int) ($vendedor["puede_descargar"] ?? 0) === 1;
 
 if (empty($_SESSION["csrf_pedido"])) {
     $_SESSION["csrf_pedido"] = bin2hex(random_bytes(16));
@@ -106,7 +109,7 @@ $pf = [
     "texto_enviar" => ($pedidoEditar && $pedidoEditar["estado"] === "pendiente") ? "Guardar cambios" : "Enviar pedido",
 ];
 
-function tarjetaPedido(array $ped, string $csrf): void
+function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): void
 {
     $esBorrador = $ped["estado"] === "borrador";
     $nombre = $ped["cliente_nombre"] !== "" ? $ped["cliente_nombre"] : "(sin cliente todavía)";
@@ -118,6 +121,22 @@ function tarjetaPedido(array $ped, string $csrf): void
             <span class="p-cli"><?= e($nombre) ?> <span class="pf-tag-lista <?= e(listaValida($ped["tipo_cliente"] ?? "")) ?>"><?= e(etiquetaTipoCliente($ped["tipo_cliente"] ?? "mayorista")) ?></span></span>
             <span class="p-fecha"><?= date("d/m/Y H:i", strtotime($ped["actualizado_en"] ?? $ped["creado_en"])) ?></span>
             <span class="p-total"><?= formatoCOP($ped["total"]) ?></span>
+            <?php
+            // Descargas debajo del pedido: el PDF de las cotizaciones lo ven todos; el PDF de cualquier documento y el Excel, solo los ejecutivos autorizados
+            $esCotizacion = ($ped["tipo_pedido"] ?? "pedido") === "cotizacion";
+            $verPdf = !$esBorrador && ($esCotizacion || $puedeDescargar);
+            $verExcel = !$esBorrador && $puedeDescargar;
+            ?>
+            <?php if ($verPdf || $verExcel): ?>
+                <span style="grid-column:1 / -1; display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+                    <?php if ($verPdf): ?>
+                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>">📄 Descargar PDF</a>
+                    <?php endif; ?>
+                    <?php if ($verExcel): ?>
+                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00796B;" href="pedido_excel.php?id=<?= (int) $ped["id"] ?>">📊 Descargar Excel</a>
+                    <?php endif; ?>
+                </span>
+            <?php endif; ?>
             <?php if ($esBorrador): ?>
                 <span style="grid-column:1 / -1; display:flex; gap:8px; margin-top:6px;">
                     <button type="button" class="btn btn-rojo" style="min-height:40px; padding:6px 14px; font-size:14px;"
@@ -219,7 +238,7 @@ function tarjetaPedido(array $ped, string $csrf): void
 
             <?php if ($enviados): ?>
                 <div class="ped-grupo">Pedidos enviados</div>
-                <?php foreach ($enviados as $ped) { tarjetaPedido($ped, $_SESSION["csrf_pedido"]); } ?>
+                <?php foreach ($enviados as $ped) { tarjetaPedido($ped, $_SESSION["csrf_pedido"], $puedeDescargar); } ?>
             <?php endif; ?>
         </div>
     </div>
