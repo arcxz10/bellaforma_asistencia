@@ -114,7 +114,7 @@ $datosGraficoVend = array_map(function ($v) {
                     <th class="num-der">Pedidos</th>
                     <th class="num-der">Valor total</th>
                     <th>Estado</th>
-                    <th>Descargas</th>
+                    <th>Permisos extra</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -144,8 +144,8 @@ $datosGraficoVend = array_map(function ($v) {
                                     <input type="hidden" name="id" value="<?= (int) $v["id"] ?>">
                                     <input type="hidden" name="permiso" value="<?= (int) ($v["puede_descargar"] ?? 0) === 1 ? 0 : 1 ?>">
                                     <?php if ((int) ($v["puede_descargar"] ?? 0) === 1): ?>
-                                        <span class="estado estado-activo">PDF + Excel: Sí</span>
-                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return confirm('¿Quitar el permiso de descargar PDF y Excel a este ejecutivo?')">Quitar</button>
+                                        <span class="estado estado-activo">PDF, Excel y número: Sí</span>
+                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return confirm('¿Quitar a este ejecutivo el permiso de descargar PDF y Excel y de editar el número?')">Quitar</button>
                                     <?php else: ?>
                                         <span class="estado estado-inactivo">No</span>
                                         <button type="submit" class="btn-activar btn-fila">Permitir</button>
