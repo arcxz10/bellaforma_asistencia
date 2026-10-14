@@ -12,7 +12,7 @@
  *   Detalle     -> observaciones del pedido                 Numexterno -> el mismo N° del documento
  *   Referencia, Cantidad, VrSubtot (TOTAL de la línea = cantidad x precio; Syscafe lo divide entre la cantidad), Descritem (nombre del producto)
  *   Fpago       -> forma de pago (SYSCAFE_PE_FPAGO: contado / crédito)         Periodo -> AAAAMM
- *   pIva/VrIva  -> solo en documentos con factura electrónica (SYSCAFE_PE_IVA)
+ *   pIva/VrIva  -> siempre 0 (SYSCAFE_PE_IVA = 0: sin IVA)
  *   Sugerido    -> precio unitario (para que Syscafe no calcule descuentos)
  */
 require_once __DIR__ . "/xlsx_simple.php";   // xlsx_col(), xlsx_texto(), xlsx_zip()
@@ -38,9 +38,21 @@ const SYSCAFE_PE_FPAGO = [
     "credito" => "130505001",
 ];
 
-/* IVA que se agrega SOLO cuando el pedido lleva factura electrónica (se asume que los precios de la página NO incluyen IVA).
-   Ponga 0 para no enviar IVA. */
-const SYSCAFE_PE_IVA = 19;
+/* Forma de pago por TIPO DE DOCUMENTO (solo si un tipo usa un código distinto al de arriba).
+   Syscafe respondió "PE1-xxxx : forma de pago no existe": para PE1 (pedido con factura electrónica) el código de arriba
+   no existe. Escriba aquí el código EXACTO que aparece en el campo FPago de Syscafe al abrir un documento PE1.
+   Formato:  "TIPO" => ["contado" => "CODIGO", "credito" => "CODIGO"]
+   Ej:       "PE1" => ["contado" => "110505001", "credito" => "130505001"],
+   Lo que no esté aquí usa SYSCAFE_PE_FPAGO. */
+const SYSCAFE_PE_FPAGO_POR_TIPO = [
+    // "PE1" => ["contado" => "AQUI_CODIGO_SYSCAFE", "credito" => "AQUI_CODIGO_SYSCAFE"],
+    // "RM2" => ["contado" => "AQUI_CODIGO_SYSCAFE", "credito" => "AQUI_CODIGO_SYSCAFE"],
+    // "CT2" => ["contado" => "AQUI_CODIGO_SYSCAFE", "credito" => "AQUI_CODIGO_SYSCAFE"],
+];
+
+/* IVA: el pedido sale SIN IVA (pIva y VrIva en 0) tenga o no factura electrónica.
+   Si algún día necesita volver a enviarlo, cambie el 0 por 19. */
+const SYSCAFE_PE_IVA = 0;
 
 /* true -> el precio unitario también va en la columna Sugerido, para que Syscafe use ese valor como precio y no calcule descuentos. */
 const SYSCAFE_PE_USAR_SUGERIDO = true;
@@ -137,7 +149,8 @@ function syscafe_pe_filas(array $p): array
 
     $conFE = !empty($p["factura_electronica"]);
     $tipo = SYSCAFE_PE_TIPOS[tipoDocumentoValido($p["tipo_pedido"] ?? "pedido")][$conFE ? 1 : 0];
-    $fpago = SYSCAFE_PE_FPAGO[$credito ? "credito" : "contado"] ?? "";
+    $claveFpago = $credito ? "credito" : "contado";
+    $fpago = SYSCAFE_PE_FPAGO_POR_TIPO[$tipo][$claveFpago] ?? SYSCAFE_PE_FPAGO[$claveFpago] ?? "";
     $pIva = $conFE ? (float) SYSCAFE_PE_IVA : 0.0;
     $numeroPropio = trim((string) ($p["numero_pedido"] ?? ""));
     $numero = str_pad($numeroPropio !== "" ? $numeroPropio : (string) (SYSCAFE_PE_NUMERO_BASE + (int) $p["id"]), 10, "0", STR_PAD_LEFT);
