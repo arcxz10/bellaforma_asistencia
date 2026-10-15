@@ -76,7 +76,7 @@ if (!$empleado) {
 
 // --- Asistencias del periodo, día por día ---
 $stmt = $conexion->prepare("
-    SELECT fecha, hora_entrada, hora_salida, minutos_retraso, minutos_extra, minutos_deuda
+    SELECT fecha, hora_entrada, hora_salida, hora_salida_almuerzo, hora_entrada_almuerzo, minutos_retraso, minutos_extra, minutos_deuda
     FROM asistencias
     WHERE empleado_id = ? AND fecha BETWEEN ? AND ?
     ORDER BY fecha ASC
@@ -84,6 +84,48 @@ $stmt = $conexion->prepare("
 $stmt->bind_param("iss", $empleadoId, $desde, $hasta);
 $stmt->execute();
 $filas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Temporales: sin horario. Solo se muestra entrada, salida y las horas trabajadas.
+$esTemporal = ($empleado["cargo"] === "Temporales");
+
+function minutosTrabajadosDia($f)
+{
+    if (empty($f["hora_entrada"]) || empty($f["hora_salida"])) {
+        return null;
+    }
+
+    $m = (int) round((strtotime($f["hora_salida"]) - strtotime($f["hora_entrada"])) / 60);
+
+    if (!empty($f["hora_salida_almuerzo"]) && !empty($f["hora_entrada_almuerzo"])) {
+        $m -= max(0, (int) round((strtotime($f["hora_entrada_almuerzo"]) - strtotime($f["hora_salida_almuerzo"])) / 60));
+    }
+
+    return max(0, $m);
+}
+
+// "3 h", "3 h 30 min" o "45 min"
+function textoTrabajado($minutos)
+{
+    $minutos = (int) $minutos;
+    $h = intdiv($minutos, 60);
+    $r = $minutos % 60;
+
+    if ($h > 0) {
+        return $h . " h" . ($r > 0 ? " " . $r . " min" : "");
+    }
+
+    return $r . " min";
+}
+
+$totalTrabajado = 0;
+if ($esTemporal) {
+    foreach ($filas as $i => $f) {
+        $filas[$i]["minutos_retraso"] = 0;
+        $filas[$i]["minutos_extra"] = 0;
+        $filas[$i]["minutos_deuda"] = 0;
+        $totalTrabajado += (int) minutosTrabajadosDia($f);
+    }
+}
 
 $totalRetrasoBruto = 0;
 $totalExtraBruto = 0;
@@ -274,6 +316,12 @@ if (empty($filas)) {
         // La altura de la fila crece un poco si la salida tiene 2 etiquetas
         // a la vez (extra Y deuda el mismo día — raro, pero puede pasar).
         $etiquetasSalida = [];
+        if ($esTemporal) {
+            $mt = minutosTrabajadosDia($f);
+            if ($mt !== null) {
+                $etiquetasSalida[] = ["texto" => "Trabajó: " . textoTrabajado($mt), "color" => [30, 122, 52]];
+            }
+        }
         if ($extra > 0) {
             $etiquetasSalida[] = ["texto" => "Extra: " . minutosAHoras($extra), "color" => $ambar];
         }
@@ -320,8 +368,31 @@ if (empty($filas)) {
     }
 }
 
+// --- Temporales: un solo recuadro con el total de horas trabajadas ---
+if (!empty($filas) && $esTemporal) {
+    $pdf->Ln(6);
+
+    if ($pdf->GetY() > 250) {
+        $pdf->AddPage();
+    }
+
+    $y = $pdf->GetY();
+    $pdf->SetFillColor(233, 247, 236);
+    $pdf->Rect(15, $y, 180, 16, "F");
+
+    $pdf->SetXY(15, $y + 2.5);
+    $pdf->SetFont("Helvetica", "B", 12);
+    $pdf->SetTextColor(30, 122, 52);
+    $pdf->Cell(180, 6, t(textoTrabajado($totalTrabajado)), 0, 2, "C");
+    $pdf->SetX(15);
+    $pdf->SetFont("Helvetica", "", 7.5);
+    $pdf->SetTextColor(91, 102, 118);
+    $pdf->Cell(180, 5, t("Total horas trabajadas del periodo (" . count($filas) . " días)"), 0, 0, "C");
+
+    $pdf->SetY($y + 20);
+
 // --- Resumen total + compensación (misma lógica que Liquidación) ---
-if (!empty($filas)) {
+} elseif (!empty($filas)) {
     $pdf->Ln(6);
 
     if ($pdf->GetY() > 250) {
