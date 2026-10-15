@@ -54,9 +54,15 @@ if ($tipoAccion === "salida") {
     exit;
 }
 
-// Sábado citado (Producción, Temporales, Jefe de Maquinaria, Directora de Despachos):
+// Temporales no tienen horario: nunca llegan tarde.
+if ($cargo === 'Temporales') {
+    echo json_encode(["tipo" => "entrada", "tarde" => false]);
+    exit;
+}
+
+// Sábado citado (Producción, Jefe de Maquinaria, Directora de Despachos):
 // no hay hora de entrada que cumplir, todo cuenta como extra.
-$cargosSabadoExtra = ['Producción', 'Temporales', 'Jefe de Maquinaria', 'Directora de Despachos'];
+$cargosSabadoExtra = ['Producción', 'Jefe de Maquinaria', 'Directora de Despachos'];
 if ($diaSemana === 6 && in_array($cargo, $cargosSabadoExtra, true)) {
     echo json_encode(["tipo" => "entrada", "tarde" => false]);
     exit;
