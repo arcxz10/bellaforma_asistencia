@@ -71,25 +71,43 @@
         
         document.getElementById('dispositivo_id').value = obtenerIdDispositivo();
 
+        // El reloj usa la hora del SERVIDOR (la misma que se guarda al registrar),
+        // en zona America/Bogota, sin depender de la hora del celular.
+        let desfaseServidor = 0;
+
+        async function sincronizarHoraServidor() {
+            try {
+                const t0 = Date.now();
+                const resp = await fetch(location.pathname, { method: 'HEAD', cache: 'no-store' });
+                const t1 = Date.now();
+                const fechaServidor = resp.headers.get('Date');
+                if (fechaServidor) {
+                    desfaseServidor = new Date(fechaServidor).getTime() - (t0 + t1) / 2;
+                }
+            } catch (e) { /* si falla, se usa la hora del dispositivo */ }
+        }
+
+        const formatoBogota = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'America/Bogota',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+        });
+
         function actualizarReloj() {
-            const ahora = new Date();
-            const horas = String(ahora.getHours()).padStart(2, '0');
-            const minutos = String(ahora.getMinutes()).padStart(2, '0');
-            const segundos = String(ahora.getSeconds()).padStart(2, '0');
-            
-            const horaActualStr = `${horas}:${minutos}:${segundos}`;
-            
+            const horaActualStr = formatoBogota.format(new Date(Date.now() + desfaseServidor));
+
             const elementoReloj = document.getElementById('reloj');
             if (elementoReloj) {
                 elementoReloj.textContent = horaActualStr;
             }
-            
+
             const elementoClockBig = document.getElementById('clockBig');
             if (elementoClockBig) {
                 elementoClockBig.textContent = horaActualStr;
             }
         }
-        
+
+        sincronizarHoraServidor().then(actualizarReloj);
+        setInterval(sincronizarHoraServidor, 300000);
         setInterval(actualizarReloj, 1000);
         actualizarReloj();
     </script>
