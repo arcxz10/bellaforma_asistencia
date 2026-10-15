@@ -68,8 +68,9 @@ if ($resultado->num_rows === 0) {
 
         if ($resH->num_rows === 1) {
             $horario = $resH->fetch_assoc();
-            $esSabadoCitado = ($diaSemana === 6 && in_array($cargo, ['Producción', 'Temporales', 'Jefe de Maquinaria', 'Directora de Despachos'], true));
-            if ((int)$horario["trabaja"] === 1 && !$esSabadoCitado) {
+            $esSabadoCitado = ($diaSemana === 6 && in_array($cargo, ['Producción', 'Jefe de Maquinaria', 'Directora de Despachos'], true));
+            // Temporales no tienen horario: nunca se marca retraso ni salida anticipada.
+            if ((int)$horario["trabaja"] === 1 && !$esSabadoCitado && $cargo !== 'Temporales') {
                 $minActuales = (int)explode(":", $horaActual)[0] * 60 + (int)explode(":", $horaActual)[1];
                 
                 // Validación de entrada tarde
