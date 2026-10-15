@@ -91,8 +91,12 @@ $horaActual = date("H:i:s");
 $diaSemana = (int) date("N");
 
 // Si citan a estos cargos un sábado, todo el tiempo trabajado cuenta 100% como horas extra.
-$cargosSabadoExtra = ['Producción', 'Temporales', 'Jefe de Maquinaria', 'Directora de Despachos'];
+$cargosSabadoExtra = ['Producción', 'Jefe de Maquinaria', 'Directora de Despachos'];
 $esSabadoCitado = ($diaSemana === 6 && in_array($cargo, $cargosSabadoExtra, true));
+
+// Temporales: pago por horas trabajadas, sin horario fijo. No tienen retraso, horas extra,
+// deuda ni días no asistidos: solo cuenta la hora de entrada y la de salida.
+$esTemporal = ($cargo === "Temporales");
 
 $sqlFestivo = "
     SELECT descripcion
@@ -158,7 +162,7 @@ $stmtHorario->bind_param("si", $cargo, $diaSemana);
 $stmtHorario->execute();
 $resultadoHorario = $stmtHorario->get_result();
 
-if ($resultadoHorario->num_rows !== 1 && !$esSabadoCitado) {
+if ($resultadoHorario->num_rows !== 1 && !$esSabadoCitado && !$esTemporal) {
     $stmtHorario->close();
     $conexion->close();
 
@@ -177,6 +181,15 @@ if ($esSabadoCitado) {
     $horario = [
         "hora_entrada" => $horario["hora_entrada"] ?? "07:30:00",
         "hora_salida" => $horario["hora_salida"] ?? "07:30:00",
+        "trabaja" => 1,
+    ];
+}
+
+if ($esTemporal) {
+    // Sin horario: puede registrar cualquier día a cualquier hora.
+    $horario = [
+        "hora_entrada" => "00:00:00",
+        "hora_salida" => "23:59:59",
         "trabaja" => 1,
     ];
 }
@@ -251,7 +264,7 @@ if ($tipo === "entrada") {
 
     // Jornada terminada: desde las 5:00 pm ya no se puede registrar entrada.
     // Ese día queda guardado como "no asistió" (salvo que tenga un permiso aprobado).
-    if ($horaActual >= "17:00:00") {
+    if ($horaActual >= "17:00:00" && !$esTemporal) {
 
         $tienePermiso = false;
 
@@ -305,7 +318,7 @@ if ($tipo === "entrada") {
     $partesHorario = explode(":", $horaEntradaProgramada);
     $minutosEntrada = ((int)($partesHorario[0] ?? 0) * 60) + (int)($partesHorario[1] ?? 0);
 
-    if ($minutosActuales > $minutosEntrada && !$esSabadoCitado) {
+    if ($minutosActuales > $minutosEntrada && !$esSabadoCitado && !$esTemporal) {
         $estadoEntrada = "tarde";
         $minutosRetraso = $minutosActuales - $minutosEntrada;
 
@@ -537,6 +550,10 @@ if ($tipo === "salida") {
         $minutosEntradaReal = convertirMinutos($asistencia["hora_entrada"]);
         $minutosExtra = max(0, $minutosActuales - $minutosEntradaReal);
         $minutosDeuda = 0;
+    } elseif ($esTemporal) {
+        // Temporales: solo se guardan entrada y salida; no hay extra ni deuda.
+        $minutosExtra = 0;
+        $minutosDeuda = 0;
     } else {
         if ($minutosActuales > $minutosSalida) {
             $minutosExtra = $minutosActuales - $minutosSalida;
@@ -640,6 +657,18 @@ if ($tipo === "salida") {
 
     $stmt->close();
     $conexion->close();
+
+    if ($esTemporal) {
+        $minTrabajados = $minutosActuales - convertirMinutos($asistencia["hora_entrada"]);
+        if (!empty($regCheck["hora_salida_almuerzo"]) && !empty($regCheck["hora_entrada_almuerzo"])) {
+            $minTrabajados -= max(0, convertirMinutos($regCheck["hora_entrada_almuerzo"]) - convertirMinutos($regCheck["hora_salida_almuerzo"]));
+        }
+        mostrarResultado(
+            "exito",
+            "Salida registrada",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu salida fue registrada a las " . formatoHora($horaActual) . ".<br><strong>Trabajaste " . convertirMinutosTexto(max(0, $minTrabajados)) . " hoy.</strong>"
+        );
+    }
 
     if ($minutosDeuda > 0) {
         mostrarResultado(
