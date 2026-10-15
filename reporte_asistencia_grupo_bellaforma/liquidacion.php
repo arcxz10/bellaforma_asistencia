@@ -38,7 +38,7 @@ define("RECARGO_HORA_EXTRA", 1.25); // 25% de recargo legal, hora extra diurna
 
 // Cargos a los que, si los citan un sábado, TODO el tiempo trabajado ese día cuenta
 // como horas extra. Debe ser la misma lista que $cargosSabadoExtra en registro.php.
-define("CARGOS_SABADO_EXTRA", ["Producción", "Temporales", "Jefe de Maquinaria", "Directora de Despachos"]);
+define("CARGOS_SABADO_EXTRA", ["Producción", "Jefe de Maquinaria", "Directora de Despachos"]);
 
 // --- Producción: tarifa fija diaria (no por SMMLV) ---
 define("VALOR_DIA_PRODUCCION", 60000);
@@ -119,6 +119,11 @@ function cargarMapaHorarios($conexion)
 // Si no hay horario configurado para ese día, solo el domingo se considera no laboral.
 function esDiaLaboral($mapaHorarios, $cargo, $diaN)
 {
+    // Temporales no tienen horario: ningún día cuenta como inasistencia.
+    if ($cargo === "Temporales") {
+        return false;
+    }
+
     // Sábado de estos cargos = solo si los citan; nunca cuenta como inasistencia.
     if ($diaN === 6 && in_array($cargo, CARGOS_SABADO_EXTRA, true)) {
         return false;
@@ -650,6 +655,7 @@ $sqlFN = "
       AND NOT EXISTS (SELECT 1 FROM asistencias a WHERE a.empleado_id = d.empleado_id AND a.fecha = d.fecha)
       AND NOT EXISTS (SELECT 1 FROM festivos fe WHERE fe.fecha = d.fecha)
       AND NOT EXISTS (SELECT 1 FROM permisos p WHERE p.empleado_id = d.empleado_id AND p.fecha = d.fecha AND p.estado = 'aprobado')
+      AND NOT EXISTS (SELECT 1 FROM empleados em WHERE em.id = d.empleado_id AND em.cargo = 'Temporales')
 ";
 $tiposF = "";
 $paramsF = [];
@@ -789,6 +795,15 @@ foreach ($empleadosBase as $fila) {
     $diasConRegistro = (int) $fila["total_dias"];
     $minutosTrabajados = (int) $fila["total_minutos_trabajados"];
 
+    // Temporales: se paga solo por horas trabajadas. Aunque existan registros viejos con
+    // retraso/extra/deuda, se ignoran.
+    $esTemporal = ($fila["cargo"] === "Temporales");
+    if ($esTemporal) {
+        $retrasoBruto = 0;
+        $extraBruto = 0;
+        $deudaBruta = 0;
+    }
+
     // Sábado citado: sus minutos cuentan 100% como extra. No se usan para tapar
     // retraso/deuda de otros días y el día no se paga además como "día trabajado".
     $esCargoSabado = in_array($fila["cargo"], CARGOS_SABADO_EXTRA, true);
@@ -796,7 +811,7 @@ foreach ($empleadosBase as $fila) {
     $sabadosConRegistro = 0;
     $extraDetalle = [];
 
-    foreach (($extraPorDia[$idEmp] ?? []) as $d) {
+    foreach (($esTemporal ? [] : ($extraPorDia[$idEmp] ?? [])) as $d) {
         $esSab = $esCargoSabado && (int) date("N", strtotime($d["fecha"])) === 6;
 
         if ($esSab) {
