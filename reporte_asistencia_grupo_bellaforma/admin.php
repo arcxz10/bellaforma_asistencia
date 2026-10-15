@@ -628,6 +628,19 @@ if ($esUnSoloDia) {
             $fila["estado_dia"] =
                 "no_laboral";
 
+        } elseif ($fila["cargo"] === "Temporales") {
+
+            // Temporales: sin horario. Si registró se muestra como puntual; si no, no es inasistencia.
+            if ($fila["asistencia_id"] !== null) {
+                $registraronDia++;
+                if (!empty($fila["registro_salida"])) {
+                    $salidasDia++;
+                }
+                $fila["estado_dia"] = "puntual";
+            } else {
+                $fila["estado_dia"] = "no_laboral";
+            }
+
         } elseif (
             (int) $fila["trabaja"] !== 1
         ) {
@@ -3178,7 +3191,7 @@ $resultadoEmpleados =
         } else if (cargo === "Temporales") {
 
             horario.textContent =
-                "Lunes a viernes: 8:00 AM - 3:00 PM. Si la citan un sábado: 7:30 AM en adelante cuenta 100% como horas extra. Domingo: no trabaja.";
+                "Sin horario fijo: se paga por las horas trabajadas (de la entrada a la salida). No tiene retrasos, horas extra ni días no asistidos.";
 
         } else if (cargo === "Jefe de Maquinaria") {
 
