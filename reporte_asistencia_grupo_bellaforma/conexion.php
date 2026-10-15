@@ -1,4 +1,9 @@
 <?php
+// Toda la aplicación trabaja con hora de Colombia (UTC-5, sin horario de verano).
+// Se fija en PHP y también en MySQL: Railway usa UTC por defecto, y eso causaba
+// horas con +5 y fechas de "otro día" después de las 7:00 pm.
+date_default_timezone_set("America/Bogota");
+
 $host = "mysql.railway.internal";
 $user = "root";
 $pass = "zfhJTFzwzIdzxFGOrQXoHAIsbGURuxtC";
@@ -12,4 +17,8 @@ if ($conexion->connect_error) {
 }
 
 $conexion->set_charset("utf8");
+
+// Zona horaria de la sesión MySQL: afecta NOW(), CURRENT_TIMESTAMP, CURDATE(),
+// DATE(columna_timestamp) y cómo se leen las columnas TIMESTAMP.
+$conexion->query("SET time_zone = '-05:00'");
 ?>
