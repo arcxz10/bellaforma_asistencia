@@ -799,7 +799,8 @@ function mostrarResultado(
             </div>
         </div>
 
-    </body>
+        <script src="js/bellaforma-ui.js"></script>
+</body>
 
     </html>
     <?php
