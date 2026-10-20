@@ -1,1 +1,809 @@
+<?php
+date_default_timezone_set("America/Bogota");
+require_once "conexion.php";
+
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    header("Location: registro.html");
+    exit;
+}
+
+$documento = trim($_POST["documento"] ?? "");
+$dispositivoId = trim($_POST["dispositivo_id"] ?? "");
+$justificacion = trim($_POST["justificacion"] ?? "");
+$justificacionSalida = trim($_POST["justificacion_salida"] ?? ""); 
+$accionManual = trim($_POST["accion"] ?? ""); 
+
+if ($documento === "") {
+    mostrarResultado(
+        "error",
+        "Documento requerido",
+        "Ingrese su número de documento."
+    );
+}
+
+if ($dispositivoId === "") {
+    mostrarResultado(
+        "error",
+        "Dispositivo no identificado",
+        "No se pudo identificar este dispositivo."
+    );
+}
+
+$sql = "
+    SELECT
+        id,
+        nombre,
+        cargo,
+        dispositivo_id
+    FROM empleados
+    WHERE identificacion = ?
+      AND activo = 1
+    LIMIT 1
+";
+
+$stmt = $conexion->prepare($sql);
+
+if (!$stmt) {
+    mostrarResultado(
+        "error",
+        "Error del sistema",
+        "No se pudo consultar el empleado."
+    );
+}
+
+$stmt->bind_param("s", $documento);
+$stmt->execute();
+$resultado = $stmt->get_result();
+
+if ($resultado->num_rows !== 1) {
+    $stmt->close();
+    $conexion->close();
+
+    mostrarResultado(
+        "error",
+        "Empleado no encontrado",
+        "La identificación no corresponde a un empleado activo."
+    );
+}
+
+$empleado = $resultado->fetch_assoc();
+$stmt->close();
+
+if (
+    !empty($empleado["dispositivo_id"]) &&
+    $empleado["dispositivo_id"] !== $dispositivoId
+) {
+    $conexion->close();
+
+    mostrarResultado(
+        "error",
+        "Dispositivo no autorizado",
+        "Este empleado solo puede registrar su asistencia desde el dispositivo asociado."
+    );
+}
+
+$empleadoId = (int) $empleado["id"];
+$nombre = $empleado["nombre"];
+$cargo = $empleado["cargo"];
+
+$fecha = date("Y-m-d");
+$horaActual = date("H:i:s");
+$diaSemana = (int) date("N");
+
+// Si citan a estos cargos un sábado, todo el tiempo trabajado cuenta 100% como horas extra.
+$cargosSabadoExtra = ['Producción', 'Jefe de Maquinaria', 'Directora de Despachos'];
+$esSabadoCitado = ($diaSemana === 6 && in_array($cargo, $cargosSabadoExtra, true));
+
+// Temporales: pago por horas trabajadas, sin horario fijo. No tienen retraso, horas extra,
+// deuda ni días no asistidos: solo cuenta la hora de entrada y la de salida.
+$esTemporal = ($cargo === "Temporales");
+
+$sqlFestivo = "
+    SELECT descripcion
+    FROM festivos
+    WHERE fecha = ?
+    LIMIT 1
+";
+
+$stmtFestivo = $conexion->prepare($sqlFestivo);
+
+if (!$stmtFestivo) {
+    mostrarResultado(
+        "error",
+        "Error del sistema",
+        "No se pudo comprobar el calendario."
+    );
+}
+
+$stmtFestivo->bind_param("s", $fecha);
+$stmtFestivo->execute();
+$resultadoFestivo = $stmtFestivo->get_result();
+
+if ($resultadoFestivo->num_rows > 0) {
+    $festivo = $resultadoFestivo->fetch_assoc();
+    $descripcion = $festivo["descripcion"];
+
+    $stmtFestivo->close();
+    $conexion->close();
+
+    mostrarResultado(
+        "error",
+        "Día no laboral",
+        "Hoy es día festivo: " .
+        htmlspecialchars($descripcion) .
+        ". No se puede registrar asistencia."
+    );
+}
+
+$stmtFestivo->close();
+
+$sqlHorario = "
+    SELECT
+        hora_entrada,
+        hora_salida,
+        trabaja
+    FROM horarios
+    WHERE cargo = ?
+      AND dia_semana = ?
+    LIMIT 1
+";
+
+$stmtHorario = $conexion->prepare($sqlHorario);
+
+if (!$stmtHorario) {
+    mostrarResultado(
+        "error",
+        "Error del sistema",
+        "No se pudo consultar el horario."
+    );
+}
+
+$stmtHorario->bind_param("si", $cargo, $diaSemana);
+$stmtHorario->execute();
+$resultadoHorario = $stmtHorario->get_result();
+
+if ($resultadoHorario->num_rows !== 1 && !$esSabadoCitado && !$esTemporal) {
+    $stmtHorario->close();
+    $conexion->close();
+
+    mostrarResultado(
+        "error",
+        "Horario no disponible",
+        "No existe un horario configurado para este día."
+    );
+}
+
+$horario = $resultadoHorario->fetch_assoc();
+$stmtHorario->close();
+
+if ($esSabadoCitado) {
+    // Sábado citado: se puede registrar aunque la tabla horarios diga que no se trabaja.
+    $horario = [
+        "hora_entrada" => $horario["hora_entrada"] ?? "07:30:00",
+        "hora_salida" => $horario["hora_salida"] ?? "07:30:00",
+        "trabaja" => 1,
+    ];
+}
+
+if ($esTemporal) {
+    // Sin horario: puede registrar cualquier día a cualquier hora.
+    $horario = [
+        "hora_entrada" => "00:00:00",
+        "hora_salida" => "23:59:59",
+        "trabaja" => 1,
+    ];
+}
+
+if ((int) $horario["trabaja"] !== 1) {
+    $conexion->close();
+
+    mostrarResultado(
+        "error",
+        "Día no laboral",
+        "Hoy no corresponde jornada laboral para los empleados de " .
+        htmlspecialchars($cargo) .
+        "."
+    );
+}
+
+$horaEntradaProgramada = $horario["hora_entrada"];
+$horaSalidaProgramada = $horario["hora_salida"];
+
+$sqlAsistenciaCheck = "
+    SELECT
+        id,
+        hora_entrada,
+        hora_salida,
+        hora_salida_almuerzo,
+        hora_entrada_almuerzo
+    FROM asistencias
+    WHERE empleado_id = ?
+      AND fecha = ?
+    LIMIT 1
+";
+
+$stmtCheck = $conexion->prepare($sqlAsistenciaCheck);
+if (!$stmtCheck) {
+    mostrarResultado("error", "Error del sistema", "No se pudo consultar el estado de asistencia.");
+}
+
+$stmtCheck->bind_param("is", $empleadoId, $fecha);
+$stmtCheck->execute();
+$resultadoCheck = $stmtCheck->get_result();
+
+$regCheck = null;
+if ($resultadoCheck->num_rows > 0) {
+    $regCheck = $resultadoCheck->fetch_assoc();
+}
+$stmtCheck->close();
+
+if (!empty($accionManual)) {
+    $tipo = $accionManual; 
+} else {
+    $tipo = "entrada";
+    if ($regCheck) {
+        if (empty($regCheck["hora_salida"])) {
+            $tipo = "salida";
+        } else {
+            $conexion->close();
+            mostrarResultado(
+                "error",
+                "Registro completo",
+                "Ya registraste tu entrada y salida el día de hoy."
+            );
+        }
+    }
+}
+
+if ($tipo === "entrada") {
+
+    if ($regCheck && !empty($regCheck["hora_entrada"])) {
+        $conexion->close();
+        mostrarResultado("error", "Ya registrado", "Ya registraste tu entrada el día de hoy.");
+    }
+
+    // Jornada terminada: desde las 5:00 pm ya no se puede registrar entrada.
+    // Ese día queda guardado como "no asistió" (salvo que tenga un permiso aprobado).
+    if ($horaActual >= "17:00:00" && !$esTemporal) {
+
+        $tienePermiso = false;
+
+        try {
+            $conexion->query("
+                CREATE TABLE IF NOT EXISTS dias_no_asistidos (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    empleado_id INT NOT NULL,
+                    fecha DATE NOT NULL,
+                    liquidado TINYINT(1) NOT NULL DEFAULT 0,
+                    fecha_liquidacion DATETIME NULL,
+                    creado_en DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_empleado_fecha (empleado_id, fecha)
+                ) DEFAULT CHARSET=utf8
+            ");
+
+            $stmtPerm = $conexion->prepare("SELECT id FROM permisos WHERE empleado_id = ? AND fecha = ? AND estado = 'aprobado' LIMIT 1");
+            if ($stmtPerm) {
+                $stmtPerm->bind_param("is", $empleadoId, $fecha);
+                $stmtPerm->execute();
+                $tienePermiso = $stmtPerm->get_result()->num_rows > 0;
+                $stmtPerm->close();
+            }
+
+            if (!$tienePermiso && !$esSabadoCitado) {
+                $stmtNA = $conexion->prepare("INSERT IGNORE INTO dias_no_asistidos (empleado_id, fecha) VALUES (?, ?)");
+                if ($stmtNA) {
+                    $stmtNA->bind_param("is", $empleadoId, $fecha);
+                    $stmtNA->execute();
+                    $stmtNA->close();
+                }
+            }
+        } catch (Throwable $e) {
+            error_log("registro inasistencia: " . $e->getMessage());
+        }
+
+        $conexion->close();
+
+        mostrarResultado(
+            "error",
+            "Jornada laboral terminada",
+            ($tienePermiso || $esSabadoCitado)
+                ? "La jornada laboral ha terminado (5:00 pm). Ya no es posible registrar la entrada de hoy."
+                : "La jornada laboral ha terminado (5:00 pm). No registraste tu entrada a tiempo, por lo que <strong>se te marcó inasistencia el día de hoy</strong>."
+        );
+    }
+
+    // Validación de entrada corregida por minutos independientes del formato de hora
+    $minutosActuales = (int)date("H") * 60 + (int)date("i");
+    
+    $partesHorario = explode(":", $horaEntradaProgramada);
+    $minutosEntrada = ((int)($partesHorario[0] ?? 0) * 60) + (int)($partesHorario[1] ?? 0);
+
+    if ($minutosActuales > $minutosEntrada && !$esSabadoCitado && !$esTemporal) {
+        $estadoEntrada = "tarde";
+        $minutosRetraso = $minutosActuales - $minutosEntrada;
+
+        if ($justificacion === "") {
+            $conexion->close();
+            mostrarResultado(
+                "error",
+                "Justificación requerida",
+                "Has llegado " . $minutosRetraso . " minutos tarde. Es obligatorio ingresar una justificación para poder registrar la entrada."
+            );
+        }
+
+    } else {
+        $estadoEntrada = "puntual";
+        $minutosRetraso = 0;
+        $justificacion = null; 
+    }
+
+    $sql = "
+        INSERT INTO asistencias
+        (
+            empleado_id,
+            fecha,
+            hora_entrada,
+            estado_entrada,
+            minutos_retraso,
+            justificacion
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+    ";
+
+    $stmt = $conexion->prepare($sql);
+
+    if (!$stmt) {
+        mostrarResultado(
+            "error",
+            "Error del sistema",
+            "No se pudo guardar la entrada."
+        );
+    }
+
+    $stmt->bind_param(
+        "isssis",
+        $empleadoId,
+        $fecha,
+        $horaActual,
+        $estadoEntrada,
+        $minutosRetraso,
+        $justificacion
+    );
+
+    if (!$stmt->execute()) {
+        $stmt->close();
+        $conexion->close();
+
+        mostrarResultado(
+            "error",
+            "No se pudo registrar",
+            "Ocurrió un error al guardar la entrada."
+        );
+    }
+
+    $stmt->close();
+    $conexion->close();
+
+    if ($estadoEntrada === "tarde") {
+        $mensajeTarde = "Hola, " .
+            htmlspecialchars($nombre) .
+            ". Tu entrada fue registrada a las " .
+            formatoHora($horaActual) .
+            ".<br><strong>Retraso: " .
+            $minutosRetraso .
+            " minutos.</strong>";
+
+        if (!empty($justificacion)) {
+            $mensajeTarde .= "<br><small><strong>Justificación:</strong> " . htmlspecialchars($justificacion) . "</small>";
+        }
+
+        mostrarResultado(
+            "tarde",
+            "Entrada registrada",
+            $mensajeTarde
+        );
+
+    } else {
+        mostrarResultado(
+            "exito",
+            "Entrada registrada",
+            "Hola, " .
+            htmlspecialchars($nombre) .
+            ". Tu entrada fue registrada a las " .
+            formatoHora($horaActual) .
+            "."
+        );
+    }
+}
+
+if ($tipo === "salida_almuerzo") {
+
+    if (!$regCheck || empty($regCheck["hora_entrada"])) {
+        $conexion->close();
+        mostrarResultado("error", "Acción no permitida", "Debes registrar tu entrada primero antes de salir a almorzar.");
+    }
+
+    if (!empty($regCheck["hora_salida_almuerzo"])) {
+        $conexion->close();
+        mostrarResultado("error", "Ya registrado", "Ya registraste tu salida a almorzar hoy.");
+    }
+
+    $sql = "UPDATE asistencias SET hora_salida_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
+    $stmt = $conexion->prepare($sql);
+    if (!$stmt) {
+        mostrarResultado("error", "Error del sistema", "No se pudo procesar la salida a almuerzo.");
+    }
+    $stmt->bind_param("sis", $horaActual, $empleadoId, $fecha);
+    $stmt->execute();
+    $stmt->close();
+    $conexion->close();
+
+    mostrarResultado(
+        "exito",
+        "Salida a Almuerzo",
+        "Hola, " . htmlspecialchars($nombre) . ". Tu salida a almorzar fue registrada a las " . formatoHora($horaActual) . "."
+    );
+}
+
+if ($tipo === "entrada_almuerzo") {
+
+    if (!$regCheck || empty($regCheck["hora_salida_almuerzo"])) {
+        $conexion->close();
+        mostrarResultado("error", "Acción no permitida", "Debes registrar tu salida a almorzar primero.");
+    }
+
+    if (!empty($regCheck["hora_entrada_almuerzo"])) {
+        $conexion->close();
+        mostrarResultado("error", "Ya registrado", "Ya registraste tu regreso de almuerzo hoy.");
+    }
+
+    $minutosActuales = convertirMinutos($horaActual);
+    $minutosLimiteAlmuerzo = convertirMinutos("13:10:00");
+    $minutosRetrasoAlmuerzo = 0;
+
+    if ($minutosActuales > $minutosLimiteAlmuerzo) {
+        $minutosRetrasoAlmuerzo = $minutosActuales - $minutosLimiteAlmuerzo;
+    }
+
+    $sql = "UPDATE asistencias SET hora_entrada_almuerzo = ?, minutos_retraso_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
+    
+    $stmt = $conexion->prepare($sql);
+    if (!$stmt) {
+        $sqlAlt = "UPDATE asistencias SET hora_entrada_almuerzo = ? WHERE empleado_id = ? AND fecha = ?";
+        $stmtAlt = $conexion->prepare($sqlAlt);
+        $stmtAlt->bind_param("sis", $horaActual, $empleadoId, $fecha);
+        $stmtAlt->execute();
+        $stmtAlt->close();
+    } else {
+        $stmt->bind_param("siis", $horaActual, $minutosRetrasoAlmuerzo, $empleadoId, $fecha);
+        $stmt->execute();
+        $stmt->close();
+    }
+    
+    $conexion->close();
+
+    if ($minutosRetrasoAlmuerzo > 0) {
+        mostrarResultado(
+            "tarde",
+            "Regreso de Almuerzo",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu regreso de almuerzo fue a las " . formatoHora($horaActual) . ".<br><strong>Retraso de almuerzo: " . $minutosRetrasoAlmuerzo . " minutos.</strong>"
+        );
+    } else {
+        mostrarResultado(
+            "exito",
+            "Regreso de Almuerzo",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu regreso de almuerzo fue registrado a las " . formatoHora($horaActual) . "."
+        );
+    }
+}
+
+if ($tipo === "salida") {
+
+    $sql = "
+        SELECT
+            id,
+            hora_entrada,
+            hora_salida
+        FROM asistencias
+        WHERE empleado_id = ?
+          AND fecha = ?
+        LIMIT 1
+    ";
+
+    $stmt = $conexion->prepare($sql);
+
+    if (!$stmt) {
+        mostrarResultado(
+            "error",
+            "Error del sistema",
+            "No se pudo consultar la asistencia."
+        );
+    }
+
+    $stmt->bind_param("is", $empleadoId, $fecha);
+    $stmt->execute();
+    $resultado = $stmt->get_result();
+
+    if ($resultado->num_rows !== 1) {
+        $stmt->close();
+        $conexion->close();
+
+        mostrarResultado(
+            "error",
+            "Entrada no registrada",
+            "No puedes registrar la salida porque todavía no tienes una entrada registrada hoy."
+        );
+    }
+
+    $asistencia = $resultado->fetch_assoc();
+    $stmt->close();
+
+    $minutosActuales = convertirMinutos($horaActual);
+    $minutosSalida = convertirMinutos($horaSalidaProgramada);
+
+    $minutosExtra = 0;
+    $minutosDeuda = 0;
+
+    // Regla especial: si citan a estos cargos un sábado, todo el tiempo trabajado
+    // (desde la entrada real hasta la salida real) cuenta 100% como horas extra.
+    if ($esSabadoCitado) {
+        $minutosEntradaReal = convertirMinutos($asistencia["hora_entrada"]);
+        $minutosExtra = max(0, $minutosActuales - $minutosEntradaReal);
+        $minutosDeuda = 0;
+    } elseif ($esTemporal) {
+        // Temporales: solo se guardan entrada y salida; no hay extra ni deuda.
+        $minutosExtra = 0;
+        $minutosDeuda = 0;
+    } else {
+        if ($minutosActuales > $minutosSalida) {
+            $minutosExtra = $minutosActuales - $minutosSalida;
+        } elseif ($minutosActuales < $minutosSalida) {
+            $minutosDeuda = $minutosSalida - $minutosActuales;
+            
+            if ($justificacionSalida === "") {
+                $conexion->close();
+                mostrarResultado(
+                    "error",
+                    "Justificación requerida",
+                    "Estás saliendo " . $minutosDeuda . " minutos antes de tu horario. Es obligatorio ingresar una justificación."
+                );
+            }
+        }
+
+        if ($minutosExtra > 0 && $minutosDeuda > 0) {
+            if ($minutosExtra >= $minutosDeuda) {
+                $minutosExtra = $minutosExtra - $minutosDeuda;
+                $minutosDeuda = 0; 
+            } else {
+                $minutosDeuda = $minutosDeuda - $minutosExtra;
+                $minutosExtra = 0; 
+            }
+        }
+    }
+
+    // Descontar minutos de deuda de días anteriores si hoy hizo horas extra
+    // (el sábado citado NO se usa para esto: se guarda completo como extra)
+    if ($minutosExtra > 0 && !$esSabadoCitado) {
+        $sqlDeudas = "SELECT id, minutos_deuda FROM asistencias WHERE empleado_id = ? AND minutos_deuda > 0 AND fecha < ? ORDER BY fecha ASC";
+        $stmtDeudas = $conexion->prepare($sqlDeudas);
+        $stmtDeudas->bind_param("is", $empleadoId, $fecha);
+        $stmtDeudas->execute();
+        $resDeudas = $stmtDeudas->get_result();
+        
+        while ($rowDeuda = $resDeudas->fetch_assoc()) {
+            if ($minutosExtra <= 0) break;
+            
+            $deudaId = $rowDeuda["id"];
+            $deudaPendiente = (int) $rowDeuda["minutos_deuda"];
+            
+            if ($minutosExtra >= $deudaPendiente) {
+                $minutosExtra -= $deudaPendiente;
+                $nuevaDeuda = 0;
+            } else {
+                $nuevaDeuda = $deudaPendiente - $minutosExtra;
+                $minutosExtra = 0;
+            }
+            
+            $sqlUpdateDeuda = "UPDATE asistencias SET minutos_deuda = ? WHERE id = ?";
+            $stmtUpd = $conexion->prepare($sqlUpdateDeuda);
+            $stmtUpd->bind_param("ii", $nuevaDeuda, $deudaId);
+            $stmtUpd->execute();
+            $stmtUpd->close();
+        }
+        $stmtDeudas->close();
+    }
+
+    $sql = "
+        UPDATE asistencias
+        SET
+            hora_salida = ?,
+            minutos_extra = ?,
+            minutos_deuda = ?,
+            justificacion_salida = ?
+        WHERE id = ?
+    ";
+
+    $stmt = $conexion->prepare($sql);
+
+    if (!$stmt) {
+        mostrarResultado(
+            "error",
+            "Error del sistema",
+            "No se pudo guardar la salida."
+        );
+    }
+
+    $asistenciaId = (int) $asistencia["id"];
+
+    $stmt->bind_param(
+        "siisi",
+        $horaActual,
+        $minutosExtra,
+        $minutosDeuda,
+        $justificacionSalida,
+        $asistenciaId
+    );
+
+    if (!$stmt->execute()) {
+        $stmt->close();
+        $conexion->close();
+
+        mostrarResultado(
+            "error",
+            "No se pudo registrar",
+            "Ocurrió un error al guardar la salida."
+        );
+    }
+
+    $stmt->close();
+    $conexion->close();
+
+    if ($esTemporal) {
+        $minTrabajados = $minutosActuales - convertirMinutos($asistencia["hora_entrada"]);
+        if (!empty($regCheck["hora_salida_almuerzo"]) && !empty($regCheck["hora_entrada_almuerzo"])) {
+            $minTrabajados -= max(0, convertirMinutos($regCheck["hora_entrada_almuerzo"]) - convertirMinutos($regCheck["hora_salida_almuerzo"]));
+        }
+        mostrarResultado(
+            "exito",
+            "Salida registrada",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu salida fue registrada a las " . formatoHora($horaActual) . ".<br><strong>Trabajaste " . convertirMinutosTexto(max(0, $minTrabajados)) . " hoy.</strong>"
+        );
+    }
+
+    if ($minutosDeuda > 0) {
+        mostrarResultado(
+            "tarde",
+            "Salida anticipada registrada",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu salida fue registrada a las " . formatoHora($horaActual) . ".<br><strong>Quedaste debiendo: " . convertirMinutosTexto($minutosDeuda) . ".</strong>"
+        );
+    } elseif ($minutosExtra > 0) {
+        mostrarResultado(
+            "extra",
+            "Salida registrada",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu salida fue registrada a las " . formatoHora($horaActual) . ".<br><strong>Horas extra netas: " . convertirMinutosTexto($minutosExtra) . ".</strong>"
+        );
+    } else {
+        mostrarResultado(
+            "exito",
+            "Salida registrada",
+            "Hola, " . htmlspecialchars($nombre) . ". Tu salida fue registrada a las " . formatoHora($horaActual) . "."
+        );
+    }
+}
+
+function convertirMinutos($hora)
+{
+    $partes = explode(":", $hora);
+    $horas = (int) ($partes[0] ?? 0);
+    $minutos = (int) ($partes[1] ?? 0);
+
+    return ($horas * 60) + $minutos;
+}
+
+function convertirMinutosTexto($minutos)
+{
+    $horas = intdiv($minutos, 60);
+    $resto = $minutos % 60;
+
+    if ($horas > 0) {
+        return $horas . " h " . $resto . " min";
+    }
+
+    return $resto . " min";
+}
+
+function formatoHora($hora)
+{
+    $partes = explode(":", $hora);
+    $horas = (int) ($partes[0] ?? 0);
+    $minutos = (int) ($partes[1] ?? 0);
+
+    $periodo = $horas >= 12 ? "PM" : "AM";
+    $horas = $horas % 12;
+
+    if ($horas === 0) {
+        $horas = 12;
+    }
+
+    return sprintf(
+        "%d:%02d %s",
+        $horas,
+        $minutos,
+        $periodo
+    );
+}
+
+function mostrarResultado(
+    $tipo,
+    $titulo,
+    $mensaje
+) {
+    $clase = "success";
+    $icono = "🎉";
+
+    if ($tipo === "error") {
+        $clase = "error";
+        $icono = "❌";
+    }
+
+    if ($tipo === "tarde") {
+        $clase = "warning";
+        $icono = "⏰";
+    }
+
+    if ($tipo === "extra") {
+        $clase = "info";
+        $icono = "✨";
+    }
+
+    ?>
+    <!DOCTYPE html>
+    <html lang="es">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Registro | Grupo Bellaforma</title>
+
+    <link rel="icon" type="image/x-icon" href="img/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+        <link rel="stylesheet" href="css/registro.css">
+    </head>
+
+    <body>
+
+        <div class="registro-header">
+            <div class="header-title"><img src="img/apple-touch-icon.png" alt="Grupo Bella Forma S.A.S." class="logo-marca-chica"></div>
+        </div>
+
+        <div class="container-registro">
+            <div class="registro-card">
+
+                <div class="resultado <?= $clase ?>">
+                    <span class="resultado-icon"><?= $icono ?></span>
+                    <div style="display:inline-block; vertical-align:middle;">
+                        <h3><?= $titulo ?></h3>
+                        <p><?= $mensaje ?></p>
+                    </div>
+                </div>
+
+                <a
+                    href="registro.html"
+                    class="btn btn-back"
+                    style="display:block; text-align:center; margin-top:20px;"
+                >
+                    ← Volver al registro
+                </a>
+
+            </div>
+        </div>
+
+        <script src="js/bellaforma-ui.js"></script>
+</body>
+
+    </html>
+    <?php
+    exit;
+}
 
