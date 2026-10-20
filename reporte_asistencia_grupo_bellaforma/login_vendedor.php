@@ -130,6 +130,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         })();
     </script>
 
+    <script src="js/bellaforma-ui.js"></script>
 </body>
 
 </html>
