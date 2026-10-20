@@ -185,5 +185,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             campoDispositivo.value = obtenerIdDispositivo();
         }
     </script>
+    <script src="js/bellaforma-ui.js"></script>
 </body>
 </html>
