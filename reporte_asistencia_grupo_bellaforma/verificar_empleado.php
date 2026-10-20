@@ -91,5 +91,6 @@ $empleadoId = $empleado["id"];
             </div>
         </div>
     </div>
+    <script src="js/bellaforma-ui.js"></script>
 </body>
 </html>
