@@ -101,5 +101,6 @@ $conexion->close();
 
     </div>
 
+    <script src="js/bellaforma-ui.js"></script>
 </body>
 </html>
