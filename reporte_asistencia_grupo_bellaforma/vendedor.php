@@ -293,6 +293,7 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
         abrirPanel(location.hash.replace("#", "") || "nuevo");
     </script>
 
+    <script src="js/bellaforma-ui.js"></script>
 </body>
 
 </html>
