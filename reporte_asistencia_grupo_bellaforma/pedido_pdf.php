@@ -148,7 +148,16 @@ foreach ($pedidos as $p) {
     $totalUnidades = 0;
     $unidadesBonificadas = 0;
 
-    foreach ($p["items"] as $it) {
+    // Productos ordenados alfabéticamente por referencia (A-Z; los números se ordenan
+    // de forma natural: 2 antes que 10). Si se repite una referencia, primero la cobrada
+    // y luego la bonificada.
+    $itemsOrdenados = $p["items"];
+    usort($itemsOrdenados, function ($a, $b) {
+        $c = strnatcasecmp(trim((string) $a["referencia"]), trim((string) $b["referencia"]));
+        return $c !== 0 ? $c : ((int) !empty($a["bonificado"]) <=> (int) !empty($b["bonificado"]));
+    });
+
+    foreach ($itemsOrdenados as $it) {
         if ($pdf->GetY() > 262) {
             $pdf->AddPage();
             $pdf->SetY(14);
