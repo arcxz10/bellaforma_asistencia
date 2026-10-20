@@ -1916,6 +1916,7 @@ foreach ($empleadosBase as $fila) {
         });
     </script>
 
+    <script src="js/bellaforma-ui.js"></script>
 </body>
 
 </html>
