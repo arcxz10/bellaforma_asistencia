@@ -12,7 +12,7 @@
  *   Detalle     -> observaciones del pedido                 Numexterno -> el mismo N° del documento
  *   Referencia, Cantidad, VrSubtot (TOTAL de la línea = cantidad x precio; Syscafe lo divide entre la cantidad), Descritem (nombre del producto)
  *   Fpago       -> forma de pago (SYSCAFE_PE_FPAGO: contado / crédito)         Periodo -> AAAAMM
- *   pIva/VrIva  -> siempre 0 (SYSCAFE_PE_IVA = 0: sin IVA)
+ *   pIva/VrIva  -> con factura electrónica: 19 % con el IVA ya incluido en el precio (el total no cambia); sin factura electrónica: 0
  *   Sugerido    -> precio unitario (para que Syscafe no calcule descuentos)
  */
 require_once __DIR__ . "/xlsx_simple.php";   // xlsx_col(), xlsx_texto(), xlsx_zip()
@@ -57,9 +57,16 @@ const SYSCAFE_PE_FPAGO_POR_TIPO = [
     "CT1" => ["contado" => "006", "credito" => "006"],
 ];
 
-/* IVA: el pedido sale SIN IVA (pIva y VrIva en 0) tenga o no factura electrónica.
-   Si algún día necesita volver a enviarlo, cambie el 0 por 19. */
-const SYSCAFE_PE_IVA = 0;
+/* IVA SOLO PARA LOS DOCUMENTOS CON FACTURA ELECTRÓNICA (PE1, RM2, CT2).
+   Los precios del pedido YA INCLUYEN el IVA, así que el valor de cada línea NO cambia: solo se envía el % de IVA
+   (pIva) y cuánto IVA trae incluido (VrIva), para que Syscafe lo muestre en Iva/Inc y en la columna %Iva.
+   Los documentos sin factura electrónica (PE5, RM1, CT1) siguen saliendo sin IVA (pIva y VrIva en 0).
+   Para quitar el IVA también de los PE1, cambie el 19 por 0. */
+const SYSCAFE_PE_IVA = 19;
+
+/* true  -> el precio ya trae el IVA dentro (VrIva = total - total / 1.19). El total del pedido no cambia.
+   false -> el IVA se suma ENCIMA del precio (el total sube un 19 %). */
+const SYSCAFE_PE_IVA_INCLUIDO = true;
 
 /* true -> el precio unitario también va en la columna Sugerido, para que Syscafe use ese valor como precio y no calcule descuentos. */
 const SYSCAFE_PE_USAR_SUGERIDO = true;
@@ -178,7 +185,13 @@ function syscafe_pe_filas(array $p): array
         $precio = (float) $it["precio_unitario"];
         $esBon = !empty($it["bonificado"]);                 // bonificado: 100 % de descuento -> total de la línea en 0 (y sin IVA)
         $subtotal = $esBon ? 0.0 : round($cant * $precio, 2);
-        $vrIva = $pIva > 0 ? round($subtotal * $pIva / 100, 2) : 0.0;
+        if ($pIva <= 0 || $esBon) {
+            $vrIva = 0.0;
+        } elseif (SYSCAFE_PE_IVA_INCLUIDO) {
+            $vrIva = round($subtotal - $subtotal / (1 + $pIva / 100), 2);   // IVA que ya viene dentro del precio
+        } else {
+            $vrIva = round($subtotal * $pIva / 100, 2);                       // IVA sumado encima del precio
+        }
         $filas[] = [
             $tipo,                          // A  Tipo
             $numero,                        // B  Numero
@@ -196,8 +209,8 @@ function syscafe_pe_filas(array $p): array
             "",                             // N  Area
             (string) $it["referencia"],     // O  Referencia
             $cant,                          // P  Cantidad
-            $subtotal,                      // Q  VrSubtot (total de la línea sin IVA)
-            $vrIva,                         // R  VrIva
+            $subtotal,                      // Q  VrSubtot (total de la línea: cantidad x precio, no cambia)
+            $vrIva,                         // R  VrIva (IVA incluido en el total de la línea)
             $pIva,                          // S  pIva
             "",                             // T  CodServ
             0.0,                            // U  vrretef
