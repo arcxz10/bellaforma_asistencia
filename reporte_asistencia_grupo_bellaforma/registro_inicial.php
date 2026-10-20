@@ -274,5 +274,6 @@ $justificacionSalida = trim($_POST['justificacion_salida'] ?? '');
             <?php endif; ?>
         </div>
     </div>
+    <script src="js/bellaforma-ui.js"></script>
 </body>
 </html>
