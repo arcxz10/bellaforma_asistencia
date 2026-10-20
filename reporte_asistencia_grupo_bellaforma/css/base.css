@@ -438,9 +438,11 @@ label {
 
 /* ==========================================================
    ANIMACIÓN DE CARGA · "FLORECER"
-   Los 8 pétalos del logo se abren uno tras otro alrededor
-   del monograma GB. Se usa como pantalla de bienvenida
-   (index, login, registro) y como transición entre páginas.
+   La flor del logo se abre y se cierra en bucle: los 8 pétalos
+   salen del centro (brote) girando, florecen, se mantienen un
+   instante y vuelven a cerrarse. Se usa como pantalla de
+   bienvenida y como loader al navegar, enviar o eliminar.
+   Color de la flor: --bf-flor (blanco por defecto).
    ========================================================== */
 
 html.bf-bloqueado,
@@ -477,75 +479,67 @@ html.bf-bloqueado body {
 }
 
 .bf-flor {
+    --bf-flor: #fff;
+    --bf-ciclo: 2.6s;
     width: min(52vw, 190px);
     height: auto;
     overflow: visible;
     filter: drop-shadow(0 12px 30px rgba(3, 14, 38, .35));
+    animation: bf-respirar var(--bf-ciclo) ease-in-out infinite;
 }
 
+.bf-flor .petalo,
+.bf-flor .punto,
+.bf-flor .monograma {
+    fill: var(--bf-flor);
+    transform-origin: 0 0; /* el centro de la flor es el (0,0) del viewBox */
+}
+
+/* Pétalos: de brote cerrado a flor abierta, y de vuelta */
 .bf-flor .petalo {
-    fill: rgba(255, 255, 255, .94);
-    transform-origin: 0 0;
-    transform: scale(0);
-    animation: bf-florecer 3s cubic-bezier(.3, .7, .2, 1) infinite;
-    animation-delay: calc(var(--i) * .16s);
-}
-
-.bf-flor .petalo.verde { fill: #8BE596; }
-
-.bf-flor .nervio {
-    fill: none;
-    stroke: rgba(11, 42, 99, .35);
-    stroke-width: 1.4;
-    stroke-linecap: round;
-    transform-origin: 0 0;
-    transform: scale(0);
-    animation: bf-florecer 3s cubic-bezier(.3, .7, .2, 1) infinite;
-    animation-delay: calc(var(--i) * .16s);
-}
-
-.bf-flor .punto {
-    fill: rgba(255, 255, 255, .85);
+    transform: rotate(-55deg) scale(.08);
     opacity: 0;
-    animation: bf-punto 3s ease-in-out infinite;
-    animation-delay: calc(var(--i) * .16s + .35s);
+    animation: bf-petalo var(--bf-ciclo) cubic-bezier(.45, 0, .25, 1) infinite;
+    animation-delay: calc(var(--i) * .065s);
 }
 
-.bf-flor .aro {
-    fill: none;
-    stroke: rgba(255, 255, 255, .9);
-    stroke-width: 1.6;
-    transform-origin: 0 0;
-    animation: bf-aro 3s ease-in-out infinite;
+/* Puntos: aparecen después de que el pétalo se abre */
+.bf-flor .punto {
+    transform: scale(0);
+    opacity: 0;
+    animation: bf-punto var(--bf-ciclo) ease-in-out infinite;
+    animation-delay: calc(var(--i) * .065s);
 }
 
 .bf-flor .monograma {
-    fill: #fff;
-    font-family: var(--fuente-titulo);
-    font-weight: 600;
-    font-size: 12px;
-    letter-spacing: .02em;
-    text-anchor: middle;
-    dominant-baseline: central;
+    animation: bf-monograma var(--bf-ciclo) ease-in-out infinite;
 }
 
-@keyframes bf-florecer {
-    0%   { transform: scale(0);   opacity: 0; }
-    22%  { transform: scale(1.06); opacity: 1; }
-    30%  { transform: scale(1);   opacity: 1; }
-    72%  { transform: scale(1);   opacity: 1; }
-    92%, 100% { transform: scale(.0); opacity: 0; }
+@keyframes bf-petalo {
+    0%        { transform: rotate(-55deg) scale(.08); opacity: 0; }
+    8%        { opacity: 1; }
+    42%       { transform: rotate(4deg) scale(1.04);  opacity: 1; }
+    50%       { transform: rotate(0deg) scale(1);     opacity: 1; }
+    64%       { transform: rotate(0deg) scale(1);     opacity: 1; }
+    92%       { opacity: 1; }
+    100%      { transform: rotate(-55deg) scale(.08); opacity: 0; }
 }
 
 @keyframes bf-punto {
-    0%, 15%   { opacity: 0; transform: scale(.4); }
-    35%, 72%  { opacity: 1; transform: scale(1); }
-    90%, 100% { opacity: 0; transform: scale(.4); }
+    0%, 28%   { transform: scale(0);    opacity: 0; }
+    50%       { transform: scale(1.25); opacity: 1; }
+    58%, 68%  { transform: scale(1);    opacity: 1; }
+    90%, 100% { transform: scale(0);    opacity: 0; }
 }
 
-@keyframes bf-aro {
-    0%, 100% { transform: scale(1);    opacity: .9; }
-    50%      { transform: scale(1.12); opacity: .55; }
+@keyframes bf-monograma {
+    0%, 100% { transform: scale(.9); opacity: .85; }
+    50%      { transform: scale(1);  opacity: 1; }
+}
+
+@keyframes bf-respirar {
+    0%, 100% { transform: scale(.94); }
+    50%      { transform: scale(1); }
 }
 
 .bf-splash__marca {
@@ -559,9 +553,17 @@ html.bf-bloqueado body {
     color: rgba(255, 255, 255, .82);
 }
 
-/* Versión compacta entre páginas: aparece solo si la carga tarda */
+.bf-splash__texto {
+    margin: -6px 0 0;
+    font-family: var(--fuente-texto);
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+}
+
+/* Versión durante la página: aparece solo si la carga tarda */
 .bf-splash.bf-nav {
-    background: rgba(7, 27, 64, .72);
+    background: rgba(7, 27, 64, .78);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     opacity: 0;
@@ -577,14 +579,14 @@ html.bf-bloqueado body {
     transition: opacity .25s ease .22s, visibility 0s linear .22s;
 }
 
-.bf-splash.bf-nav .bf-flor { width: 110px; }
+.bf-splash.bf-nav .bf-flor { width: 120px; }
 .bf-splash.bf-nav .bf-splash__marca { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
+    .bf-flor,
     .bf-flor .petalo,
-    .bf-flor .nervio,
     .bf-flor .punto,
-    .bf-flor .aro {
+    .bf-flor .monograma {
         animation: none;
         transform: none;
         opacity: 1;
