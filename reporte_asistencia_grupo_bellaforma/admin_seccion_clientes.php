@@ -74,14 +74,14 @@ $cx = function (string $name, string $label, string $extra = "", string $tipo = 
 
     <div class="cabecera-seccion">
         <div>
-            <h2>👥 Clientes</h2>
+            <h2><svg class="ico" aria-hidden="true"><use href="#i-users"/></svg> Clientes</h2>
             <p>Una sola base de clientes, con los datos del catálogo de terceros de Syscafe (incluye subterceros y contactos). Cada cliente tiene su <strong>tipo</strong> (mayorista o detal), que define la lista de precios. Cuando el ejecutivo elige el tipo y escribe el NIT o la cédula, los datos aparecen solos.</p>
         </div>
         <button type="button" class="btn-nuevo" onclick="nuevoCliente<?= $C ?>()">+ Nuevo Cliente</button>
     </div>
 
     <div style="background:#fff; border:1px dashed #90CAF9; border-radius:10px; padding:14px; margin-bottom:16px;">
-        <strong>📥 Cargar clientes desde Excel</strong>
+        <strong><svg class="ico" aria-hidden="true"><use href="#i-upload"/></svg> Cargar clientes desde Excel</strong>
         <p style="margin:6px 0 10px; font-size:13px; color:#556;">
             Suba el Excel (.xlsx) o un CSV directamente. Si el Excel tiene hojas llamadas <em>mayoristas</em> y <em>detal</em>, cada una se carga con su tipo (y se ignoran las demás hojas). Si el NIT/cédula ya existe, se actualizan sus datos.
             <a href="clientes_plantilla.php">Descargar plantilla de ejemplo</a>. Si el archivo trae la columna <em>tipo_cliente</em> (mayorista / detal) se respeta; si no, se usa el tipo que elija aquí.
