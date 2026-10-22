@@ -14,7 +14,7 @@ function transportadorasDespacho(): array
 {
     return [
         "coordinadora"        => "Coordinadora",
-        "domicilio_don_jairo" => "Domicilio Don Jairo",
+        "domicilio_don_jairo" => "Domicilio",
         "domicilio_sandra"    => "Domicilio Sandra",
         "recoge_oficina"      => "Recoge en oficina",
     ];
