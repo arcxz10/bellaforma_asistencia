@@ -107,7 +107,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
 
     <div class="cabecera-seccion">
         <div>
-            <h2>🚚 Control de despachos</h2>
+            <h2><svg class="ico" aria-hidden="true"><use href="#i-truck"/></svg> Control de despachos</h2>
             <p>Cada pedido, remisión o cotización que un ejecutivo envía aparece aquí el día en que se envía, con la forma de pago y la transportadora que él eligió. Usted completa empresa, n.º de factura, guía, flete y estados directamente en la tabla (se guarda solo).</p>
         </div>
         <button type="button" class="btn-nuevo" onclick="abrirDespacho(null)">+ Agregar despacho</button>
@@ -221,7 +221,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                                     <button type="button" class="btn-editar btn-fila" onclick="verPedidoDesdeDespacho(<?= (int) $d["pedido_id"] ?>)">Ver pedido</button>
                                 <?php endif; ?>
                                 <?php if (!$d["anulado"]): ?>
-                                    <form method="POST" action="admin.php" style="display:inline;" onsubmit="return bfConfirmarForm(this, {icono: '🚚', titulo: 'Pasar al día siguiente', texto: '¿Pasar este despacho al día siguiente?', si: 'Sí, pasarlo'});">
+                                    <form method="POST" action="admin.php" style="display:inline;" onsubmit="return bfConfirmarForm(this, {titulo: 'Pasar al día siguiente', texto: '¿Pasar este despacho al día siguiente?', si: 'Sí, pasarlo'});">
                                         <input type="hidden" name="accion" value="desp_mover">
                                         <input type="hidden" name="id" value="<?= $did ?>">
                                         <input type="hidden" name="fecha_vista" value="<?= escapar($fechaDesp) ?>">
