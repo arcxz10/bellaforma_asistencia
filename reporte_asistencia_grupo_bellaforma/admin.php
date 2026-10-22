@@ -1200,6 +1200,13 @@ $resultadoEmpleados =
             </a>
 
             <a
+                href="#despachos"
+                class="nav-item"
+            >
+                🚚 Control de despachos
+            </a>
+
+            <a
                 href="#productos_mayoristas"
                 class="nav-item"
             >
@@ -2585,6 +2592,7 @@ $resultadoEmpleados =
             <?php
             include __DIR__ . "/admin_seccion_vendedores.php";
             include __DIR__ . "/admin_seccion_pedidos.php";
+            include __DIR__ . "/admin_seccion_despachos.php";
             include __DIR__ . "/admin_seccion_productos.php";
             include __DIR__ . "/admin_seccion_clientes.php";
             ?>
@@ -3452,4 +3460,3 @@ $resultadoEmpleados =
 </body>
 
 </html>
-
