@@ -153,7 +153,7 @@ foreach ($pedidosAdmin as $pp) {
                             </td>
                             <td><?= escapar(etiquetaDocumento($ped["cliente_tipo_persona"] ?? "juridica")) ?> <?= escapar($ped["cliente_nit"]) ?></td>
                             <td><?= escapar($ped["cliente_ciudad"]) ?></td>
-                            <td><?= escapar(etiquetaCondicion($ped)) ?><?= !empty($ped["factura_electronica"]) ? "<br><small>📧 Fact. electrónica</small>" : "" ?></td>
+                            <td><?= escapar(etiquetaCondicion($ped)) ?><?= !empty($ped["transportadora"]) ? "<br><small>🚚 " . escapar(etiquetaTransportadora($ped["transportadora"])) . "</small>" : "" ?><?= !empty($ped["factura_electronica"]) ? "<br><small>📧 Fact. electrónica</small>" : "" ?></td>
                             <td class="num-der"><?= formatoCOP($ped["total"]) ?></td>
                             <td><span class="estado <?= claseEstadoPedido($ped["estado"]) ?>"><?= escapar(etiquetaEstadoPedido($ped["estado"])) ?></span></td>
                             <td>
@@ -205,7 +205,8 @@ foreach ($pedidosAdmin as $pp) {
                                         <div><span class="et">Barrio</span><?= escapar($ped["cliente_barrio"]) ?: "—" ?></div>
                                         <div><span class="et">Dirección de entrega</span><?= escapar($ped["cliente_direcciones"]) ?: "—" ?></div>
                                         <div><span class="et">Puntos de referencia</span><?= escapar($ped["cliente_puntos_referencia"]) ?: "—" ?></div>
-                                        <div><span class="et">Condiciones de pago</span><?= escapar(etiquetaCondicion($ped)) ?></div>
+                                        <div><span class="et">Forma de pago</span><?= escapar(etiquetaCondicion($ped)) ?></div>
+                                        <div><span class="et">Transportadora</span><?= !empty($ped["transportadora"]) ? escapar(etiquetaTransportadora($ped["transportadora"])) : "—" ?></div>
                                         <div><span class="et">Factura electrónica</span><?= !empty($ped["factura_electronica"]) ? "Sí — " . escapar($ped["email_fe"]) : "No" ?></div>
                                         <div><span class="et">Observaciones</span><?= nl2br(escapar($ped["observaciones"])) ?: "—" ?></div>
                                     </div>
