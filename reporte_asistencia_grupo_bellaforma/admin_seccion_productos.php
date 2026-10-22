@@ -356,6 +356,8 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
                     y: window.pageYOffset || document.documentElement.scrollTop || 0,
                     t: c ? c.scrollTop : 0,
                     q: document.getElementById("buscarProd").value,
+                    ref: (document.getElementById("prodRef").value || "").trim().toLowerCase(),
+                    nuevo: acc.value === "prod_crear",
                     ts: Date.now()
                 }));
             } catch (err) { /* sin almacenamiento: se ignora */ }
@@ -380,15 +382,36 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
             if (!guardado || Date.now() - guardado.ts > 60000) { return; }
             if (window.location.hash !== "#productos_mayoristas") { return; }
 
+            // Fila del producto que se acaba de guardar (por su referencia)
+            function filaDe(ref) {
+                if (!ref) { return null; }
+                var filas = document.querySelectorAll("#tablaProd tbody tr[data-busq]");
+                for (var i = 0; i < filas.length; i++) {
+                    var s = filas[i].querySelector("td:nth-child(2) strong");
+                    if (s && s.textContent.trim().toLowerCase() === ref) { return filas[i]; }
+                }
+                return null;
+            }
+
             var buscar = document.getElementById("buscarProd");
-            if (guardado.q) {
+            var fila = filaDe(guardado.ref);
+            // El filtro anterior solo se conserva si no esconde el producto guardado (si no, parecería que no se guardó)
+            if (guardado.q && !guardado.nuevo && (!fila || fila.dataset.busq.toLowerCase().indexOf(guardado.q.trim().toLowerCase()) !== -1)) {
                 buscar.value = guardado.q;
                 buscar.dispatchEvent(new Event("input"));
             }
             setTimeout(function () {
                 var c = contenedor();
-                if (c) { c.scrollTop = guardado.t; }
-                window.scrollTo(0, guardado.y);
+                if (guardado.nuevo && fila) {
+                    // Producto nuevo: se muestra y se resalta un momento
+                    fila.scrollIntoView({ block: "center" });
+                    fila.style.transition = "background .6s";
+                    fila.style.background = "#E4F5E7";
+                    setTimeout(function () { fila.style.background = ""; }, 3500);
+                } else {
+                    if (c) { c.scrollTop = guardado.t; }
+                    window.scrollTo(0, guardado.y);
+                }
                 avisoFlotante();
             }, 60);
         });
