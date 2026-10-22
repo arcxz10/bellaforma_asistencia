@@ -95,6 +95,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
     #despachos .desp-total td { background: #FFF9C4; font-weight: 700; }
     #despachos .desp-vacio { padding: 26px; text-align: center; color: #667; }
     #despachos .desp-acc { white-space: nowrap; }
+    #despachos .desp-acc form { margin: 0; }
     #desp-modal-form .desp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
     #desp-modal-form .desp-grid .ancho { grid-column: 1 / -1; }
     #desp-modal-form label { display: block; margin: 0 0 4px; font-size: 13px; font-weight: 600; }
@@ -218,6 +219,14 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                                         onclick="abrirDespacho(this)">Editar</button>
                                 <?php else: ?>
                                     <button type="button" class="btn-editar btn-fila" onclick="verPedidoDesdeDespacho(<?= (int) $d["pedido_id"] ?>)">Ver pedido</button>
+                                <?php endif; ?>
+                                <?php if (!$d["anulado"]): ?>
+                                    <form method="POST" action="admin.php" style="display:inline;" onsubmit="return confirm('¿Pasar este despacho al día siguiente?');">
+                                        <input type="hidden" name="accion" value="desp_mover">
+                                        <input type="hidden" name="id" value="<?= $did ?>">
+                                        <input type="hidden" name="fecha_vista" value="<?= escapar($fechaDesp) ?>">
+                                        <button type="submit" class="btn-editar btn-fila" style="background:#FFF3E0; color:#E65100;">Pasar al día siguiente →</button>
+                                    </form>
                                 <?php endif; ?>
                                 <button type="button" class="btn-eliminar btn-fila"
                                     data-id="<?= $did ?>"
@@ -373,6 +382,10 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                 if (j && j.ok) {
                     if (el.dataset.campo === "valor_flete") { el.value = (j.valor === null || j.valor === undefined) ? "" : formatoPesos(j.valor); }
                     el.dataset.prev = el.value;
+                    if (j.empresa) {
+                        var selEmp = document.querySelector('#despachos select.desp-in[data-campo="empresa"][data-id="' + el.dataset.id + '"]');
+                        if (selEmp) { selEmp.value = j.empresa; selEmp.dataset.prev = j.empresa; selEmp.classList.add("ok"); setTimeout(function () { selEmp.classList.remove("ok"); }, 1400); }
+                    }
                     el.classList.add("ok");
                     setTimeout(function () { el.classList.remove("ok"); }, 1400);
                 } else {
