@@ -653,8 +653,9 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         var mostrar = hayCompletas ? res.filter(function (r) { return r.full; }) : res;
         mostrar.sort(function (a, b) { return (b.score - a.score) || (a.f._orden - b.f._orden); });
 
-        filas.forEach(function (f) { f.hidden = true; });
-        mostrar.forEach(function (r, i) { r.f.hidden = false; r.f.style.order = i; });
+        var visibles = {};
+        mostrar.forEach(function (r, i) { visibles[r.f.dataset.id] = 1; r.f.style.order = i; });
+        filas.forEach(function (f) { var oculto = !visibles[f.dataset.id]; if (f.hidden !== oculto) { f.hidden = oculto; } });
 
         var nota = $("pfBusqNota");
         if (terminos.length && !hayCompletas && mostrar.length) {
@@ -664,6 +665,27 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         $("pfSinRes").hidden = mostrar.length !== 0 || filas.length === 0;
     }
     $("pfBuscarProd").addEventListener("input", filtrar);
+
+    /* El buscador no debe perder el cursor mientras se escribe, sin importar cuántos productos queden.
+       Si el campo se desenfoca solo (sin que la persona toque otra cosa), se le devuelve el cursor. */
+    (function () {
+        var inp = $("pfBuscarProd");
+        var ultimaTecla = 0, accionPropia = 0;
+        function marcar() { accionPropia = Date.now(); }
+        inp.addEventListener("input", function () { ultimaTecla = Date.now(); });
+        inp.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === "Tab" || e.key === "Escape") { marcar(); } });
+        document.addEventListener("pointerdown", function (e) { if (e.target !== inp) { marcar(); } }, true);
+        document.addEventListener("touchstart", function (e) { if (e.target !== inp) { marcar(); } }, true);
+        inp.addEventListener("blur", function () {
+            var ahora = Date.now();
+            if (ahora - ultimaTecla > 5000 || ahora - accionPropia < 700) { return; }
+            setTimeout(function () {
+                if (S.paso !== 2 || document.activeElement === inp || !document.hasFocus()) { return; }
+                if (!$("pfDialogo").hidden) { return; }
+                try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
+            }, 0);
+        });
+    })();
     $("pfSoloSel").addEventListener("click", function () {
         soloSel = !soloSel;
         this.classList.toggle("activo", soloSel);
@@ -940,14 +962,20 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (!vv) { return; }
         var base = Math.max(window.innerHeight, vv.height);
         function tecladoAbierto() { return vv.height < base - 120; }
+        var ultimaTecla = 0;
+        // Cada vez que se escribe, el teclado está abierto: la barra se oculta de nuevo
+        document.addEventListener("input", function (e) {
+            ultimaTecla = Date.now();
+            if (e.target && e.target.matches && e.target.matches("input,textarea")) { document.body.classList.add("pf-kb"); }
+        }, true);
         function revisarTeclado() {
+            // Si se está escribiendo, no es un cierre de teclado (el tamaño cambia al filtrar la lista o al moverse la barra del navegador)
+            if (Date.now() - ultimaTecla < 4000) { return; }
             if (!tecladoAbierto()) {
                 // Pantalla completa de nuevo: el teclado se cerró
                 base = Math.max(base, window.innerHeight, vv.height);
                 if (document.body.classList.contains("pf-kb")) {
-                    document.body.classList.remove("pf-kb");
-                    var a = document.activeElement;
-                    if (a && a.matches && a.matches("input,textarea,select")) { a.blur(); }   // así volverá a ocultarse la próxima vez que escriban
+                    document.body.classList.remove("pf-kb");   // ya NO se desenfoca el campo: solo reaparece la barra
                     ajustarBarra();
                 }
             }
