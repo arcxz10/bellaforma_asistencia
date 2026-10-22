@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import url("base.css");
 
 /* ======================================
@@ -273,3 +273,63 @@ input[type="radio"] {
     .container-inicial { animation: none; }
     .step, .step-number { transition: none; }
 }
+
+
+/* ==========================================================
+   TEMA TECH (registro inicial y formularios de empleado)
+   ========================================================== */
+
+.card-inicial {
+    position: relative;
+    padding: 36px 34px 30px;
+    background: rgba(255, 255, 255, .97);
+    border: 1px solid rgba(255, 255, 255, .55);
+    border-radius: 22px;
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, .18), 0 40px 80px -30px rgba(2, 10, 28, .75), 0 0 80px -20px rgba(56, 189, 248, .3);
+}
+
+.card-inicial::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    border-radius: 22px 22px 0 0;
+    background: linear-gradient(90deg, var(--azul-500), var(--cian), var(--neon));
+}
+
+.card-header h1 { letter-spacing: -.025em; }
+
+.logo-circle {
+    border-radius: 20px;
+    background: linear-gradient(145deg, #1E7BD8, #0D47A1);
+    border: 1px solid rgba(255, 255, 255, .2);
+    box-shadow: 0 0 0 6px rgba(56, 189, 248, .12), 0 16px 30px -12px rgba(13, 71, 161, .9);
+}
+
+.logo-circle .ico { width: 34px; height: 34px; stroke-width: 1.6; }
+
+/* Pasos */
+.step { background: #F6F9FE; border-radius: var(--radio-md); }
+
+.step.active {
+    background: rgba(30, 123, 216, .08);
+    border-color: var(--azul-500);
+    box-shadow: 0 0 0 4px rgba(30, 123, 216, .1);
+}
+
+.step-number { font-family: var(--fuente-titulo); }
+
+.step.active .step-number {
+    background: linear-gradient(135deg, #1E7BD8, #0D47A1);
+    box-shadow: 0 0 16px rgba(30, 123, 216, .5);
+}
+
+.step.completed .step-number { background: linear-gradient(135deg, #2BC24A, #1B8A3A); }
+
+.info-box {
+    border-radius: var(--radio-md);
+    border-left: 4px solid var(--info);
+}
+
+.btn-link-permiso { background: #F2ECFC; }
+.btn-link-material { background: #FFF0E1; }
