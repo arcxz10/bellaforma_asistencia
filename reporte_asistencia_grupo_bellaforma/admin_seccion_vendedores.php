@@ -145,7 +145,7 @@ $datosGraficoVend = array_map(function ($v) {
                                     <input type="hidden" name="permiso" value="<?= (int) ($v["puede_descargar"] ?? 0) === 1 ? 0 : 1 ?>">
                                     <?php if ((int) ($v["puede_descargar"] ?? 0) === 1): ?>
                                         <span class="estado estado-activo">PDF, Excel y número: Sí</span>
-                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return confirm('¿Quitar a este ejecutivo el permiso de descargar PDF y Excel y de editar el número?')">Quitar</button>
+                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return bfConfirmarForm(this.form, {icono: '📄', titulo: 'Quitar permiso', texto: '¿Quitar a este ejecutivo el permiso de descargar PDF y Excel y de editar el número?', si: 'Sí, quitar', peligro: true});">Quitar</button>
                                     <?php else: ?>
                                         <span class="estado estado-inactivo">No</span>
                                         <button type="submit" class="btn-activar btn-fila">Permitir</button>
@@ -169,7 +169,7 @@ $datosGraficoVend = array_map(function ($v) {
                                     <input type="hidden" name="id" value="<?= (int) $v["id"] ?>">
                                     <input type="hidden" name="activo" value="<?= (int) $v["activo"] === 1 ? 0 : 1 ?>">
                                     <?php if ((int) $v["activo"] === 1): ?>
-                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return confirm('¿Desactivar este vendedor? No podrá ingresar.')">Desactivar</button>
+                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return bfConfirmarForm(this.form, {icono: '🚫', titulo: 'Desactivar vendedor', texto: '¿Desactivar este vendedor? No podrá ingresar.', si: 'Sí, desactivar', peligro: true});">Desactivar</button>
                                     <?php else: ?>
                                         <button type="submit" class="btn-activar btn-fila">Activar</button>
                                     <?php endif; ?>
