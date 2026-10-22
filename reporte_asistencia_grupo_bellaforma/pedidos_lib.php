@@ -233,6 +233,22 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
     $emailFe = textoCorto($d["email_fe"] ?? "", 150);
     $condicion = (($d["condicion_pago"] ?? "") === "credito") ? "credito" : "contado";
     $dias = $condicion === "credito" ? (int) ($d["dias_credito"] ?? 0) : null;
+
+    // Forma de pago y transportadora (alimentan el Control de despachos). Si la solicitud no las trae (pantalla vieja), se conserva lo que ya tenía el pedido.
+    $formaPago = array_key_exists("forma_pago", $d) ? (string) $d["forma_pago"] : (string) ($existente["forma_pago"] ?? "");
+    $transportadora = array_key_exists("transportadora", $d) ? (string) $d["transportadora"] : (string) ($existente["transportadora"] ?? "");
+    if (!array_key_exists($formaPago, formasPagoDespacho())) {
+        $formaPago = "";
+    }
+    if (!array_key_exists($transportadora, transportadorasDespacho())) {
+        $transportadora = "";
+    }
+    if ($formaPago !== "") {
+        // La forma de pago define la condición comercial que usan el PDF, el Excel y Syscafe
+        $diasFp = formaPagoDias($formaPago);
+        $condicion = $diasFp ? "credito" : "contado";
+        $dias = $diasFp ?: null;
+    }
     $obs = textoCorto($d["observaciones"] ?? "", 2000, false);
     $clienteId = (int) ($d["cliente_id"] ?? 0) ?: null;
 
@@ -252,6 +268,15 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         }
         if ($telefono === "") {
             return $falla("Ingrese un teléfono de contacto.");
+        }
+        // Documentos nuevos: forma de pago y transportadora son obligatorias.
+        // (Un documento ya enviado antes de existir este dato puede seguir editándose sin completarlo.)
+        $enviadoAntes = $existente && $existente["estado"] !== "borrador";
+        if ($formaPago === "" && !($enviadoAntes && trim((string) ($existente["forma_pago"] ?? "")) === "")) {
+            return $falla("Seleccione la forma de pago.");
+        }
+        if ($transportadora === "" && !($enviadoAntes && trim((string) ($existente["transportadora"] ?? "")) === "")) {
+            return $falla("Seleccione la transportadora.");
         }
         if ($condicion === "credito" && ($dias === null || $dias < 1 || $dias > 365)) {
             return $falla("Indique cuántos días de crédito (entre 1 y 365).");
@@ -392,6 +417,8 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         "email_fe"                  => ["s", $emailFe],
         "condicion_pago"            => ["s", $condicion],
         "dias_credito"              => ["i", $dias],
+        "forma_pago"                => ["s", $formaPago !== "" ? $formaPago : null],
+        "transportadora"            => ["s", $transportadora !== "" ? $transportadora : null],
         "observaciones"             => ["s", $obs],
         "total"                     => ["d", $total],
         "estado"                    => ["s", $estado],
@@ -438,6 +465,11 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         $insItem->close();
 
         $c->commit();
+
+        // Al enviarse por primera vez, el documento entra al Control de despachos del día de hoy
+        if ($modo === "enviar" && $estado === "pendiente" && (!$existente || $existente["estado"] === "borrador")) {
+            crearDespachoDePedido($c, $idFinal);
+        }
     } catch (Throwable $e) {
         $c->rollback();
         if ($e->getMessage() === "NUMERO_EN_USO") {
