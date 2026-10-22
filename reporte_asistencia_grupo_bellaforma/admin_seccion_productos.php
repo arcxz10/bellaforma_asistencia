@@ -463,10 +463,23 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
         boton.disabled = true;
         boton.textContent = "Guardando…";
 
-        fetch("admin.php", { method: "POST", body: new FormData(form), credentials: "same-origin", signal: ctrl ? ctrl.signal : undefined })
+        fetch("admin.php", { method: "POST", body: new FormData(form), credentials: "same-origin", headers: { "X-Requested-With": "fetch" }, signal: ctrl ? ctrl.signal : undefined })
             .then(function (r) { return r.text().then(function (txt) { return { r: r, txt: txt }; }); })
             .then(function (x) {
                 if (/login\.html/.test(x.r.url)) { fallo("Su sesión expiró. Inicie sesión de nuevo y repita el producto."); return; }
+                function exito(texto) {
+                    try { sessionStorage.setItem("bf_msg_prod", texto); } catch (err) { /* sin almacenamiento */ }
+                    terminar();
+                    window.location.hash = "#productos_mayoristas";
+                    window.location.reload();
+                }
+                // Respuesta normal del servidor (JSON con el resultado)
+                var j = null;
+                try { j = JSON.parse(x.txt); } catch (err) { j = null; }
+                if (j && typeof j.mensaje === "string") {
+                    if (j.ok) { exito(j.mensaje); } else { fallo(j.mensaje); }
+                    return;
+                }
                 var doc = new DOMParser().parseFromString(x.txt, "text/html");
                 if (!x.r.ok) {
                     var resumen = (doc.body ? doc.body.textContent : x.txt).replace(/\s+/g, " ").trim().slice(0, 300);
