@@ -153,7 +153,7 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                 <?php if ($ped["cliente_ciudad"] !== ""): ?><?= e($ped["cliente_ciudad"]) ?><?= !empty($ped["cliente_departamento"]) ? ", " . e($ped["cliente_departamento"]) : "" ?><br><?php endif; ?>
                 <?php if (!empty($ped["cliente_direcciones"])): ?>Dirección: <?= e($ped["cliente_direcciones"]) ?><?= !empty($ped["cliente_barrio"]) ? " · " . e($ped["cliente_barrio"]) : "" ?><br><?php endif; ?>
                 <?php if (!empty($ped["cliente_puntos_referencia"])): ?>Referencia: <?= e($ped["cliente_puntos_referencia"]) ?><br><?php endif; ?>
-                Pago: <?= e(etiquetaCondicion($ped)) ?> · Factura electrónica: <?= !empty($ped["factura_electronica"]) ? "Sí" : "No" ?>
+                Pago: <?= e(etiquetaCondicion($ped)) ?><?= !empty($ped["transportadora"]) ? " · Transportadora: " . e(etiquetaTransportadora($ped["transportadora"])) : "" ?> · Factura electrónica: <?= !empty($ped["factura_electronica"]) ? "Sí" : "No" ?>
                 <?php if (!empty($ped["observaciones"])): ?><br>Obs.: <?= nl2br(e($ped["observaciones"])) ?><?php endif; ?>
             </div>
             <?php if ($ped["items"]): ?>
@@ -297,4 +297,3 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
 </body>
 
 </html>
-
