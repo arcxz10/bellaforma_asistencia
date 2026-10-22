@@ -48,14 +48,14 @@ foreach ($pedidosAdmin as $pp) {
 
     <div class="cabecera-seccion">
         <div>
-            <h2>🧾 Pedidos de ejecutivos</h2>
+            <h2><svg class="ico" aria-hidden="true"><use href="#i-receipt"/></svg> Pedidos de ejecutivos</h2>
             <p>Revise, edite y descargue los pedidos, remisiones y cotizaciones (PDF, archivo para Syscafe o Excel detallado). Márquelos «Subido a Syscafe» cuando ya estén digitados: desde ese momento el ejecutivo ya no puede editarlos.</p>
         </div>
         <?php if ($pedidosAdmin): ?>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <a class="btn-nuevo" style="text-decoration:none;" href="pedido_pdf.php?<?= escapar($qsDescarga) ?>">⬇ PDF (<?= count($pedidosAdmin) ?>)</a>
-                <a class="btn-nuevo" style="text-decoration:none; background:#00796B;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>">⬇ Syscafe .XLS (<?= count($pedidosAdmin) ?>)</a>
-                <a class="btn-nuevo" style="text-decoration:none; background:#1D6F42;" href="pedido_excel.php?<?= escapar($qsDescarga) ?>">⬇ Excel detallado</a>
+                <a class="btn-nuevo" style="text-decoration:none;" href="pedido_pdf.php?<?= escapar($qsDescarga) ?>"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> PDF (<?= count($pedidosAdmin) ?>)</a>
+                <a class="btn-nuevo" style="text-decoration:none; background:#00796B;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> Syscafe .XLS (<?= count($pedidosAdmin) ?>)</a>
+                <a class="btn-nuevo" style="text-decoration:none; background:#1D6F42;" href="pedido_excel.php?<?= escapar($qsDescarga) ?>"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> Excel detallado</a>
             </div>
         <?php endif; ?>
     </div>
@@ -153,7 +153,7 @@ foreach ($pedidosAdmin as $pp) {
                             </td>
                             <td><?= escapar(etiquetaDocumento($ped["cliente_tipo_persona"] ?? "juridica")) ?> <?= escapar($ped["cliente_nit"]) ?></td>
                             <td><?= escapar($ped["cliente_ciudad"]) ?></td>
-                            <td><?= escapar(etiquetaCondicion($ped)) ?><?= !empty($ped["transportadora"]) ? "<br><small>🚚 " . escapar(etiquetaTransportadora($ped["transportadora"])) . "</small>" : "" ?><?= !empty($ped["factura_electronica"]) ? "<br><small>📧 Fact. electrónica</small>" : "" ?></td>
+                            <td><?= escapar(etiquetaCondicion($ped)) ?><?= !empty($ped["transportadora"]) ? "<br><small><svg class='ico' aria-hidden='true'><use href='#i-truck'/></svg> " . escapar(etiquetaTransportadora($ped["transportadora"])) . "</small>" : "" ?><?= !empty($ped["factura_electronica"]) ? "<br><small>Fact. electrónica</small>" : "" ?></td>
                             <td class="num-der"><?= formatoCOP($ped["total"]) ?></td>
                             <td><span class="estado <?= claseEstadoPedido($ped["estado"]) ?>"><?= escapar(etiquetaEstadoPedido($ped["estado"])) ?></span></td>
                             <td>
@@ -218,7 +218,7 @@ foreach ($pedidosAdmin as $pp) {
                                             <?php foreach ($ped["items"] as $it): $esBon = !empty($it["bonificado"]); ?>
                                                 <tr<?= $esBon ? ' style="background:#FFF8E6"' : "" ?>>
                                                     <td><strong><?= escapar($it["referencia"]) ?></strong></td>
-                                                    <td><?= escapar($it["nombre"]) ?><?= $esBon ? ' <span style="background:#FFF1CC;color:#8A5A00;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;">🎁 BONIFICADO · 100 % dto.</span>' : "" ?></td>
+                                                    <td><?= escapar($it["nombre"]) ?><?= $esBon ? ' <span style="background:#FFF1CC;color:#8A5A00;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;">BONIFICADO · 100 % dto.</span>' : "" ?></td>
                                                     <td class="num-der"><?= (int) $it["cantidad"] ?></td>
                                                     <td class="num-der"><?= formatoCOP($it["precio_unitario"]) ?></td>
                                                     <td class="num-der"><?= formatoCOP($esBon ? 0 : $it["subtotal"]) ?></td>
@@ -254,7 +254,7 @@ foreach ($pedidosAdmin as $pp) {
 </style>
 <div class="modal" id="modalEliminarPed">
     <div class="modal-contenido modal-confirmar" role="alertdialog" aria-modal="true" aria-labelledby="elimPedTitulo" aria-describedby="elimPedTexto">
-        <div class="confirmar-icono">⚠️</div>
+        <div class="confirmar-icono"><svg class="ico" aria-hidden="true"><use href="#i-alert"/></svg></div>
         <h3 id="elimPedTitulo">¿Eliminar este documento?</h3>
         <p id="elimPedTexto" class="confirmar-texto"></p>
         <p id="elimPedExtra" class="confirmar-extra" style="display:none;"></p>
