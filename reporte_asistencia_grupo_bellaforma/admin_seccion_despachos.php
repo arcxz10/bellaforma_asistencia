@@ -221,7 +221,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                                     <button type="button" class="btn-editar btn-fila" onclick="verPedidoDesdeDespacho(<?= (int) $d["pedido_id"] ?>)">Ver pedido</button>
                                 <?php endif; ?>
                                 <?php if (!$d["anulado"]): ?>
-                                    <form method="POST" action="admin.php" style="display:inline;" onsubmit="return confirm('¿Pasar este despacho al día siguiente?');">
+                                    <form method="POST" action="admin.php" style="display:inline;" onsubmit="return bfConfirmarForm(this, {icono: '🚚', titulo: 'Pasar al día siguiente', texto: '¿Pasar este despacho al día siguiente?', si: 'Sí, pasarlo'});">
                                         <input type="hidden" name="accion" value="desp_mover">
                                         <input type="hidden" name="id" value="<?= $did ?>">
                                         <input type="hidden" name="fecha_vista" value="<?= escapar($fechaDesp) ?>">
