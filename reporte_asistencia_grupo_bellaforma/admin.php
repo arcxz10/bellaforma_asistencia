@@ -88,6 +88,13 @@ function minutosAHoras($minutos)
 
 function redireccionar($mensaje, $tipo = "exito", $seccion = "")
 {
+    // Envíos hechos con fetch (guardar producto): se responde en JSON para mostrar el resultado real en pantalla
+    if (($_SERVER["HTTP_X_REQUESTED_WITH"] ?? "") === "fetch") {
+        header("Content-Type: application/json; charset=UTF-8");
+        echo json_encode(["ok" => $tipo === "exito", "mensaje" => (string) $mensaje], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     $_SESSION["mensaje"] = $mensaje;
     $_SESSION["tipo_mensaje"] = $tipo;
 
@@ -102,6 +109,14 @@ function redireccionar($mensaje, $tipo = "exito", $seccion = "")
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
+    // Si el envío supera el límite del servidor (post_max_size), PHP descarta TODO el formulario sin avisar
+    if (empty($_POST) && empty($_FILES) && (int) ($_SERVER["CONTENT_LENGTH"] ?? 0) > 0) {
+        redireccionar(
+            "El envío pesa " . round(((int) $_SERVER["CONTENT_LENGTH"]) / 1048576, 1) . " MB y supera el límite del servidor (" . ini_get("post_max_size") . "), por eso no llegó. Use una foto más liviana o guárdelo sin foto.",
+            "error"
+        );
+    }
 
     $accion = $_POST["accion"] ?? "";
 
