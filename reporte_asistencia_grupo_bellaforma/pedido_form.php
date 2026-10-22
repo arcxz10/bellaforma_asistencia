@@ -26,6 +26,8 @@ $datosIniciales = [
     "email_fe" => $ped["email_fe"] ?? "",
     "condicion_pago" => $ped["condicion_pago"] ?? "contado",
     "dias_credito" => $ped["dias_credito"] ?? "",
+    "forma_pago" => $ped["forma_pago"] ?? "",
+    "transportadora" => $ped["transportadora"] ?? "",
     "observaciones" => $ped["observaciones"] ?? "",
     "cliente_id" => $ped["cliente_id"] ?? null,
 ];
@@ -65,6 +67,8 @@ $cfgJs = [
     "items" => (object) $itemsIniciales,
     "bonos" => (object) $bonosIniciales,
     "textoEnviar" => $pf["texto_enviar"] ?? "Enviar pedido",
+    // Documento enviado antes de que existieran estos datos: se muestra cómo estaba el pago para que el ejecutivo lo tenga de referencia
+    "pagoAnterior" => ($ped && $ped["estado"] !== "borrador" && trim((string) ($ped["forma_pago"] ?? "")) === "") ? etiquetaCondicion($ped) : "",
 ];
 $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 ?>
@@ -231,21 +235,22 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 
         <div class="pf-card">
             <h2>Condiciones comerciales</h2>
-            <div class="pf-segmento pf-seg-2" id="pfCond">
-                <button type="button" data-cond="contado" class="activo">💵 Contado</button>
-                <button type="button" data-cond="credito">🗓️ Crédito</button>
+
+            <label id="pfFormaPagoLabel">Forma de pago *</label>
+            <div class="pf-segmento pf-seg-2" id="pfFormaPago" role="group" aria-labelledby="pfFormaPagoLabel">
+                <?php foreach (formasPagoDespacho() as $clave => $etiqueta): ?>
+                    <button type="button" data-fp="<?= htmlspecialchars($clave, ENT_QUOTES, "UTF-8") ?>"><?= htmlspecialchars($etiqueta, ENT_QUOTES, "UTF-8") ?></button>
+                <?php endforeach; ?>
             </div>
-            <div id="pfDiasBox" hidden>
-                <label for="pfDias">¿Cuántos días de crédito? *</label>
-                <input type="number" id="pfDias" inputmode="numeric" min="1" max="365" placeholder="Ej: 30">
-                <div class="pf-chips">
-                    <button type="button" class="pf-chip" data-dias="8">8 días</button>
-                    <button type="button" class="pf-chip" data-dias="15">15 días</button>
-                    <button type="button" class="pf-chip" data-dias="30">30 días</button>
-                    <button type="button" class="pf-chip" data-dias="45">45 días</button>
-                    <button type="button" class="pf-chip" data-dias="60">60 días</button>
-                </div>
+            <p class="pf-nota" id="pfPagoAnterior" hidden></p>
+
+            <label id="pfTransportadoraLabel" style="margin-top:16px;">Transportadora *</label>
+            <div class="pf-segmento pf-seg-2" id="pfTransportadora" role="group" aria-labelledby="pfTransportadoraLabel">
+                <?php foreach (transportadorasDespacho() as $clave => $etiqueta): ?>
+                    <button type="button" data-tr="<?= htmlspecialchars($clave, ENT_QUOTES, "UTF-8") ?>"><?= htmlspecialchars($etiqueta, ENT_QUOTES, "UTF-8") ?></button>
+                <?php endforeach; ?>
             </div>
+            <p class="pf-nota">Estos dos datos pasan al Control de despachos de la oficina.</p>
 
             <label for="pfObs">Observaciones del pedido</label>
             <textarea id="pfObs" rows="3" maxlength="2000"></textarea>
@@ -290,7 +295,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 (function () {
     var CFG = window.PF_CFG;
     var $ = function (id) { return document.getElementById(id); };
-    var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, cond: "contado", pedidoId: CFG.pedidoId, items: {}, bonos: {}, abiertos: {},
+    var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, fp: "", tr: "", pedidoId: CFG.pedidoId, items: {}, bonos: {}, abiertos: {},
               ocupado: false, sucio: false, timer: null, ignorar: false, docOk: "" };
 
     var todasLasFilas = Array.prototype.slice.call(document.querySelectorAll(".pf-prod"));
@@ -392,19 +397,21 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         b.addEventListener("click", function () { setFE(b.dataset.fe === "1"); sucio(); });
     });
 
-    /* ---------- Condiciones de pago ---------- */
-    function setCond(v) {
-        S.cond = v === "credito" ? "credito" : "contado";
-        Array.prototype.forEach.call(document.querySelectorAll("#pfCond button"), function (b) {
-            b.classList.toggle("activo", b.dataset.cond === S.cond);
+    /* ---------- Forma de pago y transportadora ---------- */
+    var FP_DIAS = { "3": "dias_3", "5": "dias_5", "8": "dias_8", "30": "dias_30", "45": "dias_45" };
+    function diasDeFP(k) { var m = /^dias_(\d+)$/.exec(k || ""); return m ? parseInt(m[1], 10) : null; }
+    function marcarOpcion(contenedor, atributo, valor) {
+        Array.prototype.forEach.call(document.querySelectorAll("#" + contenedor + " button"), function (b) {
+            b.classList.toggle("activo", valor !== "" && b.getAttribute(atributo) === valor);
         });
-        $("pfDiasBox").hidden = S.cond !== "credito";
     }
-    Array.prototype.forEach.call(document.querySelectorAll("#pfCond button"), function (b) {
-        b.addEventListener("click", function () { setCond(b.dataset.cond); sucio(); });
+    function setFP(k) { S.fp = k || ""; marcarOpcion("pfFormaPago", "data-fp", S.fp); $("pfPagoAnterior").hidden = true; }
+    function setTR(k) { S.tr = k || ""; marcarOpcion("pfTransportadora", "data-tr", S.tr); }
+    Array.prototype.forEach.call(document.querySelectorAll("#pfFormaPago button"), function (b) {
+        b.addEventListener("click", function () { setFP(b.getAttribute("data-fp")); sucio(); });
     });
-    Array.prototype.forEach.call(document.querySelectorAll("[data-dias]"), function (b) {
-        b.addEventListener("click", function () { $("pfDias").value = b.dataset.dias; sucio(); });
+    Array.prototype.forEach.call(document.querySelectorAll("#pfTransportadora button"), function (b) {
+        b.addEventListener("click", function () { setTR(b.getAttribute("data-tr")); sucio(); });
     });
 
     /* ---------- Buscar cliente por NIT / cédula ---------- */
@@ -448,8 +455,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         $("pfDireccion").value = c.direccion || "";
         $("pfPuntos").value = c.puntos_referencia || "";
         if (c.email_fe) { $("pfEmailFe").value = c.email_fe; }
-        setCond(c.condicion_pago);
-        $("pfDias").value = c.dias_credito || "";
+        // Si el cliente ya tiene crédito pactado con un plazo de la lista, se sugiere esa forma de pago (solo si aún no eligió una)
+        if (!S.fp && c.condicion_pago === "credito" && FP_DIAS[String(parseInt(c.dias_credito, 10))]) { setFP(FP_DIAS[String(parseInt(c.dias_credito, 10))]); }
         colombiaSet($("pfDepto"), $("pfMuni"), c.departamento, c.municipio).then(function () { S.ignorar = false; sucio(); });
         if (c.inactivo) { msgCliente("⚠️ Cliente encontrado, pero está INACTIVO en el sistema. Consulte con la oficina.", "alerta"); }
         else { msgCliente("✔ Cliente encontrado. Se cargaron sus datos; revíselos y corrija si hace falta. Los datos que le faltaban y usted complete quedarán guardados para los próximos pedidos.", "ok"); }
@@ -737,8 +744,11 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             email: $("pfEmail").value.trim(), departamento: $("pfDepto").value, municipio: $("pfMuni").value,
             barrio: $("pfBarrio").value.trim(), direccion: $("pfDireccion").value.trim(),
             puntos_referencia: $("pfPuntos").value.trim(), factura_electronica: S.fe,
-            email_fe: $("pfEmailFe").value.trim(), condicion_pago: S.cond,
-            dias_credito: S.cond === "credito" ? (parseInt($("pfDias").value, 10) || 0) : null,
+            email_fe: $("pfEmailFe").value.trim(),
+            forma_pago: S.fp, transportadora: S.tr,
+            // La forma de pago define la condición comercial; si el documento es anterior y no tiene forma de pago, se conserva la que tenía
+            condicion_pago: S.fp ? (diasDeFP(S.fp) ? "credito" : "contado") : (D.condicion_pago || "contado"),
+            dias_credito: S.fp ? diasDeFP(S.fp) : (D.dias_credito ? parseInt(D.dias_credito, 10) : null),
             observaciones: $("pfObs").value.trim()
         };
     }
@@ -814,7 +824,10 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (!d.direccion) { return [1, "Ingrese la dirección de entrega.", "pfDireccion"]; }
         if (S.fe && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email_fe || d.email)) { return [1, "Ingrese un correo válido para la factura electrónica.", "pfEmailFe"]; }
         if (!Object.keys(S.items).length && !Object.keys(S.bonos).length) { return [2, "Elija al menos un producto.", "pfBuscarProd"]; }
-        if (S.cond === "credito" && !(d.dias_credito >= 1 && d.dias_credito <= 365)) { return [3, "Indique cuántos días de crédito.", "pfDias"]; }
+        // Forma de pago y transportadora son obligatorias en documentos nuevos (uno enviado antes de existir este dato puede seguir sin ellos)
+        var enviadoAntes = S.pedidoId && CFG.estadoPedido !== "borrador" && CFG.estadoPedido !== "nuevo";
+        if (!S.fp && !(enviadoAntes && !D.forma_pago)) { return [3, "Seleccione la forma de pago.", "pfFormaPago"]; }
+        if (!S.tr && !(enviadoAntes && !D.transportadora)) { return [3, "Seleccione la transportadora.", "pfTransportadora"]; }
         return null;
     }
 
@@ -944,7 +957,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     })();
 
     /* ---------- Cambios en cualquier campo ---------- */
-    ["pfNombre", "pfComercial", "pfTelefono", "pfEmail", "pfBarrio", "pfDireccion", "pfPuntos", "pfEmailFe", "pfDias", "pfObs", "pfDoc"].forEach(function (id) {
+    ["pfNombre", "pfComercial", "pfTelefono", "pfEmail", "pfBarrio", "pfDireccion", "pfPuntos", "pfEmailFe", "pfObs", "pfDoc"].forEach(function (id) {
         $(id).addEventListener("input", sucio);
     });
     $("pfDepto").addEventListener("change", sucio);
@@ -991,10 +1004,14 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     $("pfDireccion").value = D.direccion || "";
     $("pfPuntos").value = D.puntos_referencia || "";
     $("pfEmailFe").value = D.email_fe || "";
-    $("pfDias").value = D.dias_credito || "";
     $("pfObs").value = D.observaciones || "";
     setFE(D.factura_electronica ? 1 : 0);
-    setCond(D.condicion_pago);
+    setFP(D.forma_pago);
+    setTR(D.transportadora);
+    if (!D.forma_pago && CFG.pagoAnterior) {
+        $("pfPagoAnterior").textContent = "Este documento se envió con: " + CFG.pagoAnterior + ". Puede elegir una forma de pago nueva o dejarlo como está.";
+        $("pfPagoAnterior").hidden = false;
+    }
     S.clienteId = D.cliente_id || null;
     S.docOk = soloDig(D.identificacion);   // al editar, el NIT que ya tiene el pedido no se vuelve a buscar
     S.lista = CFG.tipoCliente || "";
