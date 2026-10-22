@@ -926,7 +926,7 @@ foreach ($empleadosBase as $fila) {
     <link rel="stylesheet" href="css/admin.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -1539,11 +1539,83 @@ foreach ($empleadosBase as $fila) {
             .filtros { flex-direction: column; align-items: stretch; }
             .filtros input { min-width: 0; width: 100%; }
         }
+
+        /* ===== TEMA TECH (liquidación) ===== */
+        :root {
+            --primary: #1E7BD8;
+            --primary-dark: #0D47A1;
+            --canvas: #F3F6FB;
+            --line: #E3E9F3;
+            --font-display: "Space Grotesk", "Plus Jakarta Sans", system-ui, sans-serif;
+        }
+
+        body {
+            background-color: var(--canvas);
+            background-image:
+                radial-gradient(46rem 24rem at 100% -4%, rgba(56, 189, 248, .12), transparent 60%),
+                radial-gradient(rgba(13, 71, 161, .075) 1px, transparent 1px);
+            background-size: auto, 22px 22px;
+            background-attachment: fixed;
+        }
+
+        .ico { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; flex: none; }
+
+        .top-header {
+            position: static;
+            padding: 0 0 18px;
+            background: none;
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
+
+        .top-header h1 { font-family: var(--font-display); letter-spacing: -.02em; }
+
+        .top-header .icono-titulo {
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: linear-gradient(135deg, #1E7BD8, #0D47A1);
+            box-shadow: 0 0 0 5px rgba(56, 189, 248, .12), 0 12px 22px -10px rgba(13, 71, 161, .9);
+        }
+
+        .top-header .icono-titulo .ico { width: 24px; height: 24px; }
+
+        .nota-liquidacion,
+        .nota-legal { border: 1px solid transparent; border-left: 4px solid; box-shadow: var(--shadow-card); }
+        .nota-liquidacion { border-color: #CFE2FA; border-left-color: #1E7BD8; }
+        .nota-legal { border-color: #F2DE9E; border-left-color: #E0A100; }
+        .nota-liquidacion .icono-nota .ico { color: #1E7BD8; width: 19px; height: 19px; }
+        .nota-legal .icono-nota .ico { color: #B07A00; width: 19px; height: 19px; }
+
+        .mensaje-liq { border-left: 4px solid currentColor; box-shadow: var(--shadow-card); }
+
+        .filtros label { font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+
+        .btn-filtrar,
+        .btn-liquidar {
+            background: linear-gradient(135deg, #1E7BD8 0%, #0D47A1 100%);
+            border: 1px solid rgba(255, 255, 255, .12);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, .22) inset, 0 12px 22px -12px rgba(13, 71, 161, .9);
+        }
+
+        .btn-filtrar:hover,
+        .btn-liquidar:hover { background: linear-gradient(135deg, #1E7BD8 0%, #0D47A1 100%); filter: brightness(1.08); }
+
+        .btn-liquidar,
+        .btn-pdf { display: inline-flex; align-items: center; gap: 7px; }
+
+        .tabla thead th { background: #F6F9FE; letter-spacing: .07em; }
+        .tabla tbody tr:hover { background: #F5F9FF; }
+
+        .total-nomina-caja .titulo .icono-total { display: inline-flex; align-items: center; justify-content: center; }
+        .total-nomina-caja .titulo .icono-total .ico { width: 24px; height: 24px; }
+        .total-nomina-caja .valor { font-family: var(--font-display); letter-spacing: -.02em; }
     </style>
 
 </head>
 
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol><symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol><symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol><symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"/></symbol></defs></svg>
+
 
     <div class="container-admin">
 
@@ -1551,7 +1623,7 @@ foreach ($empleadosBase as $fila) {
 
             <div class="top-header">
                 <div class="titulo-bloque">
-                    <div class="icono-titulo">💰</div>
+                    <div class="icono-titulo"><svg class="ico" aria-hidden="true"><use href="#i-wallet"/></svg></div>
                     <div>
                         <h1>Liquidación de Nómina</h1>
                         <p class="subtitulo">Calcula y liquida lo pendiente de cada empleado por periodo</p>
@@ -1566,7 +1638,7 @@ foreach ($empleadosBase as $fila) {
             <div class="content">
 
                 <div class="nota-liquidacion">
-                    <span class="icono-nota">ℹ️</span>
+                    <span class="icono-nota"><svg class="ico" aria-hidden="true"><use href="#i-info"/></svg></span>
                     <span>
                         Aquí solo se cuentan los minutos <strong>pendientes por liquidar</strong> (los que aún no has pagado/descontado). El tiempo extra ya compensa primero el retraso y luego la deuda pendiente — por ejemplo, 30 min de retraso con 45 min de extra quedan mostrados como 15 min de extra y 0 de retraso. Si filtras por fechas (ej. del 1 al 15), el botón "Liquidar" solo marca como pagados los registros de <strong>ese rango de fechas</strong> para ese empleado. Nada se borra: en <strong>Historial Completo</strong> siempre vas a seguir viendo todo (sin compensar), liquidado o no.
                         <br><br>
@@ -1575,7 +1647,7 @@ foreach ($empleadosBase as $fila) {
                 </div>
 
                 <div class="nota-legal">
-                    <span class="icono-nota">⚠️</span>
+                    <span class="icono-nota"><svg class="ico" aria-hidden="true"><use href="#i-alert"/></svg></span>
                     <span>
                         El valor a pagar es una <strong>ayuda de cálculo</strong>, no un reemplazo de tu contador(a). Usa el SMMLV y auxilio de transporte 2026 ($<?= number_format(SMMLV_2026, 0, ",", ".") ?> y $<?= number_format(AUX_TRANSPORTE_2026, 0, ",", ".") ?>, Decretos 1469 y 1470 de 2025) y el recargo legal de hora extra diurna (25%). Descuenta <strong>salud y pensión (8%)</strong> sobre el salario base y, en salarios mensuales, resta cada <strong>día no asistido</strong> (salario ÷ 30). <strong>No incluye</strong> parafiscales, cesantías, prima, vacaciones, retención en la fuente ni recargos nocturnos/dominicales. Para el salario mensual (Ventas, Administración, y demás cargos que no sean Producción o Temporales) necesitas seleccionar un rango de fechas "Desde/Hasta" para poder prorratear el mes.
                     </span>
@@ -1583,7 +1655,7 @@ foreach ($empleadosBase as $fila) {
 
                 <?php if ($mensaje !== ""): ?>
                     <div class="mensaje-liq <?= $tipoMensaje ?>">
-                        <?= $tipoMensaje === "exito" ? "✅" : "⚠️" ?>
+                        <?= $tipoMensaje === "exito" ? '<svg class="ico" aria-hidden="true"><use href="#i-check-circle"/></svg>' : '<svg class="ico" aria-hidden="true"><use href="#i-alert"/></svg>' ?>
                         <span><?= escapar($mensaje) ?></span>
                     </div>
                 <?php endif; ?>
@@ -1697,7 +1769,7 @@ foreach ($empleadosBase as $fila) {
                                                 href="reporte_empleado_pdf.php?empleado_id=<?= (int) $fila["id"] ?>&desde=<?= urlencode($desde) ?>&hasta=<?= urlencode($hasta) ?>"
                                                 target="_blank"
                                                 class="btn-pdf"
-                                            >📄 PDF</a>
+                                            ><svg class="ico" aria-hidden="true"><use href="#i-file-text"/></svg> PDF</a>
                                         <?php else: ?>
                                             <span class="sin-valor" style="display:block; margin-bottom:6px;">PDF: selecciona<br>un rango de fechas</span>
                                         <?php endif; ?>
@@ -1706,7 +1778,7 @@ foreach ($empleadosBase as $fila) {
                                             <input type="hidden" name="empleado_id" value="<?= (int) $fila["id"] ?>">
                                             <input type="hidden" name="desde" value="<?= escapar($desde) ?>">
                                             <input type="hidden" name="hasta" value="<?= escapar($hasta) ?>">
-                                            <button type="submit" class="btn-liquidar" data-nombre="<?= escapar($fila["nombre"]) ?>" data-noasistidos="<?= escapar(json_encode($fila["fechasNoAsistidas"], JSON_UNESCAPED_UNICODE)) ?>" data-asistidos="<?= (int) $fila["diasAsistidos"] ?>">💰 Liquidar</button>
+                                            <button type="submit" class="btn-liquidar" data-nombre="<?= escapar($fila["nombre"]) ?>" data-noasistidos="<?= escapar(json_encode($fila["fechasNoAsistidas"], JSON_UNESCAPED_UNICODE)) ?>" data-asistidos="<?= (int) $fila["diasAsistidos"] ?>"><svg class="ico" aria-hidden="true"><use href="#i-wallet"/></svg> Liquidar</button>
                                         </form>
                                     </td>
                                 </tr>
@@ -1719,7 +1791,7 @@ foreach ($empleadosBase as $fila) {
                 <?php if (!empty($filasProcesadas)): ?>
                     <div class="total-nomina-caja">
                         <span class="titulo">
-                            <span class="icono-total">💵</span>
+                            <span class="icono-total"><svg class="ico" aria-hidden="true"><use href="#i-wallet"/></svg></span>
                             <span>
                                 Total nómina de este periodo
                                 <?php if ($faltaRangoParaAlguno): ?>
@@ -1892,7 +1964,7 @@ foreach ($empleadosBase as $fila) {
                 let textoDias = "Días asistidos: " + boton.getAttribute("data-asistidos") + "\n";
 
                 if (noAsistidos.length > 0) {
-                    textoDias += "⚠️ " + nombre + " NO asistió estos " + noAsistidos.length + " día(s):\n" +
+                    textoDias += "ATENCIÓN: " + nombre + " NO asistió estos " + noAsistidos.length + " día(s):\n" +
                         noAsistidos.map(function (f) { return "   • " + f; }).join("\n") + "\n";
                 } else {
                     textoDias += "No tiene días no asistidos.\n";
@@ -1920,4 +1992,3 @@ foreach ($empleadosBase as $fila) {
 </body>
 
 </html>
-
