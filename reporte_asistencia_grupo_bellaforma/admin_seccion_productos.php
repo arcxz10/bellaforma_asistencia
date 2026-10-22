@@ -356,6 +356,8 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
                     y: window.pageYOffset || document.documentElement.scrollTop || 0,
                     t: c ? c.scrollTop : 0,
                     q: document.getElementById("buscarProd").value,
+                    ref: (document.getElementById("prodRef").value || "").trim().toLowerCase(),
+                    nuevo: acc.value === "prod_crear",
                     ts: Date.now()
                 }));
             } catch (err) { /* sin almacenamiento: se ignora */ }
@@ -380,17 +382,116 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
             if (!guardado || Date.now() - guardado.ts > 60000) { return; }
             if (window.location.hash !== "#productos_mayoristas") { return; }
 
+            // Fila del producto que se acaba de guardar (por su referencia)
+            function filaDe(ref) {
+                if (!ref) { return null; }
+                var filas = document.querySelectorAll("#tablaProd tbody tr[data-busq]");
+                for (var i = 0; i < filas.length; i++) {
+                    var s = filas[i].querySelector("td:nth-child(2) strong");
+                    if (s && s.textContent.trim().toLowerCase() === ref) { return filas[i]; }
+                }
+                return null;
+            }
+
             var buscar = document.getElementById("buscarProd");
-            if (guardado.q) {
+            var fila = filaDe(guardado.ref);
+            // El filtro anterior solo se conserva si no esconde el producto guardado (si no, parecería que no se guardó)
+            if (guardado.q && !guardado.nuevo && (!fila || fila.dataset.busq.toLowerCase().indexOf(guardado.q.trim().toLowerCase()) !== -1)) {
                 buscar.value = guardado.q;
                 buscar.dispatchEvent(new Event("input"));
             }
             setTimeout(function () {
                 var c = contenedor();
-                if (c) { c.scrollTop = guardado.t; }
-                window.scrollTo(0, guardado.y);
+                if (guardado.nuevo && fila) {
+                    // Producto nuevo: se muestra y se resalta un momento
+                    fila.scrollIntoView({ block: "center" });
+                    fila.style.transition = "background .6s";
+                    fila.style.background = "#E4F5E7";
+                    setTimeout(function () { fila.style.background = ""; }, 3500);
+                } else {
+                    if (c) { c.scrollTop = guardado.t; }
+                    window.scrollTo(0, guardado.y);
+                }
                 avisoFlotante();
             }, 60);
         });
     })();
+</script>
+
+<script>
+/* Guardar producto sin salir de la página: así se ve el resultado real (guardado o error) en pantalla. */
+(function () {
+    var form = document.querySelector("#modalProd form");
+    if (!form) { return; }
+    var enviando = false;
+
+    function aviso(texto, titulo) {
+        if (typeof window.bfAviso === "function") { window.bfAviso(texto, { titulo: titulo }); }
+        else { window.alert((titulo ? titulo + "\n\n" : "") + texto); }
+    }
+
+    function toast(texto, ok) {
+        var d = document.createElement("div");
+        d.textContent = texto;
+        d.style.cssText = "position:fixed; top:16px; right:16px; z-index:3000; max-width:420px; padding:14px 18px; border-radius:12px; font:600 14px/1.4 inherit; color:" +
+            (ok ? "#14501A" : "#8E1B29") + "; background:" + (ok ? "#E4F5E7" : "#FDEBED") + "; border-left:5px solid " + (ok ? "#33B540" : "#C62839") +
+            "; box-shadow:0 12px 30px -10px rgba(7,27,64,.45); transition:opacity .4s;";
+        document.body.appendChild(d);
+        setTimeout(function () { d.style.opacity = "0"; }, 4200);
+        setTimeout(function () { if (d.parentNode) { d.parentNode.removeChild(d); } }, 4700);
+    }
+
+    // Mensaje de éxito que se muestra justo después de recargar la lista
+    window.addEventListener("load", function () {
+        var m = null;
+        try { m = sessionStorage.getItem("bf_msg_prod"); sessionStorage.removeItem("bf_msg_prod"); } catch (e) { m = null; }
+        if (m) { toast(m, true); }
+    });
+
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (enviando) { return; }
+        var boton = form.querySelector('button[type="submit"]');
+        var textoBoton = boton.textContent;
+        var ctrl = window.AbortController ? new AbortController() : null;
+        var corte = setTimeout(function () { if (ctrl) { ctrl.abort(); } }, 60000);
+
+        function terminar() { clearTimeout(corte); enviando = false; boton.disabled = false; boton.textContent = textoBoton; }
+        function fallo(texto) { terminar(); aviso(texto, "No se guardó el producto"); }
+
+        enviando = true;
+        boton.disabled = true;
+        boton.textContent = "Guardando…";
+
+        fetch("admin.php", { method: "POST", body: new FormData(form), credentials: "same-origin", signal: ctrl ? ctrl.signal : undefined })
+            .then(function (r) { return r.text().then(function (txt) { return { r: r, txt: txt }; }); })
+            .then(function (x) {
+                if (/login\.html/.test(x.r.url)) { fallo("Su sesión expiró. Inicie sesión de nuevo y repita el producto."); return; }
+                var doc = new DOMParser().parseFromString(x.txt, "text/html");
+                if (!x.r.ok) {
+                    var resumen = (doc.body ? doc.body.textContent : x.txt).replace(/\s+/g, " ").trim().slice(0, 300);
+                    fallo("El servidor respondió con error " + x.r.status + (resumen ? ": " + resumen : "."));
+                    return;
+                }
+                var m = doc.querySelector(".content > .mensaje");
+                if (!m) {
+                    fallo("El servidor no devolvió confirmación del guardado. Si agregó una foto, pruebe sin foto; si sigue igual, revise los registros (Logs) en Railway.");
+                    return;
+                }
+                var texto = m.textContent.replace(/\s+/g, " ").trim();
+                if (m.classList.contains("exito")) {
+                    try { sessionStorage.setItem("bf_msg_prod", texto); } catch (err) { /* sin almacenamiento */ }
+                    terminar();
+                    window.location.hash = "#productos_mayoristas";
+                    window.location.reload();
+                } else {
+                    fallo(texto);
+                }
+            })
+            .catch(function (err) {
+                if (err && err.name === "AbortError") { fallo("El servidor tardó más de 60 segundos en responder, así que no se pudo confirmar si se guardó. Recargue la página y busque la referencia antes de repetirlo."); }
+                else { fallo("No hubo conexión con el servidor. Revise su internet e intente de nuevo."); }
+            });
+    });
+})();
 </script>
