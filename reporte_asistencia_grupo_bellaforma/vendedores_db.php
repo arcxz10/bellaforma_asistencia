@@ -5,7 +5,9 @@
  * - Funciones de formato y consulta de pedidos (admin.php, pedido_pdf.php, pedido_excel.php, vendedor.php).
  */
 
-const ESQUEMA_VEND_VERSION = 11;
+require_once __DIR__ . "/despachos_lib.php";
+
+const ESQUEMA_VEND_VERSION = 12;
 
 function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
 {
@@ -300,9 +302,13 @@ function asegurarTablasVendedores(mysqli $c): void
     $ok = agregarColumna($c, "pedido_vendedor_items", "bonificado", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
     // Permiso para que el ejecutivo descargue el PDF y el Excel de sus pedidos (lo autoriza el administrador)
     $ok = agregarColumna($c, "vendedores", "puede_descargar", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
+    // Forma de pago y transportadora (las elige el ejecutivo en el pedido) + control de despachos diarios
+    $ok = agregarColumna($c, "pedidos_vendedores", "forma_pago", "VARCHAR(20) NULL") && $ok;
+    $ok = agregarColumna($c, "pedidos_vendedores", "transportadora", "VARCHAR(30) NULL") && $ok;
+    $okDesp = asegurarTablaDespachos($c);
 
     // Solo se marca como terminado si TODO se aplicó; si no, se reintenta en la próxima visita
-    if ($ok && $okPrecios && $okClientes) {
+    if ($ok && $okPrecios && $okClientes && $okDesp) {
         $c->query("REPLACE INTO esquema_modulo (clave, valor) VALUES ('vendedores', " . ESQUEMA_VEND_VERSION . ")");
     }
 }
@@ -405,6 +411,11 @@ function etiquetaDocumento(string $tipoPersona): string
 
 function etiquetaCondicion(array $p): string
 {
+    $fp = (string) ($p["forma_pago"] ?? "");
+    if ($fp !== "") {
+        $dias = formaPagoDias($fp);
+        return $dias ? "Crédito a " . $dias . " días" : etiquetaFormaPago($fp);
+    }
     if (($p["condicion_pago"] ?? "contado") === "credito") {
         return "Crédito a " . (int) ($p["dias_credito"] ?? 0) . " días";
     }
