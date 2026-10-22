@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import url("base.css");
 
 /* ======================================
@@ -237,3 +237,52 @@ body {
     .login-card, .mensaje-error { animation: none; }
     .btn-submit, .btn-asistencia { transition: none; }
 }
+
+
+/* ==========================================================
+   TEMA TECH (acceso)
+   ========================================================== */
+
+.login-card {
+    position: relative;
+    padding: 38px 32px 28px;
+    background: rgba(255, 255, 255, .97);
+    border: 1px solid rgba(255, 255, 255, .55);
+    border-radius: 22px;
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, .18), 0 40px 80px -30px rgba(2, 10, 28, .75), 0 0 80px -20px rgba(56, 189, 248, .35);
+}
+
+.login-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    border-radius: 22px 22px 0 0;
+    background: linear-gradient(90deg, var(--azul-500), var(--cian), var(--neon));
+}
+
+.header-login h1 { font-size: 28px; letter-spacing: -.025em; }
+
+.login-card h2 { font-size: 25px; letter-spacing: -.025em; }
+
+.btn-submit {
+    background: linear-gradient(135deg, #1E7BD8 0%, #0D47A1 100%);
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: var(--radio-md);
+    letter-spacing: .01em;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset, 0 14px 28px -12px rgba(13, 71, 161, .95);
+}
+
+.btn-submit:hover {
+    background: linear-gradient(135deg, #1E7BD8 0%, #0D47A1 100%);
+    filter: brightness(1.1);
+}
+
+.btn-asistencia {
+    background: rgba(51, 181, 64, .09);
+    border: 1.5px solid rgba(51, 181, 64, .35);
+}
+
+.btn-asistencia:hover { background: rgba(51, 181, 64, .16); }
+
+.volver { color: var(--azul-600); }
