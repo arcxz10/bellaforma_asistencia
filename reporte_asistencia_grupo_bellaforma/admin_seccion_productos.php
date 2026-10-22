@@ -38,14 +38,14 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
 
     <div class="cabecera-seccion">
         <div>
-            <h2>🏷️ Productos</h2>
+            <h2><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg> Productos</h2>
             <p>Un solo catálogo con <strong>precio mayorista</strong> y <strong>precio detal</strong>. El ejecutivo ve uno u otro según el tipo de cliente que elija. La <strong>referencia</strong> es la misma de Syscafe y la foto se sube una sola vez.</p>
         </div>
         <button type="button" class="btn-nuevo" onclick="nuevoProducto()">+ Nuevo Producto</button>
     </div>
 
     <div class="caja-carga">
-        <strong>📥 Cargar o actualizar productos desde Excel</strong>
+        <strong><svg class="ico" aria-hidden="true"><use href="#i-upload"/></svg> Cargar o actualizar productos desde Excel</strong>
         <p style="margin:6px 0 10px; font-size:13px; color:#556;">
             Guarde el Excel como CSV con las columnas <em>referencia, nombre, precio_mayorista, precio_detal</em> y súbalo aquí. Si la referencia ya existe, se actualizan su nombre y los precios que el archivo traiga.
             <a href="productos_plantilla.php">Descargar plantilla</a>
@@ -91,7 +91,7 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
                                 <?php if (!empty($p["foto_v"])): ?>
                                     <img class="mini-foto" loading="lazy" src="foto.php?id=<?= (int) $p["id"] ?>&amp;v=<?= (int) $p["foto_v"] ?>" alt="">
                                 <?php else: ?>
-                                    <div class="mini-foto-vacia">📷</div>
+                                    <div class="mini-foto-vacia"><svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg></div>
                                 <?php endif; ?>
                             </td>
                             <td><strong><?= escapar($p["referencia"]) ?></strong></td>
@@ -168,7 +168,7 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
                 <label for="prodFoto">Foto del producto (sirve para mayorista y detal)</label>
                 <input type="file" id="prodFoto" name="foto" accept="image/jpeg,image/png,image/webp">
                 <div id="zonaPegar" class="zona-pegar" tabindex="0" role="button" aria-label="Pegar o arrastrar una imagen">
-                    📋 <strong>Pegue la imagen aquí</strong> (Ctrl + V) o arrástrela desde otra pestaña
+                    <svg class="ico" aria-hidden="true"><use href="#i-clipboard"/></svg> <strong>Pegue la imagen aquí</strong> (Ctrl + V) o arrástrela desde otra pestaña
                 </div>
                 <img id="prodPrev" class="prev-foto" alt="Vista previa">
                 <label id="prodQuitarBox" style="display:none; margin-top:8px; font-weight:normal;">
@@ -187,7 +187,7 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
 <!-- MODAL CONFIRMAR ELIMINAR PRODUCTO -->
 <div class="modal" id="modalEliminarProd">
     <div class="modal-contenido modal-confirmar" role="alertdialog" aria-modal="true" aria-labelledby="elimTitulo" aria-describedby="elimTexto">
-        <div class="confirmar-icono">⚠️</div>
+        <div class="confirmar-icono"><svg class="ico" aria-hidden="true"><use href="#i-alert"/></svg></div>
         <h3 id="elimTitulo">¿Eliminar este producto?</h3>
         <p id="elimTexto" class="confirmar-texto"></p>
         <p class="confirmar-aviso">Se borrará de la base de datos junto con su foto y <strong>no se puede deshacer</strong>.</p>
@@ -284,13 +284,13 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
         img.src = URL.createObjectURL(f);
         var zona = document.getElementById("zonaPegar");
         zona.classList.add("listo");
-        zona.innerHTML = "✅ Imagen lista. Puede pegar otra para reemplazarla.";
+        zona.innerHTML = "Imagen lista. Puede pegar otra para reemplazarla.";
     }
 
     function reiniciarZonaPegar() {
         var zona = document.getElementById("zonaPegar");
         zona.classList.remove("listo", "arrastrando");
-        zona.innerHTML = "📋 <strong>Pegue la imagen aquí</strong> (Ctrl + V) o arrástrela desde otra pestaña";
+        zona.innerHTML = "<strong>Pegue la imagen aquí</strong> (Ctrl + V) o arrástrela desde otra pestaña";
     }
 
     function imagenDeTransfer(dt) {
