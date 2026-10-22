@@ -53,7 +53,7 @@ $conexion->close();
 
         <div class="panel">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3>📅 Gestión de Festivos</h3>
+                <h3>Gestión de Festivos</h3>
                 <a href="crear_festivo.php" class="boton-agregar">+ Agregar Nuevo</a>
             </div>
 
@@ -104,4 +104,3 @@ $conexion->close();
     <script src="js/bellaforma-ui.js"></script>
 </body>
 </html>
-
