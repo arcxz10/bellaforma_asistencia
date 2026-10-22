@@ -276,6 +276,37 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
 
 /* ================= EDICIÓN (panel del administrador) ================= */
 
+/**
+ * Empresa según el prefijo del documento («PE5-123» → MIRELY, «PE1-45» → GRUPO BELLAFORMA).
+ * Para agregar otro prefijo, añada una línea al mapa. Devuelve "" si el prefijo no se reconoce.
+ */
+function empresaPorFactura(string $factura): string
+{
+    $mapa = [
+        "PE5" => "MIRELY", "FV" => "MIRELY", "RM1" => "MIRELY",
+        "PE1" => "GRUPO BELLAFORMA", "FE" => "GRUPO BELLAFORMA", "RM2" => "GRUPO BELLAFORMA",
+    ];
+    if (!preg_match('/^\s*([A-Za-z]+\d*)\s*[-–]?/u', $factura, $m)) {
+        return "";
+    }
+    return $mapa[strtoupper($m[1])] ?? "";
+}
+
+/** Pasa un despacho al día siguiente (por si ese día no se logró despachar). Devuelve la nueva fecha o null si no existe. */
+function moverDespachoDiaSiguiente(mysqli $c, int $id): ?string
+{
+    $st = $c->prepare("UPDATE despachos SET fecha = DATE_ADD(fecha, INTERVAL 1 DAY) WHERE id = ?");
+    $st->bind_param("i", $id);
+    $st->execute();
+    $st->close();
+    $st = $c->prepare("SELECT fecha FROM despachos WHERE id = ?");
+    $st->bind_param("i", $id);
+    $st->execute();
+    $f = $st->get_result()->fetch_assoc();
+    $st->close();
+    return $f ? $f["fecha"] : null;
+}
+
 /** Texto corto de una línea. */
 function textoDespacho($v, int $max): string
 {
@@ -375,7 +406,20 @@ function actualizarCampoDespacho(mysqli $c, int $id, string $campo, string $valo
     $up->bind_param($tipo . "i", $guardar, $id);
     $up->execute();
     $up->close();
-    return ["ok" => true, "valor" => $guardar, "texto" => is_string($guardar) ? $guardar : ($guardar === null ? "" : (string) $guardar)];
+    $resp = ["ok" => true, "valor" => $guardar, "texto" => is_string($guardar) ? $guardar : ($guardar === null ? "" : (string) $guardar)];
+
+    // El prefijo del documento define la empresa (PE5 = MIRELY, PE1 = GRUPO BELLAFORMA…)
+    if ($campo === "factura") {
+        $empresa = empresaPorFactura((string) $guardar);
+        if ($empresa !== "") {
+            $up = $c->prepare("UPDATE despachos SET empresa = ? WHERE id = ?");
+            $up->bind_param("si", $empresa, $id);
+            $up->execute();
+            $up->close();
+            $resp["empresa"] = $empresa;
+        }
+    }
+    return $resp;
 }
 
 /**
