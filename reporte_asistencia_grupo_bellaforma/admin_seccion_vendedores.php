@@ -72,7 +72,7 @@ $datosGraficoVend = array_map(function ($v) {
 
     <div class="cabecera-seccion">
         <div>
-            <h2>🧳 Vendedores</h2>
+            <h2><svg class="ico" aria-hidden="true"><use href="#i-briefcase"/></svg> Vendedores</h2>
             <p>Ejecutivos de negocios con acceso para tomar pedidos. No se cuentan los pedidos anulados ni los borradores.</p>
         </div>
         <button type="button" class="btn-nuevo" onclick="nuevoVendedor()">+ Nuevo Vendedor</button>
@@ -145,7 +145,7 @@ $datosGraficoVend = array_map(function ($v) {
                                     <input type="hidden" name="permiso" value="<?= (int) ($v["puede_descargar"] ?? 0) === 1 ? 0 : 1 ?>">
                                     <?php if ((int) ($v["puede_descargar"] ?? 0) === 1): ?>
                                         <span class="estado estado-activo">PDF, Excel y número: Sí</span>
-                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return bfConfirmarForm(this.form, {icono: '📄', titulo: 'Quitar permiso', texto: '¿Quitar a este ejecutivo el permiso de descargar PDF y Excel y de editar el número?', si: 'Sí, quitar', peligro: true});">Quitar</button>
+                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return bfConfirmarForm(this.form, {titulo: 'Quitar permiso', texto: '¿Quitar a este ejecutivo el permiso de descargar PDF y Excel y de editar el número?', si: 'Sí, quitar', peligro: true});">Quitar</button>
                                     <?php else: ?>
                                         <span class="estado estado-inactivo">No</span>
                                         <button type="submit" class="btn-activar btn-fila">Permitir</button>
@@ -169,7 +169,7 @@ $datosGraficoVend = array_map(function ($v) {
                                     <input type="hidden" name="id" value="<?= (int) $v["id"] ?>">
                                     <input type="hidden" name="activo" value="<?= (int) $v["activo"] === 1 ? 0 : 1 ?>">
                                     <?php if ((int) $v["activo"] === 1): ?>
-                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return bfConfirmarForm(this.form, {icono: '🚫', titulo: 'Desactivar vendedor', texto: '¿Desactivar este vendedor? No podrá ingresar.', si: 'Sí, desactivar', peligro: true});">Desactivar</button>
+                                        <button type="submit" class="btn-eliminar btn-fila" onclick="return bfConfirmarForm(this.form, {titulo: 'Desactivar vendedor', texto: '¿Desactivar este vendedor? No podrá ingresar.', si: 'Sí, desactivar', peligro: true});">Desactivar</button>
                                     <?php else: ?>
                                         <button type="submit" class="btn-activar btn-fila">Activar</button>
                                     <?php endif; ?>
@@ -184,7 +184,7 @@ $datosGraficoVend = array_map(function ($v) {
 
     <div class="tarjeta-grafico">
         <div class="tarjeta-grafico-cabecera">
-            <h3 style="margin:0;">🏆 Ranking de Vendedores</h3>
+            <h3 style="margin:0;"><svg class="ico" aria-hidden="true"><use href="#i-chart"/></svg> Ranking de Vendedores</h3>
             <div class="selector-metrica">
                 <label for="metricaVendedores">Ver por:</label>
                 <select id="metricaVendedores" onchange="actualizarGraficoVendedores()">
