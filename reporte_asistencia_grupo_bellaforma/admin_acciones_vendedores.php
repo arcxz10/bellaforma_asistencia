@@ -8,7 +8,7 @@ $accionesPropias = [
     "vend_crear", "vend_editar", "vend_estado", "vend_descargas",
     "prod_crear", "prod_editar", "prod_estado", "prod_eliminar",
     "ped_estado", "ped_eliminar", "ped_numero",
-    "desp_campo", "desp_guardar", "desp_eliminar",
+    "desp_campo", "desp_guardar", "desp_eliminar", "desp_mover",
     "cli_guardar", "cli_estado", "cli_importar",
     "prod_importar",
 ];
@@ -395,6 +395,16 @@ if ($accion === "desp_guardar") {
         irADespachos($r["error"], "error", $fechaVista);
     }
     irADespachos($id > 0 ? "Despacho actualizado." : "Despacho agregado.", "exito", (string) ($datosDesp["fecha"] ?? $fechaVista));
+}
+
+if ($accion === "desp_mover") {
+    $id = (int) ($_POST["id"] ?? 0);
+    $fechaVista = (string) ($_POST["fecha_vista"] ?? "");
+    $nueva = moverDespachoDiaSiguiente($conexion, $id);
+    if ($nueva === null) {
+        irADespachos("Ese despacho ya no existe.", "error", $fechaVista);
+    }
+    irADespachos("Despacho pasado al " . date("d/m/Y", strtotime($nueva)) . ".", "exito", $fechaVista);
 }
 
 if ($accion === "desp_eliminar") {
