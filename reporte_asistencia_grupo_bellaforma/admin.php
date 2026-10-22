@@ -441,7 +441,7 @@ unset($_SESSION["mensaje"]);
 unset($_SESSION["tipo_mensaje"]);
 
 $fechaDesde = $_GET["desde"] ?? date("Y-m-d");
-$fechaHasta = $_GET["hasta"] ?? date("Y-m-d");
+$fechaHasta = $_GET["hasta"] ?? $fechaDesde;
 $estado = $_GET["estado"] ?? "todos";
 $buscar = trim($_GET["buscar"] ?? "");
 
@@ -1468,7 +1468,7 @@ $resultadoEmpleados =
                     <div>
 
                         <label for="desde">
-                            Desde
+                            Fecha
                         </label>
 
                         <input
@@ -1477,25 +1477,6 @@ $resultadoEmpleados =
                             name="desde"
                             value="<?= escapar(
                                 $fechaDesde
-                            ) ?>"
-                            required
-                        >
-
-                    </div>
-
-
-                    <div>
-
-                        <label for="hasta">
-                            Hasta
-                        </label>
-
-                        <input
-                            type="date"
-                            id="hasta"
-                            name="hasta"
-                            value="<?= escapar(
-                                $fechaHasta
                             ) ?>"
                             required
                         >
