@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import url("base.css");
 
 /* ===== Panel de ejecutivos de negocios (pensado para celular) ===== */
@@ -260,3 +260,125 @@ body.pf-kb .pf-barra { display: none; }
     .pf-step.pf-step-main { max-width: 152px; }
     .pf-step button.bonif { flex-basis: 100%; margin: 6px 0 0; }
 }
+
+
+/* ==========================================================
+   TEMA TECH (panel de ejecutivos y formulario de pedido)
+   ========================================================== */
+
+body {
+    background-color: var(--lienzo);
+    background-image:
+        radial-gradient(34rem 18rem at 100% -4%, rgba(56, 189, 248, .14), transparent 60%),
+        radial-gradient(rgba(13, 71, 161, .07) 1px, transparent 1px);
+    background-size: auto, 22px 22px;
+    background-attachment: fixed;
+}
+
+/* ---- Barra superior ---- */
+.topbar {
+    background:
+        radial-gradient(20rem 8rem at 100% 0%, rgba(34, 211, 165, .22), transparent 65%),
+        linear-gradient(120deg, #06142F 0%, #0B2A63 65%, #0D47A1 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
+    box-shadow: 0 12px 30px -18px rgba(4, 14, 36, .9);
+}
+
+.topbar a.salir { background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .26); transition: background .18s ease; }
+.topbar a.salir:hover { background: rgba(198, 40, 57, .25); border-color: rgba(255, 130, 145, .55); }
+
+/* ---- Pestañas ---- */
+.tabs { background: #E6EDF8; border: 1px solid var(--linea); border-radius: 16px; }
+.tab-btn { border-radius: 12px; }
+.tab-btn.activo {
+    color: #fff;
+    background: linear-gradient(135deg, #1E7BD8, #0D47A1);
+    box-shadow: 0 10px 20px -12px rgba(13, 71, 161, .9);
+}
+
+/* ---- Tarjetas ---- */
+.card,
+.pf-card,
+.pedido-item {
+    border-radius: var(--radio-lg);
+    box-shadow: var(--sombra-sm);
+}
+
+.card h2,
+.pf-card h2 { font-family: var(--fuente-titulo); letter-spacing: -.02em; }
+
+.pf label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--tinta-suave); font-weight: 700; }
+
+.pf input[type=text], .pf input[type=tel], .pf input[type=email], .pf input[type=number], .pf input[type=search], .pf select, .pf textarea {
+    background: #FBFCFE;
+}
+.pf input:focus, .pf select:focus, .pf textarea:focus { background: #fff; }
+
+/* ---- Estados como pastillas con punto ---- */
+.estado { display: inline-flex; align-items: center; gap: 6px; }
+.estado::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ---- Pedidos ---- */
+.pedido-item .p-num { font-family: var(--fuente-titulo); letter-spacing: -.01em; }
+.pedido-item .p-total { font-family: var(--fuente-titulo); }
+.pedido-item[open] { border-color: #BFD7F6; box-shadow: var(--sombra-md); }
+
+/* ---- Botones ---- */
+.btn-azul {
+    background: linear-gradient(135deg, #1E7BD8 0%, #0D47A1 100%);
+    border: 1px solid rgba(255, 255, 255, .12);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .22) inset, 0 12px 22px -12px rgba(13, 71, 161, .9);
+}
+.btn-rojo { background: #FDEEF0; border: 1px solid #F8D4D9; }
+.btn-gris { background: #fff; border: 1px solid var(--linea); box-shadow: var(--sombra-sm); }
+
+/* ---- Formulario de pedido ---- */
+.pf-paso-btn { border-radius: 14px; border-color: var(--linea); background: #fff; }
+.pf-paso-btn span { font-family: var(--fuente-titulo); }
+.pf-paso-btn.activo {
+    background: linear-gradient(135deg, #1E7BD8, #0D47A1);
+    border-color: rgba(255, 255, 255, .12);
+    box-shadow: 0 10px 20px -12px rgba(13, 71, 161, .9);
+}
+
+.pf-segmento button { border-radius: 14px; background: #fff; }
+.pf-segmento button.activo { background: rgba(30, 123, 216, .07); box-shadow: 0 0 0 4px rgba(30, 123, 216, .1); }
+
+.pf-chip.activo { background: linear-gradient(135deg, #1E7BD8, #0D47A1); border-color: rgba(255, 255, 255, .12); }
+
+.pf-prod { border-radius: 14px; }
+.pf-prod.sel { border-color: var(--verde-500); background: rgba(51, 181, 64, .06); box-shadow: 0 0 0 3px rgba(51, 181, 64, .1); }
+.pf-prod-info b { font-family: var(--fuente-titulo); letter-spacing: -.01em; }
+.pf-thumb { border-radius: 12px; border: 1px solid var(--linea); }
+
+.pf-step button { background: #EAF2FD; color: var(--azul-700); border: 1px solid #D5E5FA; }
+.pf-step button:active { background: #D5E5FA; }
+
+.pf-total-linea { font-family: var(--fuente-titulo); border-top-color: var(--azul-100); }
+
+/* ---- Barra inferior: cristal oscuro con brillo ---- */
+.pf-barra {
+    background:
+        radial-gradient(14rem 6rem at 100% 0%, rgba(34, 211, 165, .25), transparent 70%),
+        linear-gradient(120deg, rgba(6, 20, 47, .96), rgba(11, 42, 99, .96));
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 18px;
+    box-shadow: 0 20px 44px -14px rgba(4, 14, 36, .8), 0 0 0 1px rgba(56, 189, 248, .12);
+}
+
+.pf-total b { font-family: var(--fuente-titulo); }
+.pf-btn-prim { border-radius: 12px; }
+.pf-btn-prim.pf-enviar { background: linear-gradient(135deg, #2BC24A, #1B8A3A); }
+
+/* ---- Diálogo ---- */
+.pf-dialogo { background: rgba(4, 14, 36, .6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.pf-dialogo-caja { position: relative; border-top: none; border-radius: 20px; box-shadow: 0 0 0 1px rgba(13, 71, 161, .08), var(--sombra-lg); overflow: hidden; }
+.pf-dialogo-caja::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: linear-gradient(90deg, var(--azul-500), var(--cian), var(--neon)); }
+.pf-dialogo-icono { border-radius: 18px; background: #EAF2FD; border: 1px solid #D5E5FA; }
+.pf-dialogo-no { background: #fff; border: 1px solid var(--linea); }
+.pf-dialogo-si { background: linear-gradient(135deg, #1E7BD8, #0D47A1); }
+.pf-dialogo-si.peligro { background: linear-gradient(135deg, #E04A5B, #B3202F); }
+
+.pf-toast { border-radius: 14px; background: #0B1A36; border: 1px solid rgba(255, 255, 255, .1); }
