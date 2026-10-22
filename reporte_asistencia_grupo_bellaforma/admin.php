@@ -1307,101 +1307,125 @@ $resultadoEmpleados =
                         $listaTarde[] = [$filaDash["nombre"], (int) $filaDash["minutos_retraso"]];
                     }
                 }
+
+                // Los que llegaron más tarde aparecen primero
+                usort($listaTarde, function ($a, $b) {
+                    return $b[1] <=> $a[1];
+                });
+
+                $dashPendiente = ($esHoy && !$diaCerrado);
+                $dashTotalFaltan = $dashPendiente ? $pendientesDia : $noRegistraronDia;
+                $dashPorcentaje = ((int) $totalEmpleados > 0)
+                    ? (int) round(((int) $registraronDia / (int) $totalEmpleados) * 100)
+                    : 0;
+                $dashPorcentaje = max(0, min(100, $dashPorcentaje));
+
+                // Iniciales para el círculo de cada persona (máx. 2 letras)
+                $dashIniciales = function ($nombre) {
+                    $palabras = preg_split('/\s+/u', trim((string) $nombre), -1, PREG_SPLIT_NO_EMPTY);
+                    $ini = "";
+                    foreach (array_slice($palabras ?: [], 0, 2) as $palabra) {
+                        if (preg_match('/\p{L}/u', $palabra, $m)) {
+                            $ini .= $m[0];
+                        }
+                    }
+                    return function_exists("mb_strtoupper") ? mb_strtoupper($ini, "UTF-8") : strtoupper($ini);
+                };
                 ?>
-                <style>
-                    .card-lista { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--linea); list-style: none; max-height: 190px; overflow-y: auto; }
-                    .card-lista li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; color: var(--tinta); }
-                    .card-lista li span { color: var(--peligro); font-weight: 600; white-space: nowrap; }
-                    .card-stat p.card-lista-vacia { margin: 12px 0 0; font-size: 13px; color: var(--tinta-suave); font-weight: 400; letter-spacing: 0; }
-                </style>
 
-                <div class="cards-dashboard">
+                <div class="dash-stats">
 
-                    <div class="card-stat">
-
-                        <h3>
-                            Total Empleados
-                        </h3>
-
-                        <p>
-                            <?= $totalEmpleados ?>
-                        </p>
-
+                    <div class="dash-stat">
+                        <div class="dash-icono">👥</div>
+                        <div class="dash-dato">
+                            <span class="dash-etiqueta">Total Empleados</span>
+                            <span class="dash-numero"><?= $totalEmpleados ?></span>
+                            <span class="dash-pie">Personal en el sistema</span>
+                        </div>
                     </div>
 
-
-                    <div class="card-stat">
-
-                        <h3>
-                            Registraron Hoy
-                        </h3>
-
-                        <p>
-                            <?= $registraronDia ?>
-                        </p>
-
+                    <div class="dash-stat dash-stat--verde">
+                        <div class="dash-icono">✅</div>
+                        <div class="dash-dato">
+                            <span class="dash-etiqueta">Registraron Hoy</span>
+                            <span class="dash-numero"><?= $registraronDia ?></span>
+                            <span class="dash-barra" role="img" aria-label="<?= $dashPorcentaje ?>% del personal registrado">
+                                <span style="width: <?= $dashPorcentaje ?>%;"></span>
+                            </span>
+                            <span class="dash-pie"><?= $dashPorcentaje ?>% del personal</span>
+                        </div>
                     </div>
 
+                    <div class="dash-stat dash-stat--aviso">
+                        <div class="dash-icono">⏳</div>
+                        <div class="dash-dato">
+                            <span class="dash-etiqueta"><?= $dashPendiente ? "Pendientes Hoy" : "No registraron" ?></span>
+                            <span class="dash-numero"><?= $dashTotalFaltan ?></span>
+                            <span class="dash-pie"><?= $dashPendiente ? "Aún sin registrar" : "Sin registro en el día" ?></span>
+                        </div>
+                    </div>
 
-                    <div class="card-stat">
+                    <div class="dash-stat dash-stat--rojo">
+                        <div class="dash-icono">⏰</div>
+                        <div class="dash-dato">
+                            <span class="dash-etiqueta">Retardos Hoy</span>
+                            <span class="dash-numero"><?= $tardanzasDia ?></span>
+                            <span class="dash-pie">Llegaron tarde</span>
+                        </div>
+                    </div>
 
-                        <h3>
+                </div>
 
-                            <?= (
-                                $esHoy &&
-                                !$diaCerrado
-                            )
-                                ? "Pendientes Hoy"
-                                : "No registraron"
-                            ?>
 
-                        </h3>
+                <div class="dash-paneles">
 
-                        <p>
-
-                            <?= (
-                                $esHoy &&
-                                !$diaCerrado
-                            )
-                                ? $pendientesDia
-                                : $noRegistraronDia
-                            ?>
-
-                        </p>
+                    <div class="dash-panel dash-panel--aviso">
+                        <div class="dash-panel-cab">
+                            <h3><?= $dashPendiente ? "Pendientes por registrar" : "No registraron" ?></h3>
+                            <span class="dash-chip"><?= count($listaFaltan) ?></span>
+                        </div>
 
                         <?php if ($listaFaltan): ?>
-                            <ul class="card-lista">
+                            <ul class="dash-lista">
                                 <?php foreach ($listaFaltan as $nombreFalta): ?>
-                                    <li><?= escapar($nombreFalta) ?></li>
+                                    <li class="dash-fila">
+                                        <span class="dash-avatar"><?= escapar($dashIniciales($nombreFalta)) ?></span>
+                                        <span class="dash-nombre"><?= escapar($nombreFalta) ?></span>
+                                        <span class="dash-badge"><?= $dashPendiente ? "Pendiente" : "Sin registro" ?></span>
+                                    </li>
                                 <?php endforeach; ?>
                             </ul>
                         <?php else: ?>
-                            <p class="card-lista-vacia">Nadie por registrar</p>
+                            <div class="dash-vacio">
+                                <span class="dash-vacio-icono">🎉</span>
+                                Nadie por registrar
+                            </div>
                         <?php endif; ?>
-
                     </div>
 
 
-                    <div class="card-stat">
-
-                        <h3>
-                            Retardos Hoy
-                        </h3>
-
-                        <p>
-                            <?= $tardanzasDia ?>
-                        </p>
+                    <div class="dash-panel dash-panel--rojo">
+                        <div class="dash-panel-cab">
+                            <h3>Retardos del día</h3>
+                            <span class="dash-chip"><?= count($listaTarde) ?></span>
+                        </div>
 
                         <?php if ($listaTarde): ?>
-                            <ul class="card-lista">
+                            <ul class="dash-lista">
                                 <?php foreach ($listaTarde as [$nombreTarde, $minTarde]): ?>
-                                    <li><?= escapar($nombreTarde) ?> <span><?= escapar(minutosAHoras($minTarde)) ?></span></li>
+                                    <li class="dash-fila">
+                                        <span class="dash-avatar"><?= escapar($dashIniciales($nombreTarde)) ?></span>
+                                        <span class="dash-nombre"><?= escapar($nombreTarde) ?></span>
+                                        <span class="dash-badge"><?= escapar(minutosAHoras($minTarde)) ?></span>
+                                    </li>
                                 <?php endforeach; ?>
                             </ul>
                         <?php else: ?>
-                            <p class="card-lista-vacia">Nadie llegó tarde</p>
+                            <div class="dash-vacio">
+                                <span class="dash-vacio-icono">👏</span>
+                                Nadie llegó tarde
+                            </div>
                         <?php endif; ?>
-
                     </div>
 
                 </div>
@@ -2692,6 +2716,32 @@ $resultadoEmpleados =
 </div>
 
 
+<div class="modal bf-dlg" id="bfDialogo">
+
+    <div
+        class="modal-contenido bf-dlg-caja"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="bfDlgTitulo"
+        aria-describedby="bfDlgTexto"
+    >
+
+        <div class="bf-dlg-icono" id="bfDlgIcono">❔</div>
+
+        <h3 id="bfDlgTitulo"></h3>
+
+        <p id="bfDlgTexto"></p>
+
+        <div class="bf-dlg-botones">
+            <button type="button" class="bf-dlg-btn bf-dlg-no" id="bfDlgNo">Cancelar</button>
+            <button type="button" class="bf-dlg-btn bf-dlg-si" id="bfDlgSi">Aceptar</button>
+        </div>
+
+    </div>
+
+</div>
+
+
 <div
     class="modal"
     id="modalConfirmar"
@@ -3494,6 +3544,83 @@ $resultadoEmpleados =
         }
     );
 
+</script>
+
+<script>
+/* ==========================================================
+   Diálogos con el estilo de la página (reemplazan confirm() y alert())
+   - bfConfirmar({ icono, titulo, texto, si, no, peligro, onSi })
+   - bfConfirmarForm(form, { ...mismas opciones }) -> se usa en onsubmit / onclick
+   - bfAviso(texto, { icono, titulo })
+   - alert("...") también sale con este diseño
+   ========================================================== */
+(function () {
+    var caja = document.getElementById("bfDialogo");
+    if (!caja) { return; }
+
+    var $icono = document.getElementById("bfDlgIcono");
+    var $titulo = document.getElementById("bfDlgTitulo");
+    var $texto = document.getElementById("bfDlgTexto");
+    var $si = document.getElementById("bfDlgSi");
+    var $no = document.getElementById("bfDlgNo");
+    var alAceptar = null;
+    var focoPrevio = null;
+
+    function cerrar() {
+        caja.style.display = "none";
+        alAceptar = null;
+        if (focoPrevio && focoPrevio.focus) {
+            try { focoPrevio.focus(); } catch (e) { /* sin foco previo */ }
+        }
+        focoPrevio = null;
+    }
+
+    function abrir(o, soloAviso) {
+        focoPrevio = document.activeElement;
+        $icono.textContent = o.icono || (soloAviso ? "⚠️" : "❔");
+        $titulo.textContent = o.titulo || (soloAviso ? "Aviso" : "¿Confirmar?");
+        $texto.textContent = o.texto || "";
+        $texto.style.display = o.texto ? "" : "none";
+        $si.textContent = o.si || (soloAviso ? "Entendido" : "Aceptar");
+        $no.textContent = o.no || "Cancelar";
+        $no.style.display = soloAviso ? "none" : "";
+        $si.classList.toggle("peligro", !!o.peligro);
+        caja.classList.toggle("bf-dlg--peligro", !!o.peligro);
+        alAceptar = o.onSi || null;
+        caja.style.display = "flex";
+        $si.focus();
+    }
+
+    window.bfConfirmar = function (o) { abrir(o || {}, false); };
+
+    window.bfConfirmarForm = function (form, o) {
+        var opciones = {};
+        var k;
+        for (k in (o || {})) { if (Object.prototype.hasOwnProperty.call(o, k)) { opciones[k] = o[k]; } }
+        opciones.onSi = function () { form.submit(); };
+        abrir(opciones, false);
+        return false; // frena el envío: se envía cuando la persona acepta
+    };
+
+    window.bfAviso = function (texto, o) {
+        o = o || {};
+        abrir({ icono: o.icono, titulo: o.titulo, texto: String(texto == null ? "" : texto), si: o.si }, true);
+    };
+
+    // Cualquier alert("...") de la página sale con este diseño
+    window.alert = function (mensaje) { window.bfAviso(mensaje); };
+
+    $no.addEventListener("click", cerrar);
+    $si.addEventListener("click", function () {
+        var f = alAceptar;
+        cerrar();
+        if (f) { f(); }
+    });
+    caja.addEventListener("click", function (e) { if (e.target === caja) { cerrar(); } });
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && caja.style.display === "flex") { cerrar(); }
+    });
+})();
 </script>
 
     <script src="js/bellaforma-ui.js"></script>
