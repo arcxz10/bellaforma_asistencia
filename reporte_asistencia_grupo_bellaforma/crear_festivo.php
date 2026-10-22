@@ -11,8 +11,8 @@ require 'conexion.php';
 
 $mensaje = '';
 $tipo_mensaje = '';
-$fecha = '';           // ✅ INICIALIZAR
-$descripcion = '';     // ✅ INICIALIZAR
+$fecha = '';           // INICIALIZAR
+$descripcion = '';     // INICIALIZAR
 
 // Procesar el formulario si se envía
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -90,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <a href="admin.php" class="enlace-volver">← Volver al panel</a>
 
         <div class="panel">
-            <h3>🎉 Crear Nuevo Festivo</h3>
+            <h3>Crear Nuevo Festivo</h3>
 
             <?php if ($mensaje): ?>
                 <div class="mensaje <?php echo htmlspecialchars($tipo_mensaje); ?>">
@@ -139,4 +139,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="js/bellaforma-ui.js"></script>
 </body>
 </html>
-
