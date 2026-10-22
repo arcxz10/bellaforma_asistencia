@@ -8,6 +8,7 @@ $accionesPropias = [
     "vend_crear", "vend_editar", "vend_estado", "vend_descargas",
     "prod_crear", "prod_editar", "prod_estado", "prod_eliminar",
     "ped_estado", "ped_eliminar", "ped_numero",
+    "desp_campo", "desp_guardar", "desp_eliminar",
     "cli_guardar", "cli_estado", "cli_importar",
     "prod_importar",
 ];
@@ -321,6 +322,10 @@ if ($accion === "ped_eliminar") {
     }
     try {
         $conexion->begin_transaction();
+        $stmt = $conexion->prepare("DELETE FROM despachos WHERE pedido_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $stmt->close();
         $stmt = $conexion->prepare("DELETE FROM pedido_vendedor_items WHERE pedido_id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
@@ -335,6 +340,79 @@ if ($accion === "ped_eliminar") {
         redireccionar("No se pudo eliminar el pedido: " . substr($ex->getMessage(), 0, 140), "error", "pedidos");
     }
     redireccionar(tituloDocumento($existe) . " eliminado definitivamente.", "exito", "pedidos");
+}
+
+/* ---------------- CONTROL DE DESPACHOS ---------------- */
+
+/** Vuelve a la sección del control de despachos, en el mismo día que se estaba viendo. */
+function irADespachos(string $mensaje, string $tipo, string $fecha): void
+{
+    $_SESSION["mensaje"] = $mensaje;
+    $_SESSION["tipo_mensaje"] = $tipo;
+    $q = fechaDespachoValida($fecha) ? "?fecha_d=" . $fecha : "";
+    header("Location: admin.php" . $q . "#despachos");
+    exit;
+}
+
+if ($accion === "desp_campo") {
+    // Edición en línea de una celda de la tabla (responde JSON, sin recargar la página)
+    try {
+        $r = actualizarCampoDespacho($conexion, (int) ($_POST["id"] ?? 0), (string) ($_POST["campo"] ?? ""), (string) ($_POST["valor"] ?? ""));
+    } catch (Throwable $ex) {
+        $r = ["ok" => false, "error" => "No se pudo guardar. Intente de nuevo."];
+    }
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header("Content-Type: application/json; charset=utf-8");
+    echo json_encode($r, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($accion === "desp_guardar") {
+    // Despacho manual o histórico (sin pedido): crear o editar sus datos
+    $id = (int) ($_POST["id"] ?? 0);
+    $fechaVista = (string) ($_POST["fecha_vista"] ?? ($_POST["fecha"] ?? ""));
+    $datosDesp = $_POST;
+    unset($datosDesp["_forma_actual"], $datosDesp["_transp_actual"]);
+    if ($id > 0) {
+        $st = $conexion->prepare("SELECT pedido_id, forma_pago, transportadora FROM despachos WHERE id = ?");
+        $st->bind_param("i", $id);
+        $st->execute();
+        $actual = $st->get_result()->fetch_assoc();
+        $st->close();
+        if (!$actual) {
+            irADespachos("Ese despacho ya no existe.", "error", $fechaVista);
+        }
+        if ($actual["pedido_id"] !== null) {
+            irADespachos("Ese despacho viene de un pedido: sus datos se cambian en el pedido.", "error", $fechaVista);
+        }
+        $datosDesp["_forma_actual"] = $actual["forma_pago"];
+        $datosDesp["_transp_actual"] = $actual["transportadora"];
+    }
+    $r = guardarDespachoManual($conexion, $id > 0 ? $id : null, $datosDesp);
+    if (!$r["ok"]) {
+        irADespachos($r["error"], "error", $fechaVista);
+    }
+    irADespachos($id > 0 ? "Despacho actualizado." : "Despacho agregado.", "exito", (string) ($datosDesp["fecha"] ?? $fechaVista));
+}
+
+if ($accion === "desp_eliminar") {
+    $id = (int) ($_POST["id"] ?? 0);
+    $fechaVista = (string) ($_POST["fecha_vista"] ?? "");
+    $st = $conexion->prepare("SELECT pedido_id FROM despachos WHERE id = ?");
+    $st->bind_param("i", $id);
+    $st->execute();
+    $fila = $st->get_result()->fetch_assoc();
+    $st->close();
+    if (!$fila) {
+        irADespachos("Ese despacho ya no existe.", "error", $fechaVista);
+    }
+    $st = $conexion->prepare("DELETE FROM despachos WHERE id = ?");
+    $st->bind_param("i", $id);
+    $st->execute();
+    $st->close();
+    irADespachos($fila["pedido_id"] !== null ? "Se quitó del control de despachos (el pedido sigue en Pedidos de ejecutivos)." : "Despacho eliminado.", "exito", $fechaVista);
 }
 
 /* ---------------- CLIENTES (una sola base; el campo tipo_cliente indica mayorista o detal) ---------------- */
