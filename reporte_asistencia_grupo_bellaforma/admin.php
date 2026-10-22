@@ -1295,6 +1295,26 @@ $resultadoEmpleados =
                     📊 Dashboard
                 </h2>
 
+                <?php
+                // Quién falta por registrar (o no registró, si el día ya cerró) y quién llegó tarde
+                $estadoFaltan = ($esHoy && !$diaCerrado) ? "pendiente" : "no_registro";
+                $listaFaltan = [];
+                $listaTarde = [];
+                foreach ($estadoDiario as $filaDash) {
+                    if ($filaDash["estado_dia"] === $estadoFaltan) {
+                        $listaFaltan[] = $filaDash["nombre"];
+                    } elseif ($filaDash["estado_dia"] === "tarde") {
+                        $listaTarde[] = [$filaDash["nombre"], (int) $filaDash["minutos_retraso"]];
+                    }
+                }
+                ?>
+                <style>
+                    .card-lista { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--linea); list-style: none; max-height: 190px; overflow-y: auto; }
+                    .card-lista li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; color: var(--tinta); }
+                    .card-lista li span { color: var(--peligro); font-weight: 600; white-space: nowrap; }
+                    .card-stat p.card-lista-vacia { margin: 12px 0 0; font-size: 13px; color: var(--tinta-suave); font-weight: 400; letter-spacing: 0; }
+                </style>
+
                 <div class="cards-dashboard">
 
                     <div class="card-stat">
@@ -1349,6 +1369,16 @@ $resultadoEmpleados =
 
                         </p>
 
+                        <?php if ($listaFaltan): ?>
+                            <ul class="card-lista">
+                                <?php foreach ($listaFaltan as $nombreFalta): ?>
+                                    <li><?= escapar($nombreFalta) ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php else: ?>
+                            <p class="card-lista-vacia">Nadie por registrar</p>
+                        <?php endif; ?>
+
                     </div>
 
 
@@ -1361,6 +1391,16 @@ $resultadoEmpleados =
                         <p>
                             <?= $tardanzasDia ?>
                         </p>
+
+                        <?php if ($listaTarde): ?>
+                            <ul class="card-lista">
+                                <?php foreach ($listaTarde as [$nombreTarde, $minTarde]): ?>
+                                    <li><?= escapar($nombreTarde) ?> <span><?= escapar(minutosAHoras($minTarde)) ?></span></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php else: ?>
+                            <p class="card-lista-vacia">Nadie llegó tarde</p>
+                        <?php endif; ?>
 
                     </div>
 
