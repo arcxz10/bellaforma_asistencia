@@ -17,7 +17,7 @@ if (!isset($_SESSION["admin_id"])) {
     <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
     <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="css/base.css">
     <style>
         * {
@@ -38,10 +38,12 @@ if (!isset($_SESSION["admin_id"])) {
         }
 
         .tarjeta-qr {
-            background: white;
-            border-radius: 26px;
+            position: relative;
+            background: rgba(255, 255, 255, .97);
+            border: 1px solid rgba(255, 255, 255, .55);
+            border-radius: 22px;
             padding: 40px;
-            box-shadow: var(--sombra-md);
+            box-shadow: 0 0 0 1px rgba(56, 189, 248, .18), 0 40px 80px -30px rgba(2, 10, 28, .75), 0 0 80px -20px rgba(56, 189, 248, .35);
             text-align: center;
             max-width: 600px;
             width: 100%;
@@ -54,8 +56,18 @@ if (!isset($_SESSION["admin_id"])) {
             margin-bottom: 10px;
         }
 
+        .tarjeta-qr::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 3px;
+            border-radius: 22px 22px 0 0;
+            background: linear-gradient(90deg, #1E7BD8, #38BDF8, #22D3A5);
+        }
+
         .tarjeta-qr p {
-            color: #444;
+            font-family: var(--fuente-titulo);
+            color: #0E1B33;
             font-size: 18px;
             font-weight: 600;
             margin-bottom: 25px;
@@ -67,6 +79,11 @@ if (!isset($_SESSION["admin_id"])) {
             display: flex;
             justify-content: center;
             margin-bottom: 25px;
+            padding: 18px;
+            background: #fff;
+            border: 1px solid #E3E9F3;
+            border-radius: 18px;
+            box-shadow: 0 18px 36px -22px rgba(7, 27, 64, .5);
         }
 
         #qrcode img,
@@ -78,11 +95,16 @@ if (!isset($_SESSION["admin_id"])) {
         }
 
         .btn-imprimir {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
             width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            background: linear-gradient(180deg, #1E7BD8, #1565C0);
+            padding: 13px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 12px;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset, 0 14px 26px -12px rgba(13, 71, 161, .95);
+            background: linear-gradient(135deg, #1E7BD8, #0D47A1);
             color: white;
             font-size: 15px;
             font-weight: 600;
@@ -110,7 +132,16 @@ if (!isset($_SESSION["admin_id"])) {
                 display: none;
             }
 
+            .tarjeta-qr::before { display: none; }
+
+            #qrcode {
+                padding: 0;
+                border: none;
+                box-shadow: none;
+            }
+
             .tarjeta-qr {
+                border: none;
                 box-shadow: none;
                 max-width: 100%;
                 padding: 0;
@@ -144,7 +175,7 @@ if (!isset($_SESSION["admin_id"])) {
         <div id="qrcode"></div>
 
         <button class="btn-imprimir" onclick="window.print()">
-            🖨️ Imprimir
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg> Imprimir
         </button>
     </div>
 
