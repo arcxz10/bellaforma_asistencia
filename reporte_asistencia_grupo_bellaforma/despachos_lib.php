@@ -503,7 +503,7 @@ function sincronizarDespachoVinculado(mysqli $c, int $despachoId, string $campo,
             } elseif ($campo === "valor_flete") {
                 $up = $c->prepare("UPDATE despachos SET valor_flete = ? WHERE id = ?");
                 $up->bind_param("di", $valorDb, $otroId);
-            } elseif (in_array($campo, ["numero_guia", "flete_tipo"], true)) {
+            } elseif (in_array($campo, ["numero_guia", "flete_tipo", "estado_entrega", "estado_pago"], true)) {
                 // $campo viene de la lista blanca de arriba
                 $up = $c->prepare("UPDATE despachos SET `$campo` = ? WHERE id = ?");
                 $up->bind_param("si", $valorDb, $otroId);
@@ -609,7 +609,7 @@ function actualizarCampoDespacho(mysqli $c, int $id, string $campo, string $valo
     $resp = ["ok" => true, "valor" => $guardar, "texto" => is_string($guardar) ? $guardar : ($guardar === null ? "" : (string) $guardar)];
 
     // Pedido y remisión vinculados van juntos: guía, tipo de flete y valor del flete se copian al otro documento
-    if (in_array($campo, ["numero_guia", "flete_tipo", "valor_flete"], true)) {
+    if (in_array($campo, ["numero_guia", "flete_tipo", "valor_flete", "estado_entrega", "estado_pago"], true)) {
         $resp["vinculados"] = sincronizarDespachoVinculado($c, $id, $campo, $guardar, $guardar);
     }
 
