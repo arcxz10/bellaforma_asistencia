@@ -155,11 +155,12 @@ function vendedorPuedeEditarNumero(mysqli $c, int $vendedorId): bool
  *  $d      datos del cliente y condiciones
  *  $items  [producto_id => cantidad]
  *  $bonos  [producto_id => cantidad] productos BONIFICADOS (se entregan sin costo)
+ *  $docenas [producto_id => true] bonificados que son la «docena de 13» (1 unidad gratis; se guarda con bonificado = 2)
  *  $modo   'borrador' | 'enviar'
  *  $rol    'vendedor' | 'admin'
  * Devuelve ['ok'=>bool, 'error'=>string, 'id'=>int, 'total'=>float, 'estado'=>string]
  */
-function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, array $items, string $modo, string $rol = "vendedor", array $bonos = []): array
+function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, array $items, string $modo, string $rol = "vendedor", array $bonos = [], array $docenas = []): array
 {
     $falla = fn(string $m) => ["ok" => false, "error" => $m];
 
@@ -341,6 +342,14 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
             $cantBonos[$pid] = $cant;
         }
     }
+    $esDocena = [];   // docena de 13: la unidad bonificada es siempre 1
+    foreach ($docenas as $pid => $v) {
+        $pid = (int) $pid;
+        if ($v && isset($cantBonos[$pid])) {
+            $esDocena[$pid] = true;
+            $cantBonos[$pid] = 1;
+        }
+    }
     if ($modo === "enviar" && !$cantidades && !$cantBonos) {
         return $falla("Seleccione al menos un producto con cantidad.");
     }
@@ -391,7 +400,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
             if (isset($cantBonos[$pid])) {
                 // Bonificado: queda el precio de lista como referencia, pero no se cobra (subtotal 0)
                 $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
-                             "precio" => $precio, "cantidad" => $cantBonos[$pid], "subtotal" => 0.0, "bonificado" => 1];
+                             "precio" => $precio, "cantidad" => $cantBonos[$pid], "subtotal" => 0.0, "bonificado" => isset($esDocena[$pid]) ? 2 : 1];
             }
         }
         if ($modo === "enviar" && !$lineas) {
@@ -692,12 +701,13 @@ function manejarApiPedido(mysqli $conexion): void
             $datos = is_array($in["datos"] ?? null) ? $in["datos"] : [];
             $items = is_array($in["items"] ?? null) ? $in["items"] : [];
             $bonos = is_array($in["bonos"] ?? null) ? $in["bonos"] : [];
+            $docenas = is_array($in["docenas"] ?? null) ? $in["docenas"] : [];
 
             if ($rol === "admin" && !$pedidoId) {
                 api_responder(["ok" => false, "error" => "Falta el pedido a editar."], 400);
             }
 
-            $r = guardarPedido($conexion, $vendedorId, $pedidoId, $datos, $items, $modo, $rol, $bonos);
+            $r = guardarPedido($conexion, $vendedorId, $pedidoId, $datos, $items, $modo, $rol, $bonos, $docenas);
             if (!$r["ok"]) {
                 api_responder($r, 422);
             }
