@@ -66,7 +66,7 @@ foreach ($pedidosAdmin as $pp) {
         <summary style="cursor:pointer; font-weight:700; font-size:15px;">🔢 Numeración automática de documentos</summary>
         <form method="POST" action="admin.php" style="margin-top:14px;">
             <input type="hidden" name="accion" value="ped_numeracion">
-            <p style="margin:0 0 12px; font-size:13px; color:#667;">Escriba el <b>último número que ya usó</b> en cada clase; el siguiente documento que envíen los ejecutivos saldrá con ese número + 1 (ej.: escribe 1000 y el próximo será 1001) y de ahí seguirá solo. Déjelo vacío para mantener el número automático de antes. Si el ejecutivo escribe un número a mano, se respeta.</p>
+            <p style="margin:0 0 12px; font-size:13px; color:#667;">Escriba el <b>número con el que quiere que salga el próximo documento</b> de cada clase (ej.: escribe 1000 y el próximo saldrá con el 1000, luego el 1001, 1002...). El cuadro siempre muestra el número que sigue. Déjelo vacío para mantener el número automático de antes. Si el ejecutivo escribe un número a mano, se respeta.</p>
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
                 <?php foreach (clasesNumeracionDocumento() as $claveNum => $infoNum): $ultNum = (int) ($ultimosNumeros[$claveNum] ?? 0); ?>
                     <div>
@@ -74,7 +74,7 @@ foreach ($pedidosAdmin as $pp) {
                         <input type="text" name="num[<?= $claveNum ?>]" id="num_<?= $claveNum ?>" inputmode="numeric" pattern="[0-9]*" maxlength="9" autocomplete="off"
                                value="<?= $ultNum > 0 ? $ultNum : "" ?>" placeholder="Automático" data-prox="prox_<?= $claveNum ?>"
                                style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
-                        <small id="prox_<?= $claveNum ?>" style="color:#0D47A1;"><?= $ultNum > 0 ? "Próximo: " . ($ultNum + 1) : "" ?></small>
+                        <small id="prox_<?= $claveNum ?>" style="color:#0D47A1;"><?= $ultNum > 0 ? "Próximo: " . $ultNum : "" ?></small>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -86,7 +86,7 @@ foreach ($pedidosAdmin as $pp) {
             document.querySelectorAll("input[data-prox]").forEach(function (inp) {
                 inp.addEventListener("input", function () {
                     var n = parseInt(inp.value, 10);
-                    document.getElementById(inp.dataset.prox).textContent = n > 0 ? "Próximo: " + (n + 1) : "";
+                    document.getElementById(inp.dataset.prox).textContent = n > 0 ? "Próximo: " + n : "";
                 });
             });
         </script>
