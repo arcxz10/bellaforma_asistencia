@@ -28,37 +28,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $horaSalida = "17:05:00";
         }
 
-        $sql = "
-            INSERT INTO empleados
-            (nombre, identificacion, cargo, hora_entrada, hora_salida, dispositivo_id, activo)
-            VALUES (?, ?, ?, ?, ?, ?, 0)
-        ";
+        // En PHP 8.1+ mysqli lanza excepciones: si no se capturan, la página queda en blanco.
+        try {
+            // ¿Ya existe esa identificación?
+            $chk = $conexion->prepare("SELECT id FROM empleados WHERE identificacion = ? LIMIT 1");
+            $chk->bind_param("s", $identificacion);
+            $chk->execute();
+            $yaExiste = $chk->get_result()->num_rows > 0;
+            $chk->close();
 
-        $stmt = $conexion->prepare($sql);
+            if ($yaExiste) {
+                $error = "Ya existe un registro con esa identificación. Si ya te registraste, avisa a un administrador para que active tu usuario.";
+            } else {
+                $sql = "
+                    INSERT INTO empleados
+                    (nombre, identificacion, cargo, hora_entrada, hora_salida, dispositivo_id, activo)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
+                ";
 
-        if (!$stmt) {
-            $error = "No se pudo procesar tu registro. Intenta más tarde.";
-        } else {
-
-            $stmt->bind_param(
-                "ssssss",
-                $nombre,
-                $identificacion,
-                $cargo,
-                $horaEntrada,
-                $horaSalida,
-                $dispositivo_id
-            );
-
-            if ($stmt->execute()) {
+                $stmt = $conexion->prepare($sql);
+                $stmt->bind_param("ssssss", $nombre, $identificacion, $cargo, $horaEntrada, $horaSalida, $dispositivo_id);
+                $stmt->execute();
+                $stmt->close();
                 $exito = true;
-            } elseif ($stmt->errno === 1062) {
-                $error = "Ya existe un registro con esa identificación.";
+            }
+        } catch (mysqli_sql_exception $e) {
+            error_log("registro_empleado: [" . $e->getCode() . "] " . $e->getMessage());
+            if ((int) $e->getCode() === 1062) {
+                $error = "Ya existe un registro con esa identificación o con este dispositivo. Avisa a un administrador.";
             } else {
                 $error = "No se pudo guardar tu registro. Intenta más tarde.";
             }
-
-            $stmt->close();
+        } catch (Throwable $e) {
+            error_log("registro_empleado: " . $e->getMessage());
+            $error = "No se pudo guardar tu registro. Intenta más tarde.";
         }
     }
 }
@@ -188,4 +191,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="js/bellaforma-ui.js"></script>
 </body>
 </html>
-
