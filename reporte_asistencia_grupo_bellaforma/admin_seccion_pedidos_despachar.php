@@ -333,6 +333,34 @@ function pdSelectHtml(int $id, string $campo, array $catalogo, string $actual, s
         if (b) { abrirVisor(b.dataset.pedido, b.dataset.titulo); }
     });
 
+    /* ---------- Se actualiza sola: observación del ejecutivo y comprobante de pago ---------- */
+    function extrasDe(td) {
+        return Array.prototype.slice.call(td.querySelectorAll(".pd-obs-ej, .pd-comp"));
+    }
+    function refrescarExtras() {
+        if (document.hidden) { return; }
+        fetch(window.location.pathname + window.location.search, { credentials: "same-origin", cache: "no-store" })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                var doc = new DOMParser().parseFromString(html, "text/html");
+                Array.prototype.forEach.call(doc.querySelectorAll("#pdTabla input.pd-obs"), function (inNuevo) {
+                    var inActual = tabla.querySelector('input.pd-obs[data-id="' + inNuevo.dataset.id + '"]');
+                    if (!inActual) { return; }
+                    var celdaN = inNuevo.closest("td"), celdaA = inActual.closest("td");
+                    var nuevos = extrasDe(celdaN), actuales = extrasDe(celdaA);
+                    var sn = nuevos.map(function (x) { return x.outerHTML; }).join("");
+                    var sa = actuales.map(function (x) { return x.outerHTML; }).join("");
+                    if (sn !== sa) {
+                        actuales.forEach(function (x) { x.remove(); });
+                        nuevos.forEach(function (x) { celdaA.appendChild(document.importNode(x, true)); });
+                    }
+                });
+            })
+            .catch(function () {});
+    }
+    setInterval(refrescarExtras, 45000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { refrescarExtras(); } });
+
     document.getElementById("pdBuscar").addEventListener("input", aplicar);
     Array.prototype.forEach.call(raiz.querySelectorAll(".pd-chip"), function (b) {
         b.addEventListener("click", function () {
