@@ -257,6 +257,13 @@ body.pf-kb .pf-barra { display: none; }
 }
 .pf-bonif-info button.pf-docena:active { background: #FFF1CC; }
 .pf-bonif-info button.pf-docena.activo { background: #F5A623; border-color: #E08E00; color: #fff; }
+.pf-bonif-info button.pf-flete {
+    align-self: flex-start; margin-top: 4px; height: 32px; padding: 0 12px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 700; white-space: nowrap; cursor: pointer;
+    background: #fff; border: 1.5px solid #E6B84A; color: #8A5A00;
+}
+.pf-bonif-info button.pf-flete:active { background: #FFF1CC; }
+.pf-bonif-info button.pf-flete.activo { background: #F5A623; border-color: #E08E00; color: #fff; }
 .pf-step button:disabled, .pf-step input:disabled { opacity: .45; cursor: not-allowed; }
 .pf-step input.cantb { width: 56px !important; min-height: 44px !important; padding: 4px !important; text-align: center; font-weight: 700; -moz-appearance: textfield; }
 .pf-step input.cantb::-webkit-outer-spin-button, .pf-step input.cantb::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
