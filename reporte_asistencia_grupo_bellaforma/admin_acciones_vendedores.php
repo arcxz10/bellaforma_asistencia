@@ -308,7 +308,7 @@ if ($accion === "ped_numero") {
 }
 
 if ($accion === "ped_numeracion") {
-    // Último número usado de cada una de las 6 clases (PE5, PE1, RM1, RM2, CT1, CT2). El siguiente documento enviado toma último + 1.
+    // Próximo número de cada una de las 6 clases (PE5, PE1, RM1, RM2, CT1, CT2). El siguiente documento enviado sale con ese número.
     $errorNum = guardarNumeracionDocumentos($conexion, $_POST["num"] ?? []);
     if ($errorNum !== null) {
         redireccionar($errorNum, "error", "pedidos");
@@ -364,7 +364,7 @@ function irADespachos(string $mensaje, string $tipo, string $fecha): void
 }
 
 if ($accion === "desp_numeracion") {
-    // Último # de factura usado (FV = PE5, FE = PE1). El siguiente pedido enviado entra al Control de despachos con último + 1.
+    // Próximo # de factura (FV = PE5, FE = PE1). El siguiente pedido enviado entra al Control de despachos con ese número.
     $errorFact = guardarNumeracionFacturas($conexion, $_POST["fact"] ?? []);
     if ($errorFact !== null) {
         redireccionar($errorFact, "error", "despachos");
