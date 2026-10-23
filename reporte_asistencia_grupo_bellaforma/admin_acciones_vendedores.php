@@ -331,6 +331,7 @@ if ($accion === "ped_eliminar") {
     }
     try {
         $conexion->begin_transaction();
+        borrarRotuloDePedido($conexion, $id);
         $stmt = $conexion->prepare("DELETE FROM despachos WHERE pedido_id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
@@ -436,6 +437,7 @@ if ($accion === "desp_eliminar") {
     if (!$fila) {
         irADespachos("Ese despacho ya no existe.", "error", $fechaVista);
     }
+    borrarRotuloDeDespacho($conexion, $id);
     $st = $conexion->prepare("DELETE FROM despachos WHERE id = ?");
     $st->bind_param("i", $id);
     $st->execute();
