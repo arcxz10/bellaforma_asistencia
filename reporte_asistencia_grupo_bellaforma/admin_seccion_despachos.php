@@ -92,6 +92,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
     #despachos .desp-tag.remision { background: #FFF3E0; color: #E65100; }
     #despachos .desp-tag.cotizacion { background: #F3E5F5; color: #6A1B9A; }
     #despachos .desp-origen { display: block; margin-top: 2px; font-size: 11px; color: #667; }
+    #despachos .desp-union { color: #E65100; font-weight: 700; }
     #despachos .desp-total td { background: #FFF9C4; font-weight: 700; }
     #despachos .desp-vacio { padding: 26px; text-align: center; color: #667; }
     #despachos .desp-acc { white-space: nowrap; }
@@ -186,6 +187,9 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                                 <span class="desp-tag <?= escapar($d["tipo"]) ?>"><?= escapar(etiquetaTipoDocumento($d["tipo"])) ?></span>
                                 <?php if ($ligado): ?>
                                     <span class="desp-origen">#<?= escapar($d["numero_doc"]) ?><?= $d["anulado"] ? " · anulado" : "" ?></span>
+                                    <?php if ($d["vinculo_numero"] !== ""): ?>
+                                        <span class="desp-origen desp-union">🔗 Va con el pedido #<?= escapar($d["vinculo_numero"]) ?></span>
+                                    <?php endif; ?>
                                 <?php else: ?>
                                     <span class="desp-origen">manual</span>
                                 <?php endif; ?>
