@@ -4,6 +4,7 @@
  *   GET  cobro_comprobante.php?id=53                  -> el comprobante (imagen o PDF); &descargar=1 lo baja como archivo
  *   GET  cobro_comprobante.php?op=estado              -> JSON {nuevos, por_cobrar} para la campanita del administrador
  *   POST cobro_comprobante.php op=subir pedido_id=53 archivo=<imagen|pdf> csrf=…   (ejecutivo dueño del pedido)
+ *   POST cobro_comprobante.php op=subir rol=admin pedido_id=53 archivo=… csrf=…       (administrador: lo sube él mismo, p. ej. si el cliente le envía el comprobante a él)
  *   POST cobro_comprobante.php op=visto pedido_id=53  (o todos=1)                   (administrador: ya lo leyó)
  *
  * El comprobante se guarda en la base de datos (tabla pedido_cobros), así no se pierde cuando Railway reinicia el servidor.
@@ -20,6 +21,7 @@ require_once __DIR__ . "/conexion.php";
 require_once __DIR__ . "/vendedores_db.php";
 require_once __DIR__ . "/admin_permisos.php";
 require_once __DIR__ . "/cobros_lib.php";
+require_once __DIR__ . "/admin_movimientos_lib.php";
 date_default_timezone_set("America/Bogota");
 
 // El administrador principal siempre puede; un subadministrador, solo con el módulo «Pedidos por cobrar»
@@ -103,11 +105,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             cobroJson(["ok" => true, "nuevos" => cobroContarNuevos($conexion), "lista" => cobroListarNuevos($conexion)]);
         }
 
-        /* ---- Ejecutivo: subir (o cambiar) el comprobante ---- */
+        /* ---- Subir (o cambiar) el comprobante: el ejecutivo dueño del pedido o el administrador ---- */
         if ($op !== "subir") {
             cobroJson(["ok" => false, "error" => "Operación no válida."], 400);
         }
-        if ($vendedorSesion <= 0) {
+        $comoAdmin = $adminPuede && (string) ($_POST["rol"] ?? "") === "admin";
+        if (!$comoAdmin && $vendedorSesion <= 0) {
             cobroJson(["ok" => false, "error" => "Sesión no válida. Ingrese de nuevo."], 401);
         }
         if ($csrfSesion === "" || !hash_equals($csrfSesion, (string) ($_POST["csrf"] ?? ""))) {
@@ -118,7 +121,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if (!$ped) {
             cobroJson(["ok" => false, "error" => "No se encontró el pedido."], 404);
         }
-        if ((int) $ped["vendedor_id"] !== $vendedorSesion) {
+        if (!$comoAdmin && (int) $ped["vendedor_id"] !== $vendedorSesion) {
             cobroJson(["ok" => false, "error" => "Este pedido no te pertenece."], 403);
         }
         if (!cobroEsACredito($ped)) {
@@ -160,16 +163,38 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             cobroJson(["ok" => false, "error" => "Solo se aceptan imágenes JPG, PNG, WEBP o un PDF."], 422);
         }
 
+        // ¿Ya tenía un comprobante? (para decir «subió» o «cambió» en el registro de movimientos)
+        $reemplazo = false;
+        $stPrev = $conexion->prepare("SELECT 1 FROM pedido_cobros WHERE pedido_id = ? AND datos IS NOT NULL LIMIT 1");
+        $stPrev->bind_param("i", $id);
+        $stPrev->execute();
+        $reemplazo = (bool) $stPrev->get_result()->fetch_row();
+        $stPrev->close();
+
+        // Si lo sube el administrador queda como «visto»: no se avisa a sí mismo en la campanita
+        $vistoInicial = $comoAdmin ? 1 : 0;
         $st = $conexion->prepare(
             "INSERT INTO pedido_cobros (pedido_id, mime, datos, subido_en, visto, cobrado)
-             VALUES (?, ?, ?, NOW(), 0, 0)
-             ON DUPLICATE KEY UPDATE mime = VALUES(mime), datos = VALUES(datos), subido_en = NOW(), visto = 0"
+             VALUES (?, ?, ?, NOW(), ?, 0)
+             ON DUPLICATE KEY UPDATE mime = VALUES(mime), datos = VALUES(datos), subido_en = NOW(), visto = VALUES(visto)"
         );
         $nulo = null;
-        $st->bind_param("isb", $id, $mime, $nulo);
+        $st->bind_param("isbi", $id, $mime, $nulo, $vistoInicial);
         $st->send_long_data(2, $bin);
         $st->execute();
         $st->close();
+
+        if ($comoAdmin) {
+            // Si quien lo subió es un subadministrador, queda anotado en «Movimientos subadministradores»
+            $tituloPed = movSubMinuscula(tituloDocumento($ped));
+            $clientePed = trim((string) ($ped["cliente_nombre"] ?? ""));
+            movSubRegistrar(
+                $conexion,
+                $reemplazo ? "comprobante_cambiar" : "comprobante_subir",
+                ($reemplazo ? "Cambió el comprobante de pago del " : "Subió un comprobante de pago al ") . $tituloPed . ($clientePed !== "" ? " · " . $clientePed : "")
+            );
+            cobroJson(["ok" => true, "mensaje" => "Comprobante guardado."]);
+        }
         cobroJson(["ok" => true, "mensaje" => "Comprobante enviado. La oficina lo revisará."]);
     } catch (Throwable $e) {
         cobroJson(["ok" => false, "error" => "No se pudo guardar el comprobante. Intente de nuevo."], 500);
