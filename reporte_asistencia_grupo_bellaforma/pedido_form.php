@@ -30,6 +30,7 @@ $datosIniciales = [
     "transportadora" => $ped["transportadora"] ?? "",
     "pedido_vinculado_id" => $ped["pedido_vinculado_id"] ?? "",
     "observaciones" => $ped["observaciones"] ?? "",
+    "obs_despacho" => $ped["obs_despacho"] ?? "",
     "cliente_id" => $ped["cliente_id"] ?? null,
 ];
 $itemsIniciales = [];
@@ -77,6 +78,8 @@ $cfgJs = [
     "docenas" => (object) $docenasIniciales,
     "fletes" => (object) $fletesIniciales,
     "textoEnviar" => $pf["texto_enviar"] ?? "Enviar pedido",
+    // ¿Ya tiene comprobante de pago anexado? (la foto se pide cuando la forma de pago es «Anticipado»)
+    "tieneComprobante" => ($ped && isset($GLOBALS["conexion"]) && $GLOBALS["conexion"] instanceof mysqli) ? pedidoTieneComprobante($GLOBALS["conexion"], (int) $ped["id"]) : false,
     // Documento enviado antes de que existieran estos datos: se muestra cómo estaba el pago para que el ejecutivo lo tenga de referencia
     "pagoAnterior" => ($ped && $ped["estado"] !== "borrador" && trim((string) ($ped["forma_pago"] ?? "")) === "") ? etiquetaCondicion($ped) : "",
 ];
@@ -325,25 +328,53 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 
             <div class="pf-aviso ok" id="pfJuntoBox" hidden><svg class="vi" aria-hidden="true"><use href="#vi-truck"/></svg><span id="pfJuntoTexto"></span></div>
             <div id="pfEnvioBox">
-            <label id="pfFormaPagoLabel">Forma de pago *</label>
-            <div class="pf-segmento pf-seg-2" id="pfFormaPago" role="group" aria-labelledby="pfFormaPagoLabel">
+            <label for="pfFormaPago">Forma de pago *</label>
+            <select id="pfFormaPago">
+                <option value="">Seleccione la forma de pago…</option>
                 <?php foreach (formasPagoDespacho() as $clave => $etiqueta): ?>
-                    <button type="button" data-fp="<?= htmlspecialchars($clave, ENT_QUOTES, "UTF-8") ?>"><?= htmlspecialchars($etiqueta, ENT_QUOTES, "UTF-8") ?></button>
+                    <?php if (formaPagoDias($clave) !== null) { continue; } /* los plazos en días se escriben en el campo de abajo */ ?>
+                    <option value="<?= htmlspecialchars($clave, ENT_QUOTES, "UTF-8") ?>"><?= htmlspecialchars($etiqueta, ENT_QUOTES, "UTF-8") ?></option>
                 <?php endforeach; ?>
-            </div>
+                <option value="credito">A crédito (por días)</option>
+            </select>
             <p class="pf-nota" id="pfPagoAnterior" hidden></p>
 
-            <label id="pfTransportadoraLabel" style="margin-top:16px;">Transportadora *</label>
-            <div class="pf-segmento pf-seg-2" id="pfTransportadora" role="group" aria-labelledby="pfTransportadoraLabel">
-                <?php foreach (transportadorasDespacho() as $clave => $etiqueta): ?>
-                    <button type="button" data-tr="<?= htmlspecialchars($clave, ENT_QUOTES, "UTF-8") ?>"><?= htmlspecialchars($etiqueta, ENT_QUOTES, "UTF-8") ?></button>
-                <?php endforeach; ?>
+            <div id="pfDiasBox" hidden>
+                <label for="pfDias">¿A cuántos días? *</label>
+                <input type="text" id="pfDias" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="Ej: 20">
+                <p class="pf-nota">Escriba el número de días del plazo (entre 1 y 365).</p>
             </div>
+
+            <div id="pfComprobanteBox" hidden>
+                <label>Comprobante de pago <span class="pf-opcional">(opcional)</span></label>
+                <input type="file" id="pfCompArchivo" accept="image/*" hidden>
+                <button type="button" class="pf-btn-sec pf-ancho" id="pfCompBtn">Subir foto del comprobante</button>
+                <div class="pf-comp-prev" id="pfCompPrev" hidden>
+                    <img id="pfCompImg" alt="Comprobante de pago" title="Toque para verlo grande">
+                    <div class="pf-comp-acc">
+                        <button type="button" class="pf-btn-sec" id="pfCompCambiar">Cambiar foto</button>
+                        <button type="button" class="pf-btn-sec pf-comp-quitar" id="pfCompQuitar">Quitar</button>
+                    </div>
+                </div>
+                <p class="pf-nota" id="pfCompNota">La oficina verá esta foto junto al pedido en «Pedidos para despachar».</p>
+            </div>
+
+            <label for="pfTransportadora" style="margin-top:16px;">Transportadora *</label>
+            <select id="pfTransportadora">
+                <option value="">Seleccione la transportadora…</option>
+                <?php foreach (transportadorasDespacho() as $clave => $etiqueta): ?>
+                    <option value="<?= htmlspecialchars($clave, ENT_QUOTES, "UTF-8") ?>"><?= htmlspecialchars($etiqueta, ENT_QUOTES, "UTF-8") ?></option>
+                <?php endforeach; ?>
+            </select>
             <p class="pf-nota">Estos dos datos pasan al Control de despachos de la oficina.</p>
             </div><!-- /pfEnvioBox -->
 
             <label for="pfObs">Observaciones del pedido</label>
             <textarea id="pfObs" rows="3" maxlength="2000"></textarea>
+
+            <label for="pfObsDespacho">Observación para despacho</label>
+            <textarea id="pfObsDespacho" rows="2" maxlength="500" placeholder="Ej: entregar en la mañana, llamar antes de llegar…"></textarea>
+            <p class="pf-nota">Solo la ve la oficina en «Pedidos para despachar». No sale en el PDF ni en el Excel del pedido.</p>
         </div>
 
         <?php if ($pf["autosave"]): ?>
@@ -510,22 +541,165 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         b.addEventListener("click", function () { setFE(b.dataset.fe === "1"); sucio(); });
     });
 
-    /* ---------- Forma de pago y transportadora ---------- */
-    var FP_DIAS = { "3": "dias_3", "5": "dias_5", "8": "dias_8", "30": "dias_30", "45": "dias_45" };
+    /* ---------- Forma de pago y transportadora (listas desplegables) ---------- */
     function diasDeFP(k) { var m = /^dias_(\d+)$/.exec(k || ""); return m ? parseInt(m[1], 10) : null; }
-    function marcarOpcion(contenedor, atributo, valor) {
-        Array.prototype.forEach.call(document.querySelectorAll("#" + contenedor + " button"), function (b) {
-            b.classList.toggle("activo", valor !== "" && b.getAttribute(atributo) === valor);
+    function diasEscritos() { var n = parseInt($("pfDias").value, 10); return (n >= 1 && n <= 365) ? n : null; }
+    // Opción que no está en la lista (dato histórico): se agrega para no perder lo que ya tenía el documento
+    function asegurarOpcion(sel, valor) {
+        if (!valor) { return; }
+        for (var i = 0; i < sel.options.length; i++) { if (sel.options[i].value === valor) { return; } }
+        var o = document.createElement("option");
+        o.value = valor; o.textContent = valor.replace(/_/g, " ");
+        sel.appendChild(o);
+    }
+    // Clave de la forma de pago elegida: anticipado, contra_entrega o dias_N (los días que escribió el ejecutivo)
+    function fpValor() {
+        var v = $("pfFormaPago").value;
+        if (v === "credito") { var n = diasEscritos(); return n ? "dias_" + n : ""; }
+        return v;
+    }
+    function actualizarPago() {
+        var v = $("pfFormaPago").value;
+        $("pfDiasBox").hidden = v !== "credito";
+        $("pfComprobanteBox").hidden = v !== "anticipado";
+        S.fp = fpValor();
+    }
+    function setFP(k) {
+        k = k || "";
+        var sel = $("pfFormaPago"), d = diasDeFP(k);
+        if (d !== null) { sel.value = "credito"; $("pfDias").value = d; }
+        else { $("pfDias").value = ""; asegurarOpcion(sel, k); sel.value = k; }
+        actualizarPago();
+        $("pfPagoAnterior").hidden = true;
+        if (typeof pintarComprobante === "function") { pintarComprobante(); }
+    }
+    function setTR(k) {
+        k = k || "";
+        var sel = $("pfTransportadora");
+        asegurarOpcion(sel, k);
+        sel.value = k;
+        S.tr = sel.value;
+    }
+    $("pfFormaPago").addEventListener("change", function () {
+        actualizarPago();
+        // El comprobante solo aplica a «Anticipado»: si cambia la forma de pago, el servidor lo quita al guardar
+        if (this.value !== "anticipado" && COMP.hay) { COMP.hay = false; }
+        pintarComprobante();
+        if (this.value === "credito") { setTimeout(function () { $("pfDias").focus(); }, 60); }
+        sucio();
+    });
+    $("pfDias").addEventListener("input", function () {
+        var limpio = this.value.replace(/\D+/g, "").slice(0, 3);
+        if (limpio !== this.value) { this.value = limpio; }
+        actualizarPago();
+        sucio();
+    });
+    $("pfTransportadora").addEventListener("change", function () { S.tr = this.value; sucio(); });
+
+    /* ---------- Comprobante de pago (solo «Anticipado») ---------- */
+    var COMP = { hay: !!CFG.tieneComprobante, v: 0, subiendo: false };
+    function compUrl() { return "pedido_comprobante.php?id=" + encodeURIComponent(S.pedidoId) + "&v=" + COMP.v; }
+    function compNota(texto, error) {
+        var n = $("pfCompNota");
+        n.textContent = texto || "La oficina verá esta foto junto al pedido en «Pedidos para despachar».";
+        n.style.color = error ? "var(--peligro, #D63A4B)" : "";
+    }
+    function pintarComprobante() {
+        var hay = !!(COMP.hay && S.pedidoId);
+        $("pfCompPrev").hidden = !hay;
+        $("pfCompBtn").hidden = hay;
+        if (hay) { $("pfCompImg").src = compUrl(); }
+    }
+    $("pfCompImg").addEventListener("error", function () {
+        // La foto ya no está en el servidor (por ejemplo, se quitó al cambiar la forma de pago)
+        if (COMP.hay && !COMP.subiendo) { COMP.hay = false; pintarComprobante(); }
+    });
+    $("pfCompImg").addEventListener("click", function () { window.open(compUrl(), "_blank"); });
+
+    // Reduce la foto del celular (a 1600 px, JPG) para que suba rápido aunque haya poca señal
+    function reducirImagen(archivo) {
+        return new Promise(function (ok) {
+            if (!window.URL || !archivo.type || archivo.type.indexOf("image/") !== 0) { ok(archivo); return; }
+            var img = new Image(), url = URL.createObjectURL(archivo);
+            img.onload = function () {
+                try {
+                    var w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, 1600 / Math.max(w, h));
+                    var cv = document.createElement("canvas");
+                    cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+                    var cx = cv.getContext("2d");
+                    cx.fillStyle = "#fff"; cx.fillRect(0, 0, cv.width, cv.height);
+                    cx.drawImage(img, 0, 0, cv.width, cv.height);
+                    cv.toBlob(function (b) { URL.revokeObjectURL(url); ok(b || archivo); }, "image/jpeg", 0.85);
+                } catch (e) { URL.revokeObjectURL(url); ok(archivo); }
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); ok(archivo); };
+            img.src = url;
         });
     }
-    function setFP(k) { S.fp = k || ""; marcarOpcion("pfFormaPago", "data-fp", S.fp); $("pfPagoAnterior").hidden = true; }
-    function setTR(k) { S.tr = k || ""; marcarOpcion("pfTransportadora", "data-tr", S.tr); }
-    Array.prototype.forEach.call(document.querySelectorAll("#pfFormaPago button"), function (b) {
-        b.addEventListener("click", function () { setFP(b.getAttribute("data-fp")); sucio(); });
-    });
-    Array.prototype.forEach.call(document.querySelectorAll("#pfTransportadora button"), function (b) {
-        b.addEventListener("click", function () { setTR(b.getAttribute("data-tr")); sucio(); });
-    });
+    // El comprobante se anexa al pedido, así que primero el pedido debe existir (si es nuevo se guarda como borrador)
+    function pedidoGuardado(intento) {
+        if (S.pedidoId) { return Promise.resolve(S.pedidoId); }
+        return guardar("borrador").then(function (r) {
+            if (r && r.ok) {
+                S.pedidoId = r.id;
+                if (CFG.urlBase && history.replaceState) { history.replaceState(null, "", CFG.urlBase + "?pedido=" + r.id); }
+                return r.id;
+            }
+            if (!r && (intento || 0) < 5) {   // había otro guardado en curso: se espera y se reintenta
+                return new Promise(function (res) { setTimeout(function () { res(pedidoGuardado((intento || 0) + 1)); }, 700); });
+            }
+            throw new Error((r && r.error) || "No se pudo guardar el pedido.");
+        });
+    }
+    function llamarComprobante(fd) {
+        return fetch("pedido_comprobante.php", { method: "POST", body: fd, credentials: "same-origin" }).then(function (r) {
+            return r.text().then(function (t) {
+                try { return JSON.parse(t); } catch (e) { return { ok: false, error: "El servidor no respondió bien (código " + r.status + ")." }; }
+            });
+        });
+    }
+    function subirComprobante(archivo) {
+        if (!archivo || COMP.subiendo) { return; }
+        COMP.subiendo = true;
+        $("pfCompBtn").disabled = true;
+        compNota("Subiendo comprobante…");
+        pedidoGuardado(0).then(function (id) {
+            return reducirImagen(archivo).then(function (blob) {
+                var fd = new FormData();
+                fd.append("op", "subir"); fd.append("pedido_id", id);
+                fd.append("csrf", CFG.csrf); fd.append("rol", CFG.rol);
+                fd.append("imagen", blob, "comprobante.jpg");
+                return llamarComprobante(fd);
+            });
+        }).then(function (j) {
+            if (!j.ok) { throw new Error(j.error || "No se pudo subir el comprobante."); }
+            COMP.hay = true; COMP.v = j.v || Date.now();
+            pintarComprobante();
+            compNota("");
+            toast("Comprobante anexado.");
+        }).catch(function (e) {
+            compNota((e && e.message) || "No se pudo subir el comprobante. Intente de nuevo.", true);
+            toast((e && e.message) || "No se pudo subir el comprobante.", "error");
+        }).then(function () {
+            COMP.subiendo = false;
+            $("pfCompBtn").disabled = false;
+            $("pfCompArchivo").value = "";
+        });
+    }
+    function quitarComprobante() {
+        if (!S.pedidoId) { COMP.hay = false; pintarComprobante(); return; }
+        var fd = new FormData();
+        fd.append("op", "quitar"); fd.append("pedido_id", S.pedidoId);
+        fd.append("csrf", CFG.csrf); fd.append("rol", CFG.rol);
+        llamarComprobante(fd).then(function (j) {
+            if (!j.ok) { throw new Error(j.error || "No se pudo quitar el comprobante."); }
+            COMP.hay = false; pintarComprobante(); compNota("");
+        }).catch(function (e) { toast((e && e.message) || "No se pudo quitar el comprobante.", "error"); });
+    }
+    $("pfCompBtn").addEventListener("click", function () { $("pfCompArchivo").click(); });
+    $("pfCompCambiar").addEventListener("click", function () { $("pfCompArchivo").click(); });
+    $("pfCompArchivo").addEventListener("change", function () { subirComprobante(this.files && this.files[0]); });
+    $("pfCompQuitar").addEventListener("click", quitarComprobante);
 
     /* ---------- Buscar cliente por NIT / cédula ---------- */
     function llamar(payload, opciones) {
@@ -569,7 +743,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         $("pfPuntos").value = c.puntos_referencia || "";
         if (c.email_fe) { $("pfEmailFe").value = c.email_fe; }
         // Si el cliente ya tiene crédito pactado con un plazo de la lista, se sugiere esa forma de pago (solo si aún no eligió una)
-        if (!S.fp && c.condicion_pago === "credito" && FP_DIAS[String(parseInt(c.dias_credito, 10))]) { setFP(FP_DIAS[String(parseInt(c.dias_credito, 10))]); }
+        var diasCli = parseInt(c.dias_credito, 10);
+        if (!S.fp && $("pfFormaPago").value === "" && c.condicion_pago === "credito" && diasCli >= 1 && diasCli <= 365) { setFP("dias_" + diasCli); }
         colombiaSet($("pfDepto"), $("pfMuni"), c.departamento, c.municipio).then(function () { S.ignorar = false; sucio(); });
         if (c.inactivo) { msgCliente("Cliente encontrado, pero está INACTIVO en el sistema. Consulte con la oficina.", "alerta", "alert"); }
         else { msgCliente("Cliente encontrado. Se cargaron sus datos; revíselos y corrija si hace falta. Los datos que le faltaban y usted complete quedarán guardados para los próximos pedidos.", "ok", "check"); }
@@ -919,7 +1094,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             // La forma de pago define la condición comercial; si el documento es anterior y no tiene forma de pago, se conserva la que tenía
             condicion_pago: S.fp ? (diasDeFP(S.fp) ? "credito" : "contado") : (D.condicion_pago || "contado"),
             dias_credito: S.fp ? diasDeFP(S.fp) : (D.dias_credito ? parseInt(D.dias_credito, 10) : null),
-            observaciones: $("pfObs").value.trim()
+            observaciones: $("pfObs").value.trim(),
+            obs_despacho: $("pfObsDespacho").value.trim()
         };
         // Pedido al que va la remisión (solo si esta pantalla ofrece la lista; si no, el servidor conserva el que ya tenía)
         if (remisionUnida()) { r.forma_pago = ""; r.transportadora = ""; }   // el servidor toma los del pedido
@@ -1001,7 +1177,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         // Forma de pago y transportadora son obligatorias en documentos nuevos (uno enviado antes de existir este dato puede seguir sin ellos)
         var enviadoAntes = S.pedidoId && CFG.estadoPedido !== "borrador" && CFG.estadoPedido !== "nuevo";
         if (remisionUnida()) { return null; }   // va junto a un pedido: no necesita forma de pago ni transportadora
-                if (!S.fp && !(enviadoAntes && !D.forma_pago)) { return [3, "Seleccione la forma de pago.", "pfFormaPago"]; }
+        if ($("pfFormaPago").value === "credito" && !diasEscritos()) { return [3, "Escriba a cuántos días es el crédito (entre 1 y 365).", "pfDias"]; }
+        if (!S.fp && !(enviadoAntes && !D.forma_pago)) { return [3, "Seleccione la forma de pago.", "pfFormaPago"]; }
         if (!S.tr && !(enviadoAntes && !D.transportadora)) { return [3, "Seleccione la transportadora.", "pfTransportadora"]; }
         return null;
     }
@@ -1138,7 +1315,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     })();
 
     /* ---------- Cambios en cualquier campo ---------- */
-    ["pfNombre", "pfComercial", "pfTelefono", "pfEmail", "pfBarrio", "pfDireccion", "pfPuntos", "pfEmailFe", "pfObs", "pfDoc"].forEach(function (id) {
+    ["pfNombre", "pfComercial", "pfTelefono", "pfEmail", "pfBarrio", "pfDireccion", "pfPuntos", "pfEmailFe", "pfObs", "pfObsDespacho", "pfDoc"].forEach(function (id) {
         $(id).addEventListener("input", sucio);
     });
     $("pfDepto").addEventListener("change", sucio);
@@ -1225,6 +1402,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     $("pfPuntos").value = D.puntos_referencia || "";
     $("pfEmailFe").value = D.email_fe || "";
     $("pfObs").value = D.observaciones || "";
+    $("pfObsDespacho").value = D.obs_despacho || "";
     setFE(D.factura_electronica ? 1 : 0);
     setFP(D.forma_pago);
     setTR(D.transportadora);
