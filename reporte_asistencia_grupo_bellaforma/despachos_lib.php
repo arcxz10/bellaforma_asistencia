@@ -353,6 +353,18 @@ function fechaDespachoValida($f): bool
  */
 function obtenerDespachosDelDia(mysqli $c, string $fecha): array
 {
+    return obtenerDespachosRango($c, $fecha, $fecha, false);
+}
+
+/**
+ * Despachos entre dos fechas (ambas incluidas). $porOrigen = false: por el día en que están en el control (el que se ve en «Control de despachos»).
+ * $porOrigen = true: por el día en que salió el pedido, aunque después se haya pasado a otro día (lo usa «Pedidos para despachar»).
+ */
+function obtenerDespachosRango(mysqli $c, string $desde, string $hasta, bool $porOrigen = false): array
+{
+    asegurarExtrasDespachos($c);
+    $campoFecha = $porOrigen ? "COALESCE(d.fecha_origen, d.fecha)" : "d.fecha";
+    $orden = $porOrigen ? "COALESCE(d.fecha_origen, d.fecha) ASC, d.id ASC" : "d.id ASC";
     $st = $c->prepare(
         "SELECT d.*, p.id AS p_id, p.estado AS p_estado, p.tipo_pedido AS p_tipo, p.numero_pedido AS p_numero,
                 p.cliente_nit AS p_nit, p.cliente_nombre AS p_nombre, p.cliente_nombre_comercial AS p_comercial,
@@ -363,10 +375,10 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
          LEFT JOIN pedidos_vendedores p ON p.id = d.pedido_id
          LEFT JOIN pedidos_vendedores pv ON pv.id = p.pedido_vinculado_id
          LEFT JOIN vendedores v ON v.id = p.vendedor_id
-         WHERE d.fecha = ?
-         ORDER BY d.id ASC"
+         WHERE " . $campoFecha . " BETWEEN ? AND ?
+         ORDER BY " . $orden
     );
-    $st->bind_param("s", $fecha);
+    $st->bind_param("ss", $desde, $hasta);
     $st->execute();
     $res = $st->get_result();
     $raw = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
@@ -397,11 +409,16 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
             "empresa" => $empresa, "factura" => $factura, "numero_guia" => $r["numero_guia"],
             "flete_tipo" => $r["flete_tipo"], "valor_flete" => $r["valor_flete"] !== null ? (float) $r["valor_flete"] : null,
             "estado_entrega" => $r["estado_entrega"], "estado_pago" => $r["estado_pago"],
+            "estado_pedido" => (string) ($r["estado_pedido"] ?? "") !== "" ? (string) $r["estado_pedido"] : "en_proceso",
+            "observacion" => (string) ($r["observacion"] ?? ""),
+            "fecha_origen" => $r["fecha_origen"] ?? $r["fecha"],
         ];
         if ($ligado) {
             $fila += [
                 "tipo" => tipoDocumentoValido($r["p_tipo"] ?? "pedido"),
                 "numero_doc" => numeroDocumento(["numero_pedido" => $r["p_numero"], "id" => $r["p_id"]]),
+                // Código como lo ve la oficina en la hoja: PE5 - 3127, PE1 - 12674, RM1 - 797…
+                "codigo_doc" => codigoDocumentoDespacho(tipoDocumentoValido($r["p_tipo"] ?? "pedido"), $r["p_fe"], numeroDocumento(["numero_pedido" => $r["p_numero"], "id" => $r["p_id"]])),
                 "nit" => (string) $r["p_nit"], "cliente" => (string) $r["p_nombre"], "comercial" => (string) $r["p_comercial"],
                 "ciudad" => (string) $r["p_ciudad"], "departamento" => (string) $r["p_depto"],
                 "valor" => (float) $r["p_total"], "vendedor" => (string) $r["p_vendedor"],
@@ -413,6 +430,7 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
             $fila += [
                 "tipo" => tipoDocumentoValido($r["tipo_documento"] ?? "pedido"),
                 "numero_doc" => "",
+                "codigo_doc" => "",
                 "nit" => $r["nit"], "cliente" => $r["cliente_nombre"], "comercial" => $r["nombre_comercial"],
                 "ciudad" => $r["ciudad"], "departamento" => $r["departamento"],
                 "valor" => $r["valor"] !== null ? (float) $r["valor"] : null, "vendedor" => $r["vendedor_nombre"],
@@ -452,7 +470,9 @@ function empresaPorFacturaElectronica($facturaElectronica): string
 /** Pasa un despacho al día siguiente (por si ese día no se logró despachar). Devuelve la nueva fecha o null si no existe. */
 function moverDespachoDiaSiguiente(mysqli $c, int $id): ?string
 {
-    $st = $c->prepare("UPDATE despachos SET fecha = DATE_ADD(fecha, INTERVAL 1 DAY) WHERE id = ?");
+    asegurarExtrasDespachos($c);
+    // fecha_origen guarda el día en que salió el pedido (sigue igual en «Pedidos para despachar»); fecha es el día en que se despacha
+    $st = $c->prepare("UPDATE despachos SET fecha_origen = COALESCE(fecha_origen, fecha), fecha = DATE_ADD(fecha, INTERVAL 1 DAY) WHERE id = ?");
     $st->bind_param("i", $id);
     $st->execute();
     $st->close();
@@ -537,6 +557,7 @@ function sincronizarDespachoVinculado(mysqli $c, int $despachoId, string $campo,
  */
 function actualizarCampoDespacho(mysqli $c, int $id, string $campo, string $valor): array
 {
+    asegurarExtrasDespachos($c);
     $falla = fn(string $m) => ["ok" => false, "error" => $m];
 
     $st = $c->prepare("SELECT id, pedido_id FROM despachos WHERE id = ?");
@@ -554,8 +575,9 @@ function actualizarCampoDespacho(mysqli $c, int $id, string $campo, string $valo
     $catalogos = [
         "empresa" => empresasDespacho(), "flete_tipo" => fletesTipoDespacho(),
         "estado_entrega" => estadosEntregaDespacho(), "estado_pago" => estadosPagoDespacho(),
+        "estado_pedido" => estadosPedidoDespachar(),
     ];
-    $libres = ["factura" => 60, "numero_guia" => 40];
+    $libres = ["factura" => 60, "numero_guia" => 40, "observacion" => 255];
 
     if (isset($catalogos[$campo])) {
         if ($valor !== "" && !isset($catalogos[$campo][$valor])) {
@@ -643,6 +665,7 @@ function actualizarCampoDespacho(mysqli $c, int $id, string $campo, string $valo
  */
 function guardarDespachoManual(mysqli $c, ?int $id, array $in): array
 {
+    asegurarExtrasDespachos($c);
     $falla = fn(string $m) => ["ok" => false, "error" => $m];
 
     $fecha = (string) ($in["fecha"] ?? "");
@@ -682,7 +705,7 @@ function guardarDespachoManual(mysqli $c, ?int $id, array $in): array
     try {
         if ($id) {
             $st = $c->prepare(
-                "UPDATE despachos SET fecha = ?, tipo_documento = ?, nit = ?, cliente_nombre = ?, nombre_comercial = ?, ciudad = ?,
+                "UPDATE despachos SET fecha = ?, fecha_origen = NULL, tipo_documento = ?, nit = ?, cliente_nombre = ?, nombre_comercial = ?, ciudad = ?,
                         departamento = ?, valor = ?, vendedor_nombre = ?, forma_pago = ?, transportadora = ?, empresa = ?, factura = ?
                  WHERE id = ? AND pedido_id IS NULL"
             );
@@ -703,5 +726,101 @@ function guardarDespachoManual(mysqli $c, ?int $id, array $in): array
         return ["ok" => true, "id" => $nuevo];
     } catch (Throwable $e) {
         return $falla("No se pudo guardar el despacho.");
+    }
+}
+
+
+/* ================= PEDIDOS PARA DESPACHAR · RÓTULOS ================= */
+
+/** Estado de cada pedido en la hoja «Pedidos para despachar» (clave => etiqueta). */
+function estadosPedidoDespachar(): array
+{
+    return ["en_proceso" => "EN PROCESO", "despachado" => "DESPACHADO", "con_novedad" => "CON NOVEDAD"];
+}
+
+/** PE5 - 3127, RM1 - 797… (clase de Syscafe + número). */
+function codigoDocumentoDespacho(string $tipo, $facturaElectronica, string $numeroDoc): string
+{
+    $n = preg_match('/^\d+$/', $numeroDoc) ? (string) (int) $numeroDoc : $numeroDoc;
+    return claveNumeracionDocumento($tipo, !empty($facturaElectronica)) . " - " . $n;
+}
+
+/**
+ * Crea (una sola vez por visita) lo que necesitan «Pedidos para despachar» y los rótulos:
+ * columnas estado_pedido / observacion / fecha_origen en `despachos` y la tabla despacho_rotulos (la imagen del rótulo, en la base de datos).
+ */
+function asegurarExtrasDespachos(mysqli $c): void
+{
+    static $listo = false;
+    if ($listo) {
+        return;
+    }
+    $listo = true;
+    try {
+        $r = $c->query("SHOW COLUMNS FROM despachos LIKE 'estado_pedido'");
+        $columnaNueva = $r && $r->num_rows === 0;
+        agregarColumna($c, "despachos", "estado_pedido", "VARCHAR(20) NOT NULL DEFAULT 'en_proceso'");
+        agregarColumna($c, "despachos", "observacion", "VARCHAR(255) NOT NULL DEFAULT ''");
+        agregarColumna($c, "despachos", "fecha_origen", "DATE NULL");
+        if ($columnaNueva) {
+            // Primera vez: lo que ya tiene guía o está entregado ya salió
+            $c->query("UPDATE despachos SET estado_pedido = 'despachado' WHERE numero_guia <> '' OR estado_entrega = 'entregado'");
+        }
+        $def = "despacho_id INT NOT NULL PRIMARY KEY,
+            mime VARCHAR(40) NOT NULL DEFAULT 'image/jpeg',
+            datos MEDIUMBLOB NOT NULL,
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP";
+        try {
+            $c->query("CREATE TABLE IF NOT EXISTS despacho_rotulos ($def,
+                CONSTRAINT fk_rotulo_despacho FOREIGN KEY (despacho_id) REFERENCES despachos(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        } catch (Throwable $e) {
+            $c->query("CREATE TABLE IF NOT EXISTS despacho_rotulos ($def) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
+    } catch (Throwable $e) {
+        // se reintenta en la próxima visita
+    }
+}
+
+/** [despacho_id => true] de los despachos de ese día que ya tienen rótulo anexado. */
+function idsConRotuloDelDia(mysqli $c, string $fecha): array
+{
+    asegurarExtrasDespachos($c);
+    $ids = [];
+    try {
+        $st = $c->prepare("SELECT r.despacho_id FROM despacho_rotulos r JOIN despachos d ON d.id = r.despacho_id WHERE d.fecha = ?");
+        $st->bind_param("s", $fecha);
+        $st->execute();
+        $res = $st->get_result();
+        while ($res && ($f = $res->fetch_assoc())) {
+            $ids[(int) $f["despacho_id"]] = true;
+        }
+        $st->close();
+    } catch (Throwable $e) {
+    }
+    return $ids;
+}
+
+/** Borra el rótulo de un despacho (al quitar o eliminar el despacho). Nunca interrumpe. */
+function borrarRotuloDeDespacho(mysqli $c, int $despachoId): void
+{
+    try {
+        $st = $c->prepare("DELETE FROM despacho_rotulos WHERE despacho_id = ?");
+        $st->bind_param("i", $despachoId);
+        $st->execute();
+        $st->close();
+    } catch (Throwable $e) {
+    }
+}
+
+/** Borra los rótulos del despacho ligado a un pedido (al eliminar el pedido). Nunca interrumpe. */
+function borrarRotuloDePedido(mysqli $c, int $pedidoId): void
+{
+    try {
+        $st = $c->prepare("DELETE FROM despacho_rotulos WHERE despacho_id IN (SELECT id FROM despachos WHERE pedido_id = ?)");
+        $st->bind_param("i", $pedidoId);
+        $st->execute();
+        $st->close();
+    } catch (Throwable $e) {
     }
 }
