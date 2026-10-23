@@ -447,10 +447,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 // Pedidos por cobrar: cuántos faltan y cuántos comprobantes nuevos hay (menú y campanita)
 $cobNavPend = 0;
 $cobNavNuevos = 0;
+$cobNavLista = [];
 if (adminPuede("por_cobrar")) {
     try {
         $cobNavPend = cobroContarPorCobrar($conexion);
         $cobNavNuevos = cobroContarNuevos($conexion);
+        $cobNavLista = cobroListarNuevos($conexion);
     } catch (Throwable $e) {
         // si algo falla, el panel sigue funcionando sin el aviso
     }
@@ -1097,9 +1099,26 @@ $resultadoEmpleados =
         .color-retraso, .retraso { color: #dc3545 !important; font-weight: bold; }
         .color-extra, .extra { color: #d39e00 !important; font-weight: bold; }
         .color-deuda { color: #007bff !important; font-weight: bold; }
-        .campana-cobros { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; color: #fff; background: linear-gradient(135deg, #33B540 0%, #1D6821 100%); border-radius: 999px; font-size: 12.5px; font-weight: 700; text-decoration: none; box-shadow: 0 6px 16px -8px rgba(29, 104, 33, .9); animation: campana-cobros-pulso 2s ease-in-out infinite; }
-        .campana-cobros[hidden] { display: none; }
-        .campana-cobros .ico { width: 16px; height: 16px; }
+        .campana-cobros { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 34px; padding: 0; color: var(--tinta-suave); background: var(--superficie); border: 1px solid var(--linea); border-radius: 999px; cursor: pointer; font-family: inherit; }
+        .campana-cobros:hover { background: #F1F7FE; }
+        .campana-cobros.con-nuevos { color: #1D6821; border-color: #9ED6A8; animation: campana-cobros-pulso 2s ease-in-out infinite; }
+        .campana-n { position: absolute; top: -6px; right: -4px; min-width: 18px; padding: 1px 5px; border-radius: 999px; background: #C62839; color: #fff; font-size: 10.5px; font-weight: 800; line-height: 15px; text-align: center; }
+        .campana-n[hidden] { display: none; }
+        .campana-vacio { padding: 18px 14px; text-align: center; font-size: 13px; color: var(--tinta-suave); }
+        .campana-wrap { position: relative; }
+        .campana-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: min(380px, 92vw); max-height: 70vh; overflow-y: auto; background: #fff; border: 1px solid var(--linea); border-radius: 14px; box-shadow: 0 24px 50px -18px rgba(7, 27, 64, .45); }
+        .campana-menu[hidden] { display: none; }
+        .campana-menu-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--linea); font-size: 13px; color: var(--azul-900); }
+        .campana-menu-cab button { border: none; background: none; color: var(--azul-600); font-weight: 700; font-size: 12.5px; cursor: pointer; padding: 4px 6px; }
+        .campana-item { display: block; width: 100%; text-align: left; padding: 11px 14px; border: none; border-bottom: 1px solid #EEF2F9; background: #fff; cursor: pointer; font-family: inherit; }
+        .campana-item { position: relative; padding-left: 28px; }
+        .campana-item:hover { background: #F1FAF3; }
+        .campana-item.no-leida { background: #F1FAF3; }
+        .campana-item.no-leida::before { content: ""; position: absolute; left: 11px; top: 17px; width: 8px; height: 8px; border-radius: 50%; background: #27983A; }
+        .campana-item.leida b { font-weight: 600; color: var(--tinta-suave); }
+        .campana-item b { display: block; font-size: 13.5px; color: var(--azul-900); }
+        .campana-item span { display: block; font-size: 12px; color: var(--tinta-suave); margin-top: 2px; }
+        .campana-cobros .ico { width: 18px; height: 18px; }
         @keyframes campana-cobros-pulso { 0%, 100% { box-shadow: 0 6px 16px -8px rgba(29, 104, 33, .9), 0 0 0 0 rgba(51, 181, 64, .5); } 50% { box-shadow: 0 6px 16px -8px rgba(29, 104, 33, .9), 0 0 0 8px rgba(51, 181, 64, 0); } }
         .nav-badge-cobrar { margin-left: auto; min-width: 22px; padding: 1px 7px; border-radius: 999px; background: #C62839; color: #fff; font-size: 11px; font-weight: 800; text-align: center; }
         .nav-badge-cobrar[hidden] { display: none; }
@@ -1320,10 +1339,19 @@ $resultadoEmpleados =
             <div class="header-info">
 
                 <?php if (adminPuede("por_cobrar")): ?>
-                <a href="#por_cobrar" id="campanaCobros" class="campana-cobros" <?= $cobNavNuevos > 0 ? "" : "hidden" ?> title="Un ejecutivo subió un comprobante de pago">
-                    <svg class="ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-                    <span id="campanaCobrosTxt"><?= (int) $cobNavNuevos ?> <?= $cobNavNuevos === 1 ? "comprobante nuevo" : "comprobantes nuevos" ?></span>
-                </a>
+                <div class="campana-wrap" id="campanaWrap">
+                    <button type="button" id="campanaCobros" class="campana-cobros<?= $cobNavNuevos > 0 ? " con-nuevos" : "" ?>" aria-haspopup="true" aria-expanded="false" title="Comprobantes de pago de pedidos a crédito">
+                        <svg class="ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                        <span id="campanaCobrosTxt" class="campana-n" <?= $cobNavNuevos > 0 ? "" : "hidden" ?>><?= (int) $cobNavNuevos ?></span>
+                    </button>
+                    <div class="campana-menu" id="campanaMenu" hidden>
+                        <div class="campana-menu-cab">
+                            <strong>Comprobantes de pago</strong>
+                            <button type="button" id="campanaTodas" <?= $cobNavNuevos > 0 ? "" : "hidden" ?>>Marcar todas como leídas</button>
+                        </div>
+                        <div id="campanaLista"></div>
+                    </div>
+                </div>
                 <?php endif; ?>
 
                 <span>
@@ -3730,38 +3758,97 @@ $resultadoEmpleados =
 </script>
 <?php if (adminPuede("por_cobrar")): ?>
 <script>
-/* Campanita de «Pedidos por cobrar»: avisa cuando un ejecutivo sube un comprobante de pago (se revisa sola cada 45 s) */
+/* Campanita de «Pedidos por cobrar»: lista los comprobantes que subieron los ejecutivos. Al abrir uno queda leído. */
 (function () {
     var campana = document.getElementById("campanaCobros");
     var txt = document.getElementById("campanaCobrosTxt");
+    var menu = document.getElementById("campanaMenu");
+    var listaEl = document.getElementById("campanaLista");
     var badge = document.getElementById("navBadgeCobrar");
-    var ultimo = <?= (int) $cobNavNuevos ?>;
+    var lista = <?= json_encode($cobNavLista, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+    var nuevosIni = <?= (int) $cobNavNuevos ?>;
+    var ultimo = nuevosIni;
+    var todasBtn = document.getElementById("campanaTodas");
 
-    function pintarCampana(n) {
-        n = parseInt(n, 10) || 0;
-        if (campana) {
-            campana.hidden = n < 1;
-            if (txt) { txt.textContent = n + (n === 1 ? " comprobante nuevo" : " comprobantes nuevos"); }
+    function pintarLista() {
+        listaEl.innerHTML = "";
+        if (!lista.length) {
+            var vacio = document.createElement("div");
+            vacio.className = "campana-vacio";
+            vacio.textContent = "No hay comprobantes por revisar.";
+            listaEl.appendChild(vacio);
         }
+        lista.forEach(function (it) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "campana-item " + (it.visto ? "leida" : "no-leida");
+            var t = document.createElement("b");
+            t.textContent = "Pedido #" + it.numero + " · " + (it.cliente || "Sin cliente");
+            var d = document.createElement("span");
+            d.textContent = it.vendedor + " · " + it.total + " · " + it.subido + (it.visto ? " · leído" : "");
+            b.appendChild(t); b.appendChild(d);
+            b.addEventListener("click", function () { abrirItem(it); });
+            listaEl.appendChild(b);
+        });
+    }
+
+    function pintarCampana(n, nuevaLista) {
+        if (nuevaLista) { lista = nuevaLista; }
+        n = parseInt(n, 10) || 0;
+        pintarLista();
+        // La campana siempre se ve; el número rojo cuenta solo los que faltan por leer
+        txt.textContent = n;
+        txt.hidden = n < 1;
+        campana.classList.toggle("con-nuevos", n > 0);
+        if (todasBtn) { todasBtn.hidden = n < 1; }
         ultimo = n;
     }
     window.bfActualizarCampanaCobros = pintarCampana;
 
-    if (campana) {
-        campana.addEventListener("click", function () {
-            if (typeof mostrarSeccion === "function") { mostrarSeccion("por_cobrar"); }
-            document.querySelectorAll(".nav-item").forEach(function (i) { i.classList.remove("active"); });
-            var nav = document.querySelector('.nav-item[href="#por_cobrar"]');
-            if (nav) { nav.classList.add("active"); }
-            window.scrollTo(0, 0);
-        });
+    function irASeccion() {
+        if (typeof mostrarSeccion === "function") { mostrarSeccion("por_cobrar"); }
+        document.querySelectorAll(".nav-item").forEach(function (i) { i.classList.remove("active"); });
+        var nav = document.querySelector('.nav-item[href="#por_cobrar"]');
+        if (nav) { nav.classList.add("active"); }
+        history.replaceState(null, "", "#por_cobrar");
+        window.scrollTo(0, 0);
     }
+
+    // Elegir cuál ver: abre la sección y el comprobante; el servidor lo marca como leído
+    function abrirItem(it) {
+        menu.hidden = true;
+        campana.setAttribute("aria-expanded", "false");
+        irASeccion();
+        if (window.cbAbrirVisor) { window.cbAbrirVisor(it.id, it.mime, "Pedido #" + it.numero + " · " + it.cliente); }
+    }
+
+    campana.addEventListener("click", function (e) {
+        e.stopPropagation();
+        menu.hidden = !menu.hidden;
+        campana.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+    });
+    menu.addEventListener("click", function (e) { e.stopPropagation(); });
+    document.addEventListener("click", function () { menu.hidden = true; campana.setAttribute("aria-expanded", "false"); });
+
+    document.getElementById("campanaTodas").addEventListener("click", function () {
+        var fd = new FormData();
+        fd.append("op", "visto");
+        fd.append("todos", "1");
+        fetch("cobro_comprobante.php", { method: "POST", body: fd, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j && j.ok) {
+                    pintarCampana(j.nuevos, j.lista);
+                    document.querySelectorAll('[id^="cb-nuevo-"]').forEach(function (m) { m.remove(); });
+                }
+            }).catch(function () {});
+    });
 
     function aviso(n) {
         var t = document.createElement("div");
         t.className = "toast-cobros";
-        t.textContent = n === 1 ? "Un ejecutivo subió un comprobante de pago." : n + " comprobantes de pago nuevos.";
-        t.addEventListener("click", function () { window.location.hash = "#por_cobrar"; window.location.reload(); });
+        t.textContent = n === 1 ? "Un ejecutivo subió un comprobante de pago." : "Hay " + n + " comprobantes de pago sin leer.";
+        t.addEventListener("click", function () { t.remove(); menu.hidden = false; campana.setAttribute("aria-expanded", "true"); window.scrollTo(0, 0); });
         document.body.appendChild(t);
         setTimeout(function () { t.remove(); }, 8000);
     }
@@ -3772,11 +3859,13 @@ $resultadoEmpleados =
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (j) {
                 if (!j || !j.ok) { return; }
-                if (j.nuevos > ultimo) { aviso(j.nuevos); }
-                pintarCampana(j.nuevos);
+                var hayNuevo = j.nuevos > ultimo;
+                pintarCampana(j.nuevos, j.lista);
+                if (hayNuevo) { aviso(j.nuevos); }
                 if (badge) { badge.textContent = j.por_cobrar; badge.hidden = j.por_cobrar < 1; }
             }).catch(function () {});
     }
+    pintarLista();
     setInterval(revisar, 45000);
     document.addEventListener("visibilitychange", function () { if (!document.hidden) { revisar(); } });
 })();
