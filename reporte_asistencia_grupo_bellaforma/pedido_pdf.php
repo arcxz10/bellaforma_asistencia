@@ -135,7 +135,24 @@ foreach ($pedidos as $p) {
 
     $pdf->SetFont("Arial", "B", 10);
     $pdf->Cell(0, 6.5, t("CONDICIONES"), 0, 1, "L", true);
-    $campo("Forma de pago:", etiquetaCondicion($p));
+    // Remisión unida a un pedido: no lleva forma de pago ni datos de envío, solo «Enviar junto al pedido No. N»
+    $numeroPedidoUnido = "";
+    if ($claveDoc === "remision" && !empty($p["pedido_vinculado_id"])) {
+        $idUnido = (int) $p["pedido_vinculado_id"];
+        $stU = $conexion->prepare("SELECT id, numero_pedido FROM pedidos_vendedores WHERE id = ? LIMIT 1");
+        $stU->bind_param("i", $idUnido);
+        $stU->execute();
+        $filaU = $stU->get_result()->fetch_assoc();
+        $stU->close();
+        if ($filaU) {
+            $numeroPedidoUnido = numeroDocumento($filaU);
+        }
+    }
+    if ($numeroPedidoUnido !== "") {
+        $campo("Envio:", "ENVIAR JUNTO AL PEDIDO No. " . $numeroPedidoUnido);
+    } else {
+        $campo("Forma de pago:", etiquetaCondicion($p));
+    }
     $campo("Factura electronica:", !empty($p["factura_electronica"]) ? "SI  -  " . ($p["email_fe"] ?: $p["cliente_email"]) : "NO");
     if (!empty($p["observaciones"])) {
         $campo("Observaciones:", (string) $p["observaciones"]);
