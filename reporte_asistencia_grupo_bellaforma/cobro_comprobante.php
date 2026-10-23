@@ -4,7 +4,7 @@
  *   GET  cobro_comprobante.php?id=53                  -> el comprobante (imagen o PDF); &descargar=1 lo baja como archivo
  *   GET  cobro_comprobante.php?op=estado              -> JSON {nuevos, por_cobrar} para la campanita del administrador
  *   POST cobro_comprobante.php op=subir pedido_id=53 archivo=<imagen|pdf> csrf=…   (ejecutivo dueño del pedido)
- *   POST cobro_comprobante.php op=visto pedido_id=53                                (administrador: ya lo abrió)
+ *   POST cobro_comprobante.php op=visto pedido_id=53  (o todos=1)                   (administrador: ya lo leyó)
  *
  * El comprobante se guarda en la base de datos (tabla pedido_cobros), así no se pierde cuando Railway reinicia el servidor.
  */
@@ -75,7 +75,7 @@ if ($_SERVER["REQUEST_METHOD"] === "GET" && ($_GET["op"] ?? "") === "estado") {
     if (!$adminPuede) {
         cobroJson(["ok" => false, "error" => "Sin permiso."], 403);
     }
-    cobroJson(["ok" => true, "nuevos" => cobroContarNuevos($conexion), "por_cobrar" => cobroContarPorCobrar($conexion)]);
+    cobroJson(["ok" => true, "nuevos" => cobroContarNuevos($conexion), "lista" => cobroListarNuevos($conexion), "por_cobrar" => cobroContarPorCobrar($conexion)]);
 }
 
 /* ---------------- POST ---------------- */
@@ -92,11 +92,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             if (($_SERVER["HTTP_X_REQUESTED_WITH"] ?? "") !== "fetch") {
                 cobroJson(["ok" => false, "error" => "Solicitud no válida."], 400);
             }
-            $st = $conexion->prepare("UPDATE pedido_cobros SET visto = 1 WHERE pedido_id = ?");
-            $st->bind_param("i", $id);
-            $st->execute();
-            $st->close();
-            cobroJson(["ok" => true, "nuevos" => cobroContarNuevos($conexion)]);
+            if (!empty($_POST["todos"])) {
+                $conexion->query("UPDATE pedido_cobros SET visto = 1 WHERE datos IS NOT NULL AND cobrado = 0");
+            } else {
+                $st = $conexion->prepare("UPDATE pedido_cobros SET visto = 1 WHERE pedido_id = ?");
+                $st->bind_param("i", $id);
+                $st->execute();
+                $st->close();
+            }
+            cobroJson(["ok" => true, "nuevos" => cobroContarNuevos($conexion), "lista" => cobroListarNuevos($conexion)]);
         }
 
         /* ---- Ejecutivo: subir (o cambiar) el comprobante ---- */
