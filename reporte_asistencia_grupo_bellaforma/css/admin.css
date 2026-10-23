@@ -1146,7 +1146,7 @@ tbody tr:last-child td { border-bottom: none; }
    DIÁLOGO DE CONFIRMACIÓN / AVISO
    ========================================================================== */
 
-.modal.bf-dlg { z-index: 2000; }
+.modal.bf-dlg { z-index: 10050; } /* por encima del visor de rótulo (9999) y del splash (10000) */
 
 .modal-contenido.bf-dlg-caja {
     max-width: 420px;
