@@ -148,6 +148,7 @@ foreach ($pedidos as $p) {
     $totalUnidades = 0;
     $unidadesBonificadas = 0;
     $unidadesDocena = 0;
+    $unidadesFlete = 0;
 
     // Productos ordenados alfabéticamente por referencia (A-Z; los números se ordenan
     // de forma natural: 2 antes que 10). Si se repite una referencia, primero la cobrada
@@ -166,10 +167,13 @@ foreach ($pedidos as $p) {
         }
         $esBon = !empty($it["bonificado"]);   // bonificado: 100 % de descuento, no se cobra
         $esDoc = ((int) ($it["bonificado"] ?? 0) === 2);   // 2 = docena de 13 (la unidad gratis)
+        $esFle = ((int) ($it["bonificado"] ?? 0) === 3);   // 3 = apoyo a flete (100 % de descuento)
         $totalUnidades += (int) $it["cantidad"];
         if ($esBon) {
             if ($esDoc) {
                 $unidadesDocena += (int) $it["cantidad"];
+            } elseif ($esFle) {
+                $unidadesFlete += (int) $it["cantidad"];
             } else {
                 $unidadesBonificadas += (int) $it["cantidad"];
             }
@@ -182,9 +186,9 @@ foreach ($pedidos as $p) {
         $pdf->SetFont("Arial", "B", 9);
         $pdf->Cell(32, 6.5, recortar($pdf, $it["referencia"], 30), "LRB", 0, "L", $relleno);
         $pdf->SetFont("Arial", "", 9);
-        if ($esDoc) {
+        if ($esDoc || $esFle) {
             // La etiqueta nunca se corta: se recorta solo el nombre del producto
-            $etiqueta = t(" (DOCENA DE 13 - BONIF.)");
+            $etiqueta = t($esFle ? " (APOYO A FLETE - 100% DTO.)" : " (DOCENA DE 13 - BONIF.)");
             $nombreDoc = recortar($pdf, $it["nombre"], max(20, 78 - $pdf->GetStringWidth($etiqueta)));
             $pdf->Cell(80, 6.5, $nombreDoc . $etiqueta, "RB", 0, "L", $relleno);
         } else {
@@ -209,6 +213,10 @@ foreach ($pedidos as $p) {
     if ($unidadesBonificadas > 0) {
         $pdf->SetFont("Arial", "", 9);
         $pdf->Cell(0, 6, t("Incluye " . $unidadesBonificadas . " unidad(es) BONIFICADA(S): 100% de descuento, sin costo."), 0, 1, "L");
+    }
+    if ($unidadesFlete > 0) {
+        $pdf->SetFont("Arial", "", 9);
+        $pdf->Cell(0, 6, t("Incluye " . $unidadesFlete . " unidad(es) por APOYO A FLETE: 100% de descuento, sin costo."), 0, 1, "L");
     }
     if ($unidadesDocena > 0) {
         $pdf->SetFont("Arial", "", 9);
