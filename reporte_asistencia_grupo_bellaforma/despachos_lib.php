@@ -227,9 +227,11 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
         "SELECT d.*, p.id AS p_id, p.estado AS p_estado, p.tipo_pedido AS p_tipo, p.numero_pedido AS p_numero,
                 p.cliente_nit AS p_nit, p.cliente_nombre AS p_nombre, p.cliente_nombre_comercial AS p_comercial,
                 p.cliente_ciudad AS p_ciudad, p.cliente_departamento AS p_depto, p.total AS p_total,
-                p.forma_pago AS p_forma, p.transportadora AS p_transp, p.factura_electronica AS p_fe, v.nombre AS p_vendedor
+                p.forma_pago AS p_forma, p.transportadora AS p_transp, p.factura_electronica AS p_fe, p.pedido_vinculado_id AS p_vinc,
+                pv.id AS pv_id, pv.numero_pedido AS pv_numero, v.nombre AS p_vendedor
          FROM despachos d
          LEFT JOIN pedidos_vendedores p ON p.id = d.pedido_id
+         LEFT JOIN pedidos_vendedores pv ON pv.id = p.pedido_vinculado_id
          LEFT JOIN vendedores v ON v.id = p.vendedor_id
          WHERE d.fecha = ?
          ORDER BY d.id ASC"
@@ -267,6 +269,8 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
                 "ciudad" => (string) $r["p_ciudad"], "departamento" => (string) $r["p_depto"],
                 "valor" => (float) $r["p_total"], "vendedor" => (string) $r["p_vendedor"],
                 "forma_pago" => (string) $r["p_forma"], "transportadora" => (string) $r["p_transp"],
+                // Remisión unida a un pedido: número del pedido al que va ("" si no está unida o ese pedido ya no existe)
+                "vinculo_numero" => $r["pv_id"] !== null ? numeroDocumento(["numero_pedido" => $r["pv_numero"], "id" => $r["pv_id"]]) : "",
             ];
         } else {
             $fila += [
@@ -276,6 +280,7 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
                 "ciudad" => $r["ciudad"], "departamento" => $r["departamento"],
                 "valor" => $r["valor"] !== null ? (float) $r["valor"] : null, "vendedor" => $r["vendedor_nombre"],
                 "forma_pago" => $r["forma_pago"], "transportadora" => $r["transportadora"],
+                "vinculo_numero" => "",
             ];
         }
         $filas[] = $fila;
