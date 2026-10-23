@@ -28,6 +28,7 @@ $datosIniciales = [
     "dias_credito" => $ped["dias_credito"] ?? "",
     "forma_pago" => $ped["forma_pago"] ?? "",
     "transportadora" => $ped["transportadora"] ?? "",
+    "pedido_vinculado_id" => $ped["pedido_vinculado_id"] ?? "",
     "observaciones" => $ped["observaciones"] ?? "",
     "cliente_id" => $ped["cliente_id"] ?? null,
 ];
@@ -96,6 +97,24 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                 <input type="text" id="pfNumero" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off" placeholder="Automático">
                 <p class="pf-nota" id="pfNumeroNota">Déjelo vacío para que el número sea automático. Si escribe uno, ese mismo saldrá en el PDF y en el archivo de Syscafe.</p>
             </div>
+            <?php if (isset($pf["pedidos_union"])): ?>
+                <div id="pfUnirBox" hidden>
+                    <label for="pfUnir">Unir esta remisión a un pedido (opcional)</label>
+                    <select id="pfUnir">
+                        <option value="">No unir a ningún pedido</option>
+                        <?php foreach ($pf["pedidos_union"] as $pu): ?>
+                            <?php
+                            $etqUnion = "Pedido #" . numeroDocumento($pu)
+                                . " · " . ($pu["cliente_nombre"] !== "" ? $pu["cliente_nombre"] : "(sin cliente)")
+                                . " · " . formatoCOP($pu["total"])
+                                . " · " . date("d/m", strtotime((string) $pu["creado_en"]));
+                            ?>
+                            <option value="<?= (int) $pu["id"] ?>"><?= htmlspecialchars($etqUnion, ENT_QUOTES, "UTF-8") ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="pf-nota">Si la remisión va junto con un pedido que ya hizo, elíjalo aquí. En el Control de despachos saldrá el número del pedido al que va.</p>
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="pf-card" id="pfCardTipoCliente">
@@ -353,6 +372,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         });
         var n = NOMBRE_DOC[S.doc];
         $("pfNumeroLabel").textContent = "Número de " + n;
+        if ($("pfUnirBox")) { $("pfUnirBox").hidden = S.doc !== "remision"; }   // «Unir a un pedido» solo para remisiones
         $("pfNumero").placeholder = CFG.numeroAuto ? "Automático: " + CFG.numeroAuto : "Automático";
         // El botón final dice «Enviar remisión», «Enviar cotización»… (al editar sigue diciendo «Guardar cambios»)
         if (S.paso === 3) { $("pfPrincipal").textContent = textoPrincipal(); }
@@ -758,7 +778,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 
     /* ---------- Datos y guardado ---------- */
     function datos() {
-        return {
+        var r = {
             tipo_documento: S.doc, numero: $("pfNumero").value.trim(),
             tipo_cliente: S.lista, tipo_persona: S.tipo, cliente_id: S.clienteId,
             identificacion: $("pfDoc").value.trim(), cliente_nombre: $("pfNombre").value.trim(),
@@ -773,6 +793,9 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             dias_credito: S.fp ? diasDeFP(S.fp) : (D.dias_credito ? parseInt(D.dias_credito, 10) : null),
             observaciones: $("pfObs").value.trim()
         };
+        // Pedido al que va la remisión (solo si esta pantalla ofrece la lista; si no, el servidor conserva el que ya tenía)
+        if ($("pfUnir")) { r.pedido_vinculado_id = S.doc === "remision" ? ($("pfUnir").value || "") : ""; }
+        return r;
     }
 
     function hayContenido() {
@@ -1021,6 +1044,10 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     /* ---------- Carga inicial ---------- */
     var D = CFG.datos;
     $("pfNumero").value = D.numero || "";
+    if ($("pfUnir")) {
+        $("pfUnir").value = D.pedido_vinculado_id ? String(D.pedido_vinculado_id) : "";
+        $("pfUnir").addEventListener("change", function () { sucio(); });
+    }
     setDoc(D.tipo_documento);
     setTipo(D.tipo_persona);
     $("pfDoc").value = D.identificacion || "";
