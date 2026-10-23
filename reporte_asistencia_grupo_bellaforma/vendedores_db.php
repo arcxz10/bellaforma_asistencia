@@ -7,7 +7,7 @@
 
 require_once __DIR__ . "/despachos_lib.php";
 
-const ESQUEMA_VEND_VERSION = 12;
+const ESQUEMA_VEND_VERSION = 13;
 
 function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
 {
@@ -305,6 +305,8 @@ function asegurarTablasVendedores(mysqli $c): void
     // Forma de pago y transportadora (las elige el ejecutivo en el pedido) + control de despachos diarios
     $ok = agregarColumna($c, "pedidos_vendedores", "forma_pago", "VARCHAR(20) NULL") && $ok;
     $ok = agregarColumna($c, "pedidos_vendedores", "transportadora", "VARCHAR(30) NULL") && $ok;
+    // Remisión unida a un pedido (id del pedido al que va la remisión; se ve en el Control de despachos)
+    $ok = agregarColumna($c, "pedidos_vendedores", "pedido_vinculado_id", "INT NULL") && $ok;
     $okDesp = asegurarTablaDespachos($c);
 
     // Solo se marca como terminado si TODO se aplicó; si no, se reintenta en la próxima visita
