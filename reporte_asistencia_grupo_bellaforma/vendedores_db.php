@@ -389,21 +389,155 @@ function tituloDocumento(array $p): string
     return etiquetaTipoDocumento($p["tipo_pedido"] ?? "pedido") . " #" . numeroDocumento($p);
 }
 
-/** ¿Ya hay otro documento (no borrador) del mismo tipo con ese número? Compara como número: 0045 = 45. */
-function numeroDocumentoEnUso(mysqli $c, string $tipo, int $numero, int $excluirId): bool
+/**
+ * ¿Ya hay otro documento (no borrador) del mismo tipo con ese número? Compara como número: 0045 = 45.
+ * $fe = null  -> compara con todos los documentos de ese tipo (con y sin factura electrónica).
+ * $fe = 0 / 1 -> solo con los de la misma clase de Syscafe (PE5 / PE1, RM1 / RM2, CT1 / CT2), que llevan numeración independiente.
+ */
+function numeroDocumentoEnUso(mysqli $c, string $tipo, int $numero, int $excluirId, ?int $fe = null): bool
 {
-    $st = $c->prepare(
-        "SELECT id FROM pedidos_vendedores
-         WHERE tipo_pedido = ? AND estado <> 'borrador' AND id <> ?
-           AND CAST(COALESCE(NULLIF(numero_pedido, ''), CAST(id AS CHAR)) AS UNSIGNED) = ?
-         LIMIT 1"
-    );
-    $st->bind_param("sii", $tipo, $excluirId, $numero);
+    $sql = "SELECT id FROM pedidos_vendedores
+            WHERE tipo_pedido = ? AND estado <> 'borrador' AND id <> ?
+              AND CAST(COALESCE(NULLIF(numero_pedido, ''), CAST(id AS CHAR)) AS UNSIGNED) = ?";
+    $tipos = "sii";
+    $vals = [$tipo, $excluirId, $numero];
+    if ($fe !== null) {
+        $sql .= " AND factura_electronica = ?";
+        $tipos .= "i";
+        $vals[] = $fe ? 1 : 0;
+    }
+    $st = $c->prepare($sql . " LIMIT 1");
+    $st->bind_param($tipos, ...$vals);
     $st->execute();
     $res = $st->get_result();
     $uso = $res && $res->fetch_assoc();
     $st->close();
     return (bool) $uso;
+}
+
+/* ---------- Numeración automática por clase de documento (las 6 clases de Syscafe) ---------- */
+
+/** clave de Syscafe => [tipo de documento, ¿con factura electrónica?, etiqueta]. Mismos códigos que SYSCAFE_PE_TIPOS. */
+function clasesNumeracionDocumento(): array
+{
+    return [
+        "PE5" => ["pedido",     0, "Pedido de cliente · factura de venta (FV)"],
+        "PE1" => ["pedido",     1, "Pedido de cliente · factura electrónica (FE)"],
+        "RM1" => ["remision",   0, "Remisión · factura de venta (FV)"],
+        "RM2" => ["remision",   1, "Remisión · factura electrónica (FE)"],
+        "CT1" => ["cotizacion", 0, "Cotización · factura de venta (FV)"],
+        "CT2" => ["cotizacion", 1, "Cotización · factura electrónica (FE)"],
+    ];
+}
+
+function claveNumeracionDocumento(string $tipo, $fe): string
+{
+    foreach (clasesNumeracionDocumento() as $clave => $info) {
+        if ($info[0] === tipoDocumentoValido($tipo) && (int) $info[1] === ($fe ? 1 : 0)) {
+            return $clave;
+        }
+    }
+    return "PE5";
+}
+
+/** Crea la tabla de contadores. Es DDL (confirma transacciones): llamarla ANTES de begin_transaction(). */
+function asegurarTablaNumeracion(mysqli $c): void
+{
+    static $listo = false;
+    if ($listo) {
+        return;
+    }
+    $listo = true;
+    $c->query("CREATE TABLE IF NOT EXISTS numeracion_documentos (
+        clave VARCHAR(10) NOT NULL PRIMARY KEY,
+        ultimo BIGINT UNSIGNED NOT NULL DEFAULT 0
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+/** [clave => último número usado]. 0 = sin configurar (el documento usa el número automático de siempre, su id). */
+function ultimosNumerosDocumento(mysqli $c): array
+{
+    asegurarTablaNumeracion($c);
+    $r = [];
+    foreach (clasesNumeracionDocumento() as $clave => $_) {
+        $r[$clave] = 0;
+    }
+    $res = $c->query("SELECT clave, ultimo FROM numeracion_documentos");
+    while ($res && ($f = $res->fetch_assoc())) {
+        if (isset($r[$f["clave"]])) {
+            $r[$f["clave"]] = (int) $f["ultimo"];
+        }
+    }
+    return $r;
+}
+
+/** Guarda lo que escribió el administrador. Vacío o 0 = vuelve al número automático. Devuelve null si todo salió bien, o el mensaje de error. */
+function guardarNumeracionDocumentos(mysqli $c, $valores): ?string
+{
+    asegurarTablaNumeracion($c);
+    $valores = is_array($valores) ? $valores : [];
+    $nuevos = [];
+    foreach (clasesNumeracionDocumento() as $clave => $info) {
+        $v = trim((string) ($valores[$clave] ?? ""));
+        if ($v === "") {
+            $v = "0";
+        }
+        if (!preg_match('/^\d{1,9}$/', $v)) {
+            return "El número de «" . $info[2] . "» solo puede tener dígitos (máximo 9).";
+        }
+        $nuevos[$clave] = (int) $v;
+    }
+    try {
+        $c->begin_transaction();
+        $st = $c->prepare("INSERT INTO numeracion_documentos (clave, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE ultimo = VALUES(ultimo)");
+        foreach ($nuevos as $clave => $n) {
+            $st->bind_param("si", $clave, $n);
+            $st->execute();
+        }
+        $st->close();
+        $c->commit();
+    } catch (Throwable $e) {
+        $c->rollback();
+        return "No se pudo guardar la numeración.";
+    }
+    return null;
+}
+
+/** ¿Esta clase de documento tiene numeración automática configurada? */
+function contadorNumeracionActivo(mysqli $c, string $tipo, $fe): bool
+{
+    asegurarTablaNumeracion($c);
+    $clave = claveNumeracionDocumento($tipo, $fe);
+    $st = $c->prepare("SELECT ultimo FROM numeracion_documentos WHERE clave = ? LIMIT 1");
+    $st->bind_param("s", $clave);
+    $st->execute();
+    $f = $st->get_result()->fetch_assoc();
+    $st->close();
+    return $f && (int) $f["ultimo"] > 0;
+}
+
+/**
+ * Toma el siguiente número de la clase (último + 1) y lo deja guardado. Llamar DENTRO de la transacción del pedido:
+ * así el número queda bloqueado hasta guardar y, si el pedido falla, no se gasta. Salta los números que ya estén en uso.
+ */
+function siguienteNumeroDocumento(mysqli $c, string $tipo, $fe, int $excluirId): ?int
+{
+    $clave = claveNumeracionDocumento($tipo, $fe);
+    for ($i = 0; $i < 500; $i++) {
+        $st = $c->prepare("UPDATE numeracion_documentos SET ultimo = LAST_INSERT_ID(ultimo + 1) WHERE clave = ? AND ultimo > 0");
+        $st->bind_param("s", $clave);
+        $st->execute();
+        $filas = $st->affected_rows;
+        $st->close();
+        if ($filas < 1) {
+            return null;
+        }
+        $n = (int) $c->insert_id;
+        if ($n > 0 && !numeroDocumentoEnUso($c, tipoDocumentoValido($tipo), $n, $excluirId, $fe ? 1 : 0)) {
+            return $n;
+        }
+    }
+    return null;
 }
 
 function etiquetaDocumento(string $tipoPersona): string
