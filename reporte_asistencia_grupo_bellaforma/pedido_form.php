@@ -598,7 +598,9 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 
     /* ---------- Comprobante de pago (solo «Anticipado») ---------- */
     var COMP = { hay: !!CFG.tieneComprobante, v: 0, subiendo: false };
-    function compUrl() { return "pedido_comprobante.php?id=" + encodeURIComponent(S.pedidoId) + "&v=" + COMP.v; }
+    // Va por la misma API con la que se guarda el pedido (el administrador usa pedido_api.php)
+    var COMP_API = CFG.rol === "admin" ? "pedido_api.php" : CFG.api;
+    function compUrl() { return COMP_API + (COMP_API.indexOf("?") === -1 ? "?" : "&") + "comprobante=" + encodeURIComponent(S.pedidoId) + "&v=" + COMP.v; }
     function compNota(texto, error) {
         var n = $("pfCompNota");
         n.textContent = texto || "La oficina verá esta foto junto al pedido en «Pedidos para despachar».";
@@ -652,12 +654,12 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         });
     }
     function llamarComprobante(fd) {
-        return fetch("pedido_comprobante.php", { method: "POST", body: fd, credentials: "same-origin" }).then(function (r) {
+        return fetch(COMP_API, { method: "POST", body: fd, credentials: "same-origin" }).then(function (r) {
             return r.text().then(function (t) {
                 try { return JSON.parse(t); } catch (e) {
                     var ini = (t || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
                     var aviso = /login/i.test(r.url) || /<form[^>]+login|iniciar sesi/i.test(t || "")
-                        ? " Parece que el archivo pedido_comprobante.php no está subido al servidor." : "";
+                        ? " Parece que el servidor no encontró el archivo " + COMP_API + "." : "";
                     return { ok: false, error: "El servidor no respondió bien (código " + r.status + ")." + aviso + (ini ? " Respuesta: " + ini : "") };
                 }
             });
@@ -671,7 +673,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         pedidoGuardado(0).then(function (id) {
             return reducirImagen(archivo).then(function (blob) {
                 var fd = new FormData();
-                fd.append("op", "subir"); fd.append("pedido_id", id);
+                fd.append("op_comprobante", "subir"); fd.append("pedido_id", id);
                 fd.append("csrf", CFG.csrf); fd.append("rol", CFG.rol);
                 fd.append("imagen", blob, "comprobante.jpg");
                 return llamarComprobante(fd);
@@ -694,7 +696,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     function quitarComprobante() {
         if (!S.pedidoId) { COMP.hay = false; pintarComprobante(); return; }
         var fd = new FormData();
-        fd.append("op", "quitar"); fd.append("pedido_id", S.pedidoId);
+        fd.append("op_comprobante", "quitar"); fd.append("pedido_id", S.pedidoId);
         fd.append("csrf", CFG.csrf); fd.append("rol", CFG.rol);
         llamarComprobante(fd).then(function (j) {
             if (!j.ok) { throw new Error(j.error || "No se pudo quitar el comprobante."); }
