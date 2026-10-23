@@ -14,6 +14,7 @@ require_once "conexion.php";
 require_once "vendedores_db.php";
 asegurarTablasVendedores($conexion);
 require_once __DIR__ . "/admin_permisos.php";
+require_once __DIR__ . "/cobros_lib.php";
 if (adminEsPrincipal() && empty($_SESSION["admin_cols_ok"])) {
     adminAsegurarColumnas($conexion);
     $_SESSION["admin_cols_ok"] = 1;
@@ -127,6 +128,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     // Vendedores / productos al por mayor / pedidos
     require __DIR__ . "/admin_acciones_vendedores.php";
+    // Pedidos por cobrar (cob_cobrado / cob_reabrir)
+    require __DIR__ . "/admin_acciones_cobros.php";
     // Subadministradores (solo el administrador principal)
     require __DIR__ . "/admin_acciones_subadmins.php";
 
@@ -438,6 +441,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $stmt->close();
         redireccionar("Registro de asistencia actualizado correctamente.", "exito", "historial");
+    }
+}
+
+// Pedidos por cobrar: cuántos faltan y cuántos comprobantes nuevos hay (menú y campanita)
+$cobNavPend = 0;
+$cobNavNuevos = 0;
+if (adminPuede("por_cobrar")) {
+    try {
+        $cobNavPend = cobroContarPorCobrar($conexion);
+        $cobNavNuevos = cobroContarNuevos($conexion);
+    } catch (Throwable $e) {
+        // si algo falla, el panel sigue funcionando sin el aviso
     }
 }
 
@@ -1082,6 +1097,13 @@ $resultadoEmpleados =
         .color-retraso, .retraso { color: #dc3545 !important; font-weight: bold; }
         .color-extra, .extra { color: #d39e00 !important; font-weight: bold; }
         .color-deuda { color: #007bff !important; font-weight: bold; }
+        .campana-cobros { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; color: #fff; background: linear-gradient(135deg, #33B540 0%, #1D6821 100%); border-radius: 999px; font-size: 12.5px; font-weight: 700; text-decoration: none; box-shadow: 0 6px 16px -8px rgba(29, 104, 33, .9); animation: campana-cobros-pulso 2s ease-in-out infinite; }
+        .campana-cobros[hidden] { display: none; }
+        .campana-cobros .ico { width: 16px; height: 16px; }
+        @keyframes campana-cobros-pulso { 0%, 100% { box-shadow: 0 6px 16px -8px rgba(29, 104, 33, .9), 0 0 0 0 rgba(51, 181, 64, .5); } 50% { box-shadow: 0 6px 16px -8px rgba(29, 104, 33, .9), 0 0 0 8px rgba(51, 181, 64, 0); } }
+        .nav-badge-cobrar { margin-left: auto; min-width: 22px; padding: 1px 7px; border-radius: 999px; background: #C62839; color: #fff; font-size: 11px; font-weight: 800; text-align: center; }
+        .nav-badge-cobrar[hidden] { display: none; }
+        .toast-cobros { position: fixed; right: 20px; bottom: 20px; z-index: 10060; max-width: 340px; padding: 14px 18px; border-radius: 12px; background: #1D6821; color: #fff; font-weight: 600; font-size: 14px; box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .5); cursor: pointer; }
     </style>
 
 </head>
@@ -1208,6 +1230,16 @@ $resultadoEmpleados =
             </a>
             <?php endif; ?>
 
+            <?php if (adminPuede("por_cobrar")): ?>
+            <a
+                href="#por_cobrar"
+                class="nav-item"
+            >
+                <svg class="ico" aria-hidden="true"><use href="#i-wallet"/></svg> Pedidos por cobrar
+                <span id="navBadgeCobrar" class="nav-badge-cobrar" <?= $cobNavPend > 0 ? "" : "hidden" ?>><?= (int) $cobNavPend ?></span>
+            </a>
+            <?php endif; ?>
+
             <?php if (adminPuede("despachos")): ?>
             <a
                 href="#despachos"
@@ -1286,6 +1318,13 @@ $resultadoEmpleados =
             </h1>
 
             <div class="header-info">
+
+                <?php if (adminPuede("por_cobrar")): ?>
+                <a href="#por_cobrar" id="campanaCobros" class="campana-cobros" <?= $cobNavNuevos > 0 ? "" : "hidden" ?> title="Un ejecutivo subió un comprobante de pago">
+                    <svg class="ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                    <span id="campanaCobrosTxt"><?= (int) $cobNavNuevos ?> <?= $cobNavNuevos === 1 ? "comprobante nuevo" : "comprobantes nuevos" ?></span>
+                </a>
+                <?php endif; ?>
 
                 <span>
                     <svg class="ico" aria-hidden="true"><use href="#i-user"/></svg>
@@ -2682,6 +2721,7 @@ $resultadoEmpleados =
             <?php
             if (adminPuede("vendedores")) { include __DIR__ . "/admin_seccion_vendedores.php"; }
             if (adminPuede("pedidos")) { include __DIR__ . "/admin_seccion_pedidos.php"; }
+            if (adminPuede("por_cobrar")) { include __DIR__ . "/admin_seccion_cobrar.php"; }
             if (adminPuede("despachos")) { include __DIR__ . "/admin_seccion_despachos.php"; }
             if (adminPuede("pedidos_despachar")) { include __DIR__ . "/admin_seccion_pedidos_despachar.php"; }
             if (adminPuede("productos")) { include __DIR__ . "/admin_seccion_productos.php"; }
@@ -3688,6 +3728,60 @@ $resultadoEmpleados =
     setInterval(pintar, 1000);
 })();
 </script>
+<?php if (adminPuede("por_cobrar")): ?>
+<script>
+/* Campanita de «Pedidos por cobrar»: avisa cuando un ejecutivo sube un comprobante de pago (se revisa sola cada 45 s) */
+(function () {
+    var campana = document.getElementById("campanaCobros");
+    var txt = document.getElementById("campanaCobrosTxt");
+    var badge = document.getElementById("navBadgeCobrar");
+    var ultimo = <?= (int) $cobNavNuevos ?>;
+
+    function pintarCampana(n) {
+        n = parseInt(n, 10) || 0;
+        if (campana) {
+            campana.hidden = n < 1;
+            if (txt) { txt.textContent = n + (n === 1 ? " comprobante nuevo" : " comprobantes nuevos"); }
+        }
+        ultimo = n;
+    }
+    window.bfActualizarCampanaCobros = pintarCampana;
+
+    if (campana) {
+        campana.addEventListener("click", function () {
+            if (typeof mostrarSeccion === "function") { mostrarSeccion("por_cobrar"); }
+            document.querySelectorAll(".nav-item").forEach(function (i) { i.classList.remove("active"); });
+            var nav = document.querySelector('.nav-item[href="#por_cobrar"]');
+            if (nav) { nav.classList.add("active"); }
+            window.scrollTo(0, 0);
+        });
+    }
+
+    function aviso(n) {
+        var t = document.createElement("div");
+        t.className = "toast-cobros";
+        t.textContent = n === 1 ? "Un ejecutivo subió un comprobante de pago." : n + " comprobantes de pago nuevos.";
+        t.addEventListener("click", function () { window.location.hash = "#por_cobrar"; window.location.reload(); });
+        document.body.appendChild(t);
+        setTimeout(function () { t.remove(); }, 8000);
+    }
+
+    function revisar() {
+        if (document.hidden) { return; }
+        fetch("cobro_comprobante.php?op=estado&t=" + Date.now(), { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                if (!j || !j.ok) { return; }
+                if (j.nuevos > ultimo) { aviso(j.nuevos); }
+                pintarCampana(j.nuevos);
+                if (badge) { badge.textContent = j.por_cobrar; badge.hidden = j.por_cobrar < 1; }
+            }).catch(function () {});
+    }
+    setInterval(revisar, 45000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { revisar(); } });
+})();
+</script>
+<?php endif; ?>
 </body>
 
 </html>
