@@ -7,7 +7,7 @@
 $accionesPropias = [
     "vend_crear", "vend_editar", "vend_estado", "vend_descargas",
     "prod_crear", "prod_editar", "prod_estado", "prod_eliminar",
-    "ped_estado", "ped_eliminar", "ped_numero",
+    "ped_estado", "ped_eliminar", "ped_numero", "ped_numeracion",
     "desp_campo", "desp_guardar", "desp_eliminar", "desp_mover",
     "cli_guardar", "cli_estado", "cli_importar",
     "prod_importar",
@@ -293,7 +293,7 @@ if ($accion === "ped_numero") {
     }
     if ($filaDoc["estado"] !== "borrador") {
         $revisar = $numNuevo !== "" ? (int) $numNuevo : (int) $filaDoc["id"];
-        if (numeroDocumentoEnUso($conexion, $tipoNuevo, $revisar, (int) $filaDoc["id"])) {
+        if (numeroDocumentoEnUso($conexion, $tipoNuevo, $revisar, (int) $filaDoc["id"], !empty($filaDoc["factura_electronica"]) ? 1 : 0)) {
             redireccionar("El número " . ($numNuevo !== "" ? $numNuevo : numeroPedido($revisar)) . " ya está en uso por otra " . $nombreNuevo . ". Escriba uno distinto.", "error", "pedidos");
         }
     }
@@ -305,6 +305,15 @@ if ($accion === "ped_numero") {
     $filaDoc["tipo_pedido"] = $tipoNuevo;
     $filaDoc["numero_pedido"] = $valorNum;
     redireccionar(tituloDocumento($filaDoc) . " actualizado.", "exito", "pedidos");
+}
+
+if ($accion === "ped_numeracion") {
+    // Último número usado de cada una de las 6 clases (PE5, PE1, RM1, RM2, CT1, CT2). El siguiente documento enviado toma último + 1.
+    $errorNum = guardarNumeracionDocumentos($conexion, $_POST["num"] ?? []);
+    if ($errorNum !== null) {
+        redireccionar($errorNum, "error", "pedidos");
+    }
+    redireccionar("Numeración guardada. Los próximos documentos seguirán desde ahí.", "exito", "pedidos");
 }
 
 if ($accion === "ped_eliminar") {
