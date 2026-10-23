@@ -244,41 +244,41 @@ $qsCobro = (string) ($_SERVER["QUERY_STRING"] ?? "");
         visor.addEventListener("click", function (e) { if (e.target === visor) { cerrar(); } });
         document.addEventListener("keydown", function (e) { if (e.key === "Escape") { cerrar(); } });
 
-        document.querySelectorAll(".cb-comp").forEach(function (b) {
-            b.addEventListener("click", function () {
-                var id = b.dataset.id;
-                var url = "cobro_comprobante.php?id=" + encodeURIComponent(id) + "&t=" + Date.now();
-                var cuerpo = document.getElementById("cbVisorCuerpo");
-                cuerpo.innerHTML = "";
-                var el;
-                if ((b.dataset.mime || "").indexOf("pdf") !== -1) {
-                    el = document.createElement("iframe");
-                } else {
-                    el = document.createElement("img");
-                    el.alt = "Comprobante de pago";
-                }
-                el.src = url;
-                cuerpo.appendChild(el);
-                document.getElementById("cbVisorTitulo").textContent = "Comprobante de pago · " + (b.dataset.titulo || "");
-                document.getElementById("cbVisorBajar").href = "cobro_comprobante.php?id=" + encodeURIComponent(id) + "&descargar=1";
-                visor.classList.add("abierto");
+        // Abre el comprobante (también lo usa la campanita del encabezado). Al abrirlo queda como leído.
+        function abrir(id, mime, titulo) {
+            var url = "cobro_comprobante.php?id=" + encodeURIComponent(id) + "&t=" + Date.now();
+            var cuerpo = document.getElementById("cbVisorCuerpo");
+            cuerpo.innerHTML = "";
+            var el;
+            if ((mime || "").indexOf("pdf") !== -1) {
+                el = document.createElement("iframe");
+            } else {
+                el = document.createElement("img");
+                el.alt = "Comprobante de pago";
+            }
+            el.src = url;
+            cuerpo.appendChild(el);
+            document.getElementById("cbVisorTitulo").textContent = "Comprobante de pago · " + (titulo || "");
+            document.getElementById("cbVisorBajar").href = "cobro_comprobante.php?id=" + encodeURIComponent(id) + "&descargar=1";
+            visor.classList.add("abierto");
 
-                // Al abrirlo se considera visto: se quita la etiqueta NUEVO y baja la campanita
-                var marca = document.getElementById("cb-nuevo-" + id);
-                if (marca) {
-                    var fd = new FormData();
-                    fd.append("op", "visto");
-                    fd.append("pedido_id", id);
-                    fetch("cobro_comprobante.php", { method: "POST", body: fd, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
-                        .then(function (r) { return r.json(); })
-                        .then(function (j) {
-                            if (j && j.ok) {
-                                marca.remove();
-                                if (window.bfActualizarCampanaCobros) { window.bfActualizarCampanaCobros(j.nuevos); }
-                            }
-                        }).catch(function () {});
-                }
-            });
+            var fd = new FormData();
+            fd.append("op", "visto");
+            fd.append("pedido_id", id);
+            fetch("cobro_comprobante.php", { method: "POST", body: fd, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    if (j && j.ok) {
+                        var marca = document.getElementById("cb-nuevo-" + id);
+                        if (marca) { marca.remove(); }
+                        if (window.bfActualizarCampanaCobros) { window.bfActualizarCampanaCobros(j.nuevos, j.lista); }
+                    }
+                }).catch(function () {});
+        }
+        window.cbAbrirVisor = abrir;
+
+        document.querySelectorAll(".cb-comp").forEach(function (b) {
+            b.addEventListener("click", function () { abrir(b.dataset.id, b.dataset.mime, b.dataset.titulo); });
         });
     })();
 </script>
