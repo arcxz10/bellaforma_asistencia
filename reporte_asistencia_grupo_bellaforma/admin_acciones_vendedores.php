@@ -8,7 +8,7 @@ $accionesPropias = [
     "vend_crear", "vend_editar", "vend_estado", "vend_descargas",
     "prod_crear", "prod_editar", "prod_estado", "prod_eliminar",
     "ped_estado", "ped_eliminar", "ped_numero", "ped_numeracion",
-    "desp_campo", "desp_guardar", "desp_eliminar", "desp_mover",
+    "desp_campo", "desp_numeracion", "desp_guardar", "desp_eliminar", "desp_mover",
     "cli_guardar", "cli_estado", "cli_importar",
     "prod_importar",
 ];
@@ -361,6 +361,15 @@ function irADespachos(string $mensaje, string $tipo, string $fecha): void
     $q = fechaDespachoValida($fecha) ? "?fecha_d=" . $fecha : "";
     header("Location: admin.php" . $q . "#despachos");
     exit;
+}
+
+if ($accion === "desp_numeracion") {
+    // Último # de factura usado (FV = PE5, FE = PE1). El siguiente pedido enviado entra al Control de despachos con último + 1.
+    $errorFact = guardarNumeracionFacturas($conexion, $_POST["fact"] ?? []);
+    if ($errorFact !== null) {
+        redireccionar($errorFact, "error", "despachos");
+    }
+    redireccionar("Numeración de facturas guardada. Los próximos pedidos seguirán desde ahí.", "exito", "despachos");
 }
 
 if ($accion === "desp_campo") {
