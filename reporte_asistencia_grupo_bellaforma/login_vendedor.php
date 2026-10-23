@@ -82,13 +82,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 <form method="POST" action="login_vendedor.php" class="form-login">
 
                     <div class="form-group">
-                        <label for="usuario">👤 Usuario</label>
+                        <label for="usuario"><svg viewBox="0 0 24 24" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-.2em;margin-right:.4em"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Usuario</label>
                         <input type="text" id="usuario" name="usuario" placeholder="Ingrese su usuario"
                             autocomplete="username" value="<?= e($usuarioIngresado) ?>" required>
                     </div>
 
                     <div class="form-group">
-                        <label for="password">🔒 Contraseña</label>
+                        <label for="password"><svg viewBox="0 0 24 24" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-.2em;margin-right:.4em"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Contraseña</label>
                         <div class="campo-password">
                         <input type="password" id="password" name="password" placeholder="Ingrese su contraseña" autocomplete="current-password" required>
                         <button type="button" class="btn-ojo" id="btnOjo" aria-label="Mostrar contraseña" aria-pressed="false" title="Mostrar contraseña">
@@ -134,4 +134,3 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 </body>
 
 </html>
-
