@@ -164,6 +164,7 @@ if ($accion === "prod_crear" || $accion === "prod_editar") {
     $nombre = trim($_POST["nombre"] ?? "");
     $precioMay = parsearPrecio((string) ($_POST["precio_mayorista"] ?? ""));
     $precioDet = parsearPrecio((string) ($_POST["precio_detal"] ?? ""));
+    $esServicio = !empty($_POST["es_servicio"]) ? 1 : 0;   // servicio (ej. FLETE 001): en Syscafe va como servicio, no como referencia
 
     if ($referencia === "" || $nombre === "" || ($precioMay <= 0 && $precioDet <= 0)) {
         redireccionar("Complete referencia, nombre y al menos un precio (mayorista o detal) mayor a 0.", "error", $seccionProd);
@@ -172,15 +173,15 @@ if ($accion === "prod_crear" || $accion === "prod_editar") {
     try {
         if ($accion === "prod_crear") {
             // la columna "precio" se mantiene igual al precio mayorista (compatibilidad)
-            $stmt = $conexion->prepare("INSERT INTO productos_mayoristas (referencia, nombre, precio, precio_mayorista, precio_detal) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("ssddd", $referencia, $nombre, $precioMay, $precioMay, $precioDet);
+            $stmt = $conexion->prepare("INSERT INTO productos_mayoristas (referencia, nombre, precio, precio_mayorista, precio_detal, es_servicio) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("ssdddi", $referencia, $nombre, $precioMay, $precioMay, $precioDet, $esServicio);
             $stmt->execute();
             $id = (int) $conexion->insert_id;
             $stmt->close();
             $msg = "Producto agregado: " . $referencia;
         } else {
-            $stmt = $conexion->prepare("UPDATE productos_mayoristas SET referencia = ?, nombre = ?, precio = ?, precio_mayorista = ?, precio_detal = ? WHERE id = ?");
-            $stmt->bind_param("ssdddi", $referencia, $nombre, $precioMay, $precioMay, $precioDet, $id);
+            $stmt = $conexion->prepare("UPDATE productos_mayoristas SET referencia = ?, nombre = ?, precio = ?, precio_mayorista = ?, precio_detal = ?, es_servicio = ? WHERE id = ?");
+            $stmt->bind_param("ssdddii", $referencia, $nombre, $precioMay, $precioMay, $precioDet, $esServicio, $id);
             $stmt->execute();
             $stmt->close();
             $msg = "Producto actualizado.";
