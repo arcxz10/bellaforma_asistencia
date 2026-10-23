@@ -5,6 +5,7 @@ if (!isset($_SESSION["admin_id"])) {
     header("Location: login.html");
     exit;
 }
+require_once __DIR__ . "/conexion.php";   // aplica los permisos de subadministradores
 ?>
 <!DOCTYPE html>
 <html lang="es">
