@@ -25,6 +25,7 @@ function adminModulos(): array
         "materiales"        => ["Materiales", "materiales"],
         "vendedores"        => ["Ejecutivos de negocios", "vendedores"],
         "pedidos"           => ["Pedidos de ejecutivos", "pedidos"],
+        "por_cobrar"        => ["Pedidos por cobrar", "por_cobrar"],
         "despachos"         => ["Control de despachos", "despachos"],
         "pedidos_despachar" => ["Pedidos para despachar", "pedidos_despachar"],
         "productos"         => ["Productos", "productos_mayoristas"],
@@ -189,6 +190,9 @@ function adminModulosDeAccion(string $accion): ?array
     if (strpos($accion, "ped_") === 0) {
         return ["pedidos"];
     }
+    if (strpos($accion, "cob_") === 0) {
+        return ["por_cobrar"];
+    }
     if (strpos($accion, "desp_") === 0) {
         return ["despachos", "pedidos_despachar"];
     }
@@ -220,6 +224,7 @@ function adminMapaScripts(): array
         "pedido_syscafe"            => $pedidos,
         "pedido_api"                => $pedidos,
         "pedido_comprobante"        => $pedidos,
+        "cobro_comprobante"         => ["por_cobrar"],
         "admin_pedido_editar"       => ["pedidos"],
         "productos_plantilla"       => ["productos"],
         "clientes_plantilla"        => ["clientes"],
@@ -291,7 +296,7 @@ function adminGuardia(mysqli $c): void
         return;
     }
     // Las pantallas de pedidos también las usan los ejecutivos con su propia sesión
-    if (in_array($script, ["pedido_api", "pedido_comprobante"], true) && !empty($_SESSION["vendedor_id"])) {
+    if (in_array($script, ["pedido_api", "pedido_comprobante", "cobro_comprobante"], true) && !empty($_SESSION["vendedor_id"])) {
         return;
     }
     if (!adminPuedeAlguno($mapa[$script])) {
