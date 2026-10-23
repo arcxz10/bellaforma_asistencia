@@ -22,8 +22,23 @@ if ($usuario === "" || $password === "") {
     exit;
 }
 
-$sql = "SELECT id, usuario, contraseña, activo FROM administradores WHERE usuario = ? AND activo = 1 LIMIT 1";
-$stmt = $conexion->prepare($sql);
+require_once __DIR__ . "/admin_permisos.php";
+adminAsegurarColumnas($conexion);
+
+// Con rol y permisos (subadministradores). Si por alguna razón esas columnas no existen, se usa la consulta de siempre.
+$stmt = false;
+try {
+    $stmt = $conexion->prepare("SELECT id, usuario, contraseña, activo, rol, permisos FROM administradores WHERE usuario = ? AND activo = 1 LIMIT 1");
+} catch (Throwable $e) {
+    $stmt = false;
+}
+if (!$stmt) {
+    try {
+        $stmt = $conexion->prepare("SELECT id, usuario, contraseña, activo FROM administradores WHERE usuario = ? AND activo = 1 LIMIT 1");
+    } catch (Throwable $e) {
+        $stmt = false;
+    }
+}
 
 if (!$stmt) {
     header("Location: login.html?error=sistema");
@@ -72,6 +87,8 @@ session_regenerate_id(true);
 $_SESSION["admin_id"] = (int) $administrador["id"];
 $_SESSION["admin_usuario"] = $administrador["usuario"];
 $_SESSION["tipo_sesion"] = "admin";
+$_SESSION["admin_rol"] = (($administrador["rol"] ?? "admin") === "sub") ? "sub" : "admin";
+$_SESSION["admin_permisos"] = $_SESSION["admin_rol"] === "sub" ? adminPermisosDesdeTexto($administrador["permisos"] ?? "") : [];
 
 $conexion->close();
 header("Location: admin.php");
