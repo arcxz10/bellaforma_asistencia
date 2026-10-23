@@ -250,6 +250,14 @@ body.pf-kb .pf-barra { display: none; }
 .pf-bonif-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pf-bonif-info b { color: #8A5A00; font-size: 14px; }
 .pf-bonif-info span { font-size: 12.5px; color: var(--tinta-suave); }
+.pf-bonif-info button.pf-docena {
+    align-self: flex-start; margin-top: 4px; height: 32px; padding: 0 12px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 700; white-space: nowrap; cursor: pointer;
+    background: #fff; border: 1.5px solid #E6B84A; color: #8A5A00;
+}
+.pf-bonif-info button.pf-docena:active { background: #FFF1CC; }
+.pf-bonif-info button.pf-docena.activo { background: #F5A623; border-color: #E08E00; color: #fff; }
+.pf-step button:disabled, .pf-step input:disabled { opacity: .45; cursor: not-allowed; }
 .pf-step input.cantb { width: 56px !important; min-height: 44px !important; padding: 4px !important; text-align: center; font-weight: 700; -moz-appearance: textfield; }
 .pf-step input.cantb::-webkit-outer-spin-button, .pf-step input.cantb::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .pf-tag-bonif { display: inline-block; background: #FFF1CC; color: #8A5A00; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; margin-left: 6px; vertical-align: middle; }
