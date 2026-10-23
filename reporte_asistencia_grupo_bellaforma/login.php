@@ -90,6 +90,12 @@ $_SESSION["tipo_sesion"] = "admin";
 $_SESSION["admin_rol"] = (($administrador["rol"] ?? "admin") === "sub") ? "sub" : "admin";
 $_SESSION["admin_permisos"] = $_SESSION["admin_rol"] === "sub" ? adminPermisosDesdeTexto($administrador["permisos"] ?? "") : [];
 
+// Los ingresos de los subadministradores quedan en «Movimientos subadministradores»
+if ($_SESSION["admin_rol"] === "sub") {
+    require_once __DIR__ . "/admin_movimientos_lib.php";
+    movSubRegistrar($conexion, "login", "Inició sesión en el panel");
+}
+
 $conexion->close();
 header("Location: admin.php");
 exit;
