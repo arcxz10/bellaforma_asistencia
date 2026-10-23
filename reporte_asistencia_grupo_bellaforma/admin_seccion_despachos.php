@@ -3,6 +3,7 @@
 require_once __DIR__ . "/despachos_lib.php";
 
 $hoyDesp = date("Y-m-d");
+$ultimosFactura = ultimosNumerosFactura($conexion);
 $fechaDesp = (string) ($_GET["fecha_d"] ?? $hoyDesp);
 if (!fechaDespachoValida($fechaDesp)) {
     $fechaDesp = $hoyDesp;
@@ -113,6 +114,37 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
         </div>
         <button type="button" class="btn-nuevo" onclick="abrirDespacho(null)">+ Agregar despacho</button>
     </div>
+
+    <!-- NUMERACIÓN AUTOMÁTICA DEL # DE FACTURA -->
+    <details style="background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:14px 18px; margin:0 0 16px;">
+        <summary style="cursor:pointer; font-weight:700; font-size:15px;">🔢 Numeración automática del # de factura</summary>
+        <form method="POST" action="admin.php" style="margin-top:14px;">
+            <input type="hidden" name="accion" value="desp_numeracion">
+            <p style="margin:0 0 12px; font-size:13px; color:#667;">Escriba el <b>último número de factura que ya usó</b>. Cada pedido de cliente que envíen los ejecutivos entra aquí con su factura: <b>FV-número</b> si es PE5 (sin factura electrónica) o <b>FE-número</b> si es PE1 (con factura electrónica), y el número sigue solo (ej.: escribe 7814 y el próximo será FV-7815). Las remisiones y cotizaciones no se tocan. Vacío = la factura queda en blanco para escribirla a mano. Después puede corregir cualquier factura en la tabla.</p>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+                <?php foreach (prefijosFacturaDespacho() as $prefF => $etiqF): $ultF = (int) ($ultimosFactura[$prefF] ?? 0); ?>
+                    <div>
+                        <label for="fact_<?= $prefF ?>" style="display:block; font-weight:600; font-size:13px; margin-bottom:4px;"><?= escapar($etiqF) ?></label>
+                        <input type="text" name="fact[<?= $prefF ?>]" id="fact_<?= $prefF ?>" inputmode="numeric" pattern="[0-9]*" maxlength="9" autocomplete="off"
+                               value="<?= $ultF > 0 ? $ultF : "" ?>" placeholder="Sin numeración" data-prox="proxf_<?= $prefF ?>" data-pref="<?= $prefF ?>"
+                               style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                        <small id="proxf_<?= $prefF ?>" style="color:#0D47A1;"><?= $ultF > 0 ? "Próxima: " . $prefF . "-" . ($ultF + 1) : "" ?></small>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+                <button type="submit" class="btn-nuevo">Guardar numeración</button>
+            </div>
+        </form>
+        <script>
+            document.querySelectorAll("input[data-pref]").forEach(function (inp) {
+                inp.addEventListener("input", function () {
+                    var n = parseInt(inp.value, 10);
+                    document.getElementById(inp.dataset.prox).textContent = n > 0 ? "Próxima: " + inp.dataset.pref + "-" + (n + 1) : "";
+                });
+            });
+        </script>
+    </details>
 
     <?php if ($errorDesp !== ""): ?>
         <div class="mensaje error"><?= escapar($errorDesp) ?></div>
