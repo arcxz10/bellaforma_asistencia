@@ -661,12 +661,156 @@ function api_responder(array $d, int $codigo = 200): void
     exit;
 }
 
+/* ---------- Comprobante de pago (pedidos «Anticipado») ----------
+ * Se sube y se ve a través de esta misma API del formulario:
+ *   POST (multipart)  op_comprobante=subir|quitar  pedido_id  csrf  rol  [imagen]
+ *   GET   ?comprobante=ID  (&descargar=1)  -> la imagen
+ * Pueden: el administrador (cualquier pedido) y el ejecutivo dueño del pedido mientras no esté subido a Syscafe ni anulado.
+ */
+function entregarComprobante(mysqli $c, int $id): void
+{
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    $texto = function (string $t, int $codigo): void {
+        http_response_code($codigo);
+        header("Content-Type: text/plain; charset=utf-8");
+        exit($t);
+    };
+    try {
+        asegurarTablasVendedores($c);
+        asegurarTablaComprobantes($c);
+        $adminId = (int) ($_SESSION["admin_id"] ?? 0);
+        $vendId = (int) ($_SESSION["vendedor_id"] ?? 0);
+        $st = $c->prepare("SELECT vendedor_id FROM pedidos_vendedores WHERE id = ? LIMIT 1");
+        $st->bind_param("i", $id);
+        $st->execute();
+        $ped = $st->get_result()->fetch_assoc();
+        $st->close();
+        if (!$ped) {
+            $texto("No encontrado.", 404);
+        }
+        if ($adminId <= 0 && !($vendId > 0 && (int) $ped["vendedor_id"] === $vendId)) {
+            $texto("Sin permiso.", 403);
+        }
+        $st = $c->prepare("SELECT mime, datos FROM pedido_comprobantes WHERE pedido_id = ?");
+        $st->bind_param("i", $id);
+        $st->execute();
+        $st->bind_result($mime, $datos);
+        $hay = $st->fetch();
+        $st->close();
+        if (!$hay) {
+            $texto("No encontrado.", 404);
+        }
+        header("Content-Type: " . $mime);
+        header("Content-Length: " . strlen($datos));
+        header("Cache-Control: private, max-age=86400");
+        header("X-Content-Type-Options: nosniff");
+        if (!empty($_GET["descargar"])) {
+            $ext = $mime === "image/png" ? ".png" : ($mime === "image/webp" ? ".webp" : ".jpg");
+            header('Content-Disposition: attachment; filename="comprobante_pedido_' . $id . $ext . '"');
+        }
+        echo $datos;
+        exit;
+    } catch (Throwable $e) {
+        $texto("Error del servidor.", 500);
+    }
+}
+
+function operarComprobante(mysqli $c): void
+{
+    $op = (string) ($_POST["op_comprobante"] ?? "");
+    $id = (int) ($_POST["pedido_id"] ?? 0);
+    $rol = (($_POST["rol"] ?? "") === "admin") ? "admin" : "vendedor";
+
+    if (empty($_SESSION["csrf_pedido"]) || !hash_equals($_SESSION["csrf_pedido"], (string) ($_POST["csrf"] ?? ""))) {
+        api_responder(["ok" => false, "error" => "La sesión expiró. Recargue la página."], 403);
+    }
+    $vendId = (int) ($_SESSION["vendedor_id"] ?? 0);
+    if ($rol === "admin" && empty($_SESSION["admin_id"])) {
+        api_responder(["ok" => false, "error" => "Sesión de administrador no válida."], 401);
+    }
+    if ($rol === "vendedor" && $vendId <= 0) {
+        api_responder(["ok" => false, "error" => "Sesión no válida. Ingrese de nuevo."], 401);
+    }
+
+    try {
+        asegurarTablasVendedores($c);
+        asegurarTablaComprobantes($c);
+
+        $st = $c->prepare("SELECT vendedor_id, estado FROM pedidos_vendedores WHERE id = ? LIMIT 1");
+        $st->bind_param("i", $id);
+        $st->execute();
+        $ped = $id > 0 ? $st->get_result()->fetch_assoc() : null;
+        $st->close();
+        if (!$ped) {
+            api_responder(["ok" => false, "error" => "No se encontró el pedido."], 404);
+        }
+        if ($rol === "vendedor") {
+            if ((int) $ped["vendedor_id"] !== $vendId) {
+                api_responder(["ok" => false, "error" => "Este pedido no te pertenece."], 403);
+            }
+            if (in_array($ped["estado"], ["procesado", "anulado"], true)) {
+                api_responder(["ok" => false, "error" => "Este pedido ya no se puede modificar."], 422);
+            }
+        }
+
+        if ($op === "quitar") {
+            borrarComprobanteDePedido($c, $id);
+            api_responder(["ok" => true]);
+        }
+        if ($op !== "subir") {
+            api_responder(["ok" => false, "error" => "Operación no válida."], 400);
+        }
+
+        $f = $_FILES["imagen"] ?? null;
+        if (!$f || ($f["error"] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $msg = (($f["error"] ?? 0) === UPLOAD_ERR_INI_SIZE || ($f["error"] ?? 0) === UPLOAD_ERR_FORM_SIZE)
+                ? "La imagen es muy pesada."
+                : "No llegó la imagen. Intente de nuevo.";
+            api_responder(["ok" => false, "error" => $msg], 422);
+        }
+        if ((int) $f["size"] > 6 * 1024 * 1024) {
+            api_responder(["ok" => false, "error" => "La imagen es muy pesada (máximo 6 MB)."], 422);
+        }
+        $bin = file_get_contents($f["tmp_name"]);
+        $info = $bin !== false ? @getimagesizefromstring($bin) : false;
+        $tiposOk = [IMAGETYPE_JPEG => "image/jpeg", IMAGETYPE_PNG => "image/png"];
+        if (defined("IMAGETYPE_WEBP")) {
+            $tiposOk[IMAGETYPE_WEBP] = "image/webp";
+        }
+        if (!$info || !isset($tiposOk[$info[2]])) {
+            api_responder(["ok" => false, "error" => "Solo se aceptan imágenes JPG, PNG o WEBP."], 422);
+        }
+        $mime = $tiposOk[$info[2]];
+
+        $st = $c->prepare("REPLACE INTO pedido_comprobantes (pedido_id, mime, datos) VALUES (?, ?, ?)");
+        $nulo = null;
+        $st->bind_param("isb", $id, $mime, $nulo);
+        $st->send_long_data(2, $bin);
+        $st->execute();
+        $st->close();
+        api_responder(["ok" => true, "v" => time()]);
+    } catch (Throwable $e) {
+        api_responder(["ok" => false, "error" => "No se pudo guardar el comprobante. Intente de nuevo."], 500);
+    }
+}
+
 function manejarApiPedido(mysqli $conexion): void
 {
+    // Ver / descargar el comprobante de pago (GET)
+    if ($_SERVER["REQUEST_METHOD"] === "GET" && isset($_GET["comprobante"])) {
+        entregarComprobante($conexion, (int) $_GET["comprobante"]);
+    }
     header("Content-Type: application/json; charset=utf-8");
     date_default_timezone_set("America/Bogota");
     if ($_SERVER["REQUEST_METHOD"] !== "POST") {
         api_responder(["ok" => false, "error" => "Método no permitido."], 405);
+    }
+
+    // Subir / quitar el comprobante de pago (viene como formulario con archivo, no como JSON)
+    if (isset($_POST["op_comprobante"])) {
+        operarComprobante($conexion);
     }
 
     $in = json_decode(file_get_contents("php://input"), true);
