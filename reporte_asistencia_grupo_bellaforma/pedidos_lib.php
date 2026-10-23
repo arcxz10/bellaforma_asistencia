@@ -208,10 +208,16 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         return $falla("El número de la " . $nombreDoc . " solo puede tener dígitos (máximo 10) y debe ser mayor que 0.");
     }
     $mensajeNumeroEnUso = fn(string $n) => "El número " . $n . " ya está en uso por otra " . $nombreDoc . ". Escriba un número distinto.";
-    if ($modo === "enviar") {
+    // Numeración automática configurada por el administrador (Pedidos > Numeración automática).
+    // Se aplica a documentos que se envían sin número escrito (nuevos o borradores). El DDL va antes de la transacción.
+    asegurarTablaNumeracion($c);
+    $feDoc = !empty($d["factura_electronica"]) ? 1 : 0;
+    $asignarAuto = $modo === "enviar" && $numeroDoc === "" && (!$existente || $existente["estado"] === "borrador")
+        && contadorNumeracionActivo($c, $tipoDoc, $feDoc);
+    if ($modo === "enviar" && !$asignarAuto) {
         // Número escrito a mano, o el automático de un documento que ya existe (un borrador al enviarse, por ejemplo)
         $numeroARevisar = $numeroDoc !== "" ? (int) $numeroDoc : ($existente ? (int) $existente["id"] : 0);
-        if ($numeroARevisar > 0 && numeroDocumentoEnUso($c, $tipoDoc, $numeroARevisar, (int) ($existente["id"] ?? 0))) {
+        if ($numeroARevisar > 0 && numeroDocumentoEnUso($c, $tipoDoc, $numeroARevisar, (int) ($existente["id"] ?? 0), $feDoc)) {
             return $falla($mensajeNumeroEnUso($numeroDoc !== "" ? $numeroDoc : numeroPedido($numeroARevisar)));
         }
     }
@@ -448,6 +454,15 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
     try {
         $c->begin_transaction();
 
+        if ($asignarAuto) {
+            $sig = siguienteNumeroDocumento($c, $tipoDoc, $feDoc, (int) ($existente["id"] ?? 0));
+            if ($sig === null) {
+                throw new RuntimeException("NUMERACION");
+            }
+            $numeroDoc = (string) $sig;
+            $campos["numero_pedido"] = ["s", $numeroDoc];
+        }
+
         if ($existente) {
             $sets = implode(", ", array_map(fn($k) => "`$k` = ?", array_keys($campos)));
             $tipos = implode("", array_map(fn($v) => $v[0], $campos)) . "i";
@@ -470,7 +485,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
             $st->close();
             $idFinal = (int) $c->insert_id;
             // Documento nuevo sin número escrito: su número automático es el id; no puede chocar con uno escrito a mano
-            if ($modo === "enviar" && $numeroDoc === "" && numeroDocumentoEnUso($c, $tipoDoc, $idFinal, $idFinal)) {
+            if ($modo === "enviar" && $numeroDoc === "" && numeroDocumentoEnUso($c, $tipoDoc, $idFinal, $idFinal, $feDoc)) {
                 throw new RuntimeException("NUMERO_EN_USO");
             }
         }
@@ -493,6 +508,9 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         }
     } catch (Throwable $e) {
         $c->rollback();
+        if ($e->getMessage() === "NUMERACION") {
+            return $falla("No se pudo asignar el número automático de la " . $nombreDoc . ". Avise al administrador para revisar la numeración.");
+        }
         if ($e->getMessage() === "NUMERO_EN_USO") {
             return $falla("El número que el sistema iba a asignar ya está en uso por otra " . $nombreDoc . ". Escriba un número manualmente en el paso 1.");
         }
