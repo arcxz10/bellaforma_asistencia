@@ -907,6 +907,33 @@ function manejarApiPedido(mysqli $conexion): void
             api_responder($r);
         }
 
+        // Guarda SOLO la «Observación para despacho» (sin tocar el resto del pedido)
+        if ($accion === "guardar_obs_despacho") {
+            $pid = (int) ($in["pedido_id"] ?? 0);
+            $obs = textoCorto($in["obs_despacho"] ?? "", 500, false);
+            $st = $conexion->prepare("SELECT vendedor_id, estado FROM pedidos_vendedores WHERE id = ? LIMIT 1");
+            $st->bind_param("i", $pid);
+            $st->execute();
+            $pedObs = $pid > 0 ? $st->get_result()->fetch_assoc() : null;
+            $st->close();
+            if (!$pedObs) {
+                api_responder(["ok" => false, "error" => "No se encontró el pedido."], 404);
+            }
+            if ($rol === "vendedor") {
+                if ((int) $pedObs["vendedor_id"] !== $vendedorId) {
+                    api_responder(["ok" => false, "error" => "Este pedido no te pertenece."], 403);
+                }
+                if (in_array($pedObs["estado"], ["procesado", "anulado"], true)) {
+                    api_responder(["ok" => false, "error" => "Este pedido ya no se puede modificar."], 422);
+                }
+            }
+            $st = $conexion->prepare("UPDATE pedidos_vendedores SET obs_despacho = ? WHERE id = ?");
+            $st->bind_param("si", $obs, $pid);
+            $st->execute();
+            $st->close();
+            api_responder(["ok" => true]);
+        }
+
         if ($accion === "eliminar_borrador" && $rol === "vendedor") {
             $pid = (int) ($in["pedido_id"] ?? 0);
             $st = $conexion->prepare("DELETE FROM pedidos_vendedores WHERE id = ? AND vendedor_id = ? AND estado = 'borrador'");
