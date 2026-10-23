@@ -42,6 +42,20 @@ function formaPagoDias($clave): ?int
     return preg_match('/^dias_(\d+)$/', (string) $clave, $m) ? (int) $m[1] : null;
 }
 
+/**
+ * ¿Es una forma de pago válida? Las del catálogo, o «dias_N» con N entre 1 y 365
+ * (el ejecutivo escribe el número de días de crédito que quiera).
+ */
+function formaPagoValida($clave): bool
+{
+    $clave = (string) $clave;
+    if (isset(formasPagoDespacho()[$clave])) {
+        return true;
+    }
+    $d = formaPagoDias($clave);
+    return $d !== null && $d >= 1 && $d <= 365 && $clave === "dias_" . $d;
+}
+
 function fletesTipoDespacho(): array
 {
     return [
@@ -89,6 +103,10 @@ function etiquetaDeCatalogo(array $catalogo, $clave): string
 
 function etiquetaFormaPago($clave): string
 {
+    $dias = formaPagoDias($clave);
+    if ($dias !== null && !isset(formasPagoDespacho()[(string) $clave])) {
+        return $dias . ($dias === 1 ? " día" : " días");   // días escritos por el ejecutivo (no están en el catálogo)
+    }
     return etiquetaDeCatalogo(formasPagoDespacho(), $clave);
 }
 
@@ -370,6 +388,8 @@ function obtenerDespachosRango(mysqli $c, string $desde, string $hasta, bool $po
                 p.cliente_nit AS p_nit, p.cliente_nombre AS p_nombre, p.cliente_nombre_comercial AS p_comercial,
                 p.cliente_ciudad AS p_ciudad, p.cliente_departamento AS p_depto, p.total AS p_total,
                 p.forma_pago AS p_forma, p.transportadora AS p_transp, p.factura_electronica AS p_fe, p.pedido_vinculado_id AS p_vinc,
+                p.obs_despacho AS p_obs_desp,
+                (SELECT 1 FROM pedido_comprobantes pc WHERE pc.pedido_id = p.id LIMIT 1) AS p_comprobante,
                 pv.id AS pv_id, pv.numero_pedido AS pv_numero, v.nombre AS p_vendedor
          FROM despachos d
          LEFT JOIN pedidos_vendedores p ON p.id = d.pedido_id
@@ -411,6 +431,9 @@ function obtenerDespachosRango(mysqli $c, string $desde, string $hasta, bool $po
             "estado_entrega" => $r["estado_entrega"], "estado_pago" => $r["estado_pago"],
             "estado_pedido" => (string) ($r["estado_pedido"] ?? "") !== "" ? (string) $r["estado_pedido"] : "en_proceso",
             "observacion" => (string) ($r["observacion"] ?? ""),
+            // Lo que escribió el ejecutivo en el pedido (solo se ve en «Pedidos para despachar») y si anexó comprobante de pago
+            "obs_ejecutivo" => $ligado ? (string) ($r["p_obs_desp"] ?? "") : "",
+            "tiene_comprobante" => $ligado && !empty($r["p_comprobante"]),
             "fecha_origen" => $r["fecha_origen"] ?? $r["fecha"],
         ];
         if ($ligado) {
@@ -604,7 +627,7 @@ function actualizarCampoDespacho(mysqli $c, int $id, string $campo, string $valo
         $cat = $campo === "forma_pago" ? formasPagoDespacho() : transportadorasDespacho();
         if ($pedidoId !== null) {
             // Fila ligada a un pedido: el dato vive en el pedido (y se mantiene la condición de pago del pedido)
-            if (!isset($cat[$valor])) {
+            if ($campo === "forma_pago" ? !formaPagoValida($valor) : !isset($cat[$valor])) {
                 return $falla("Elija una opción de la lista.");
             }
             if ($campo === "forma_pago") {
@@ -618,7 +641,7 @@ function actualizarCampoDespacho(mysqli $c, int $id, string $campo, string $valo
             }
             $up->execute();
             $up->close();
-            $resp = ["ok" => true, "valor" => $valor, "texto" => $cat[$valor]];
+            $resp = ["ok" => true, "valor" => $valor, "texto" => $campo === "forma_pago" ? etiquetaFormaPago($valor) : $cat[$valor]];
             if ($campo === "transportadora") {
                 // Pedido y remisión van juntos: la transportadora también se pone en el documento vinculado
                 $resp["vinculados"] = sincronizarDespachoVinculado($c, $id, "transportadora", $valor, $valor);
@@ -690,7 +713,7 @@ function guardarDespachoManual(mysqli $c, ?int $id, array $in): array
     $forma = (string) ($in["forma_pago"] ?? "");
     $transp = (string) ($in["transportadora"] ?? "");
     // Se aceptan las opciones del catálogo (o dejarlo vacío); un dato histórico distinto solo se conserva si ya estaba así
-    if ($forma !== "" && !isset(formasPagoDespacho()[$forma]) && !($id && $forma === ($in["_forma_actual"] ?? null))) {
+    if ($forma !== "" && !formaPagoValida($forma) && !($id && $forma === ($in["_forma_actual"] ?? null))) {
         return $falla("Forma de pago no válida.");
     }
     if ($transp !== "" && !isset(transportadorasDespacho()[$transp]) && !($id && $transp === ($in["_transp_actual"] ?? null))) {
@@ -762,6 +785,8 @@ function asegurarExtrasDespachos(mysqli $c): void
         agregarColumna($c, "despachos", "estado_pedido", "VARCHAR(20) NOT NULL DEFAULT 'en_proceso'");
         agregarColumna($c, "despachos", "observacion", "VARCHAR(255) NOT NULL DEFAULT ''");
         agregarColumna($c, "despachos", "fecha_origen", "DATE NULL");
+        agregarColumna($c, "pedidos_vendedores", "obs_despacho", "VARCHAR(500) NULL");
+        asegurarTablaComprobantes($c);
         if ($columnaNueva) {
             // Primera vez: lo que ya tiene guía o está entregado ya salió
             $c->query("UPDATE despachos SET estado_pedido = 'despachado' WHERE numero_guia <> '' OR estado_entrega = 'entregado'");
@@ -818,6 +843,63 @@ function borrarRotuloDePedido(mysqli $c, int $pedidoId): void
 {
     try {
         $st = $c->prepare("DELETE FROM despacho_rotulos WHERE despacho_id IN (SELECT id FROM despachos WHERE pedido_id = ?)");
+        $st->bind_param("i", $pedidoId);
+        $st->execute();
+        $st->close();
+    } catch (Throwable $e) {
+    }
+}
+
+/**
+ * Comprobante de pago de un pedido «Anticipado» (la foto que sube el ejecutivo). Se guarda en la base de datos,
+ * igual que los rótulos, para que no se pierda cuando Railway reinicia el servidor.
+ */
+function asegurarTablaComprobantes(mysqli $c): void
+{
+    static $listo = false;
+    if ($listo) {
+        return;
+    }
+    $listo = true;
+    $def = "pedido_id INT NOT NULL PRIMARY KEY,
+        mime VARCHAR(40) NOT NULL DEFAULT 'image/jpeg',
+        datos MEDIUMBLOB NOT NULL,
+        creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP";
+    try {
+        try {
+            $c->query("CREATE TABLE IF NOT EXISTS pedido_comprobantes ($def,
+                CONSTRAINT fk_comprobante_pedido FOREIGN KEY (pedido_id) REFERENCES pedidos_vendedores(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        } catch (Throwable $e) {
+            $c->query("CREATE TABLE IF NOT EXISTS pedido_comprobantes ($def) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
+    } catch (Throwable $e) {
+        // se reintenta en la próxima visita
+    }
+}
+
+/** ¿Este pedido tiene comprobante de pago anexado? */
+function pedidoTieneComprobante(mysqli $c, int $pedidoId): bool
+{
+    asegurarTablaComprobantes($c);
+    try {
+        $st = $c->prepare("SELECT 1 FROM pedido_comprobantes WHERE pedido_id = ? LIMIT 1");
+        $st->bind_param("i", $pedidoId);
+        $st->execute();
+        $hay = $st->get_result()->num_rows > 0;
+        $st->close();
+        return $hay;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/** Borra el comprobante de un pedido (al quitarlo, al cambiar la forma de pago o al eliminar el pedido). Nunca interrumpe. */
+function borrarComprobanteDePedido(mysqli $c, int $pedidoId): void
+{
+    try {
+        // Sin crear la tabla aquí: puede llamarse dentro de una transacción y el DDL la confirmaría antes de tiempo
+        $st = $c->prepare("DELETE FROM pedido_comprobantes WHERE pedido_id = ?");
         $st->bind_param("i", $pedidoId);
         $st->execute();
         $st->close();
