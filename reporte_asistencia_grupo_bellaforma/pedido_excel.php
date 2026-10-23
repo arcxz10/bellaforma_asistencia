@@ -76,9 +76,10 @@ foreach ($pedidos as $p) {
     foreach ($p["items"] as $it) {
         $esBon = !empty($it["bonificado"]);   // bonificado: 100 % de descuento, no se cobra
         $esDoc = ((int) ($it["bonificado"] ?? 0) === 2);   // 2 = docena de 13
+        $esFle = ((int) ($it["bonificado"] ?? 0) === 3);   // 3 = apoyo a flete
         $filas[] = array_merge($base, [
-            $it["referencia"], $it["nombre"] . ($esDoc ? " (DOCENA DE 13 - BONIFICADO)" : ($esBon ? " (BONIFICADO)" : "")), (int) $it["cantidad"],
-            $esDoc ? "Docena de 13" : ($esBon ? "Sí" : "No"), $esBon ? 100 : 0,
+            $it["referencia"], $it["nombre"] . ($esFle ? " (APOYO A FLETE - BONIFICADO)" : ($esDoc ? " (DOCENA DE 13 - BONIFICADO)" : ($esBon ? " (BONIFICADO)" : ""))), (int) $it["cantidad"],
+            $esFle ? "Apoyo a flete" : ($esDoc ? "Docena de 13" : ($esBon ? "Sí" : "No")), $esBon ? 100 : 0,
             (float) $it["precio_unitario"], $esBon ? 0.0 : (float) $it["subtotal"], (float) $p["total"],
         ]);
     }
