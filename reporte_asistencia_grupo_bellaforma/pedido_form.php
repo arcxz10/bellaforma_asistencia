@@ -175,7 +175,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                                 "puntos" => (string) ($pu["cliente_puntos_referencia"] ?? ""),
                             ];
                             ?>
-                            <option value="<?= (int) $pu["id"] ?>" data-cliente="<?= htmlspecialchars(json_encode($cliUnion, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, "UTF-8") ?>"><?= htmlspecialchars($etqUnion, ENT_QUOTES, "UTF-8") ?></option>
+                            <option value="<?= (int) $pu["id"] ?>" data-numero="<?= htmlspecialchars((string) numeroDocumento($pu), ENT_QUOTES, "UTF-8") ?>" data-cliente="<?= htmlspecialchars(json_encode($cliUnion, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, "UTF-8") ?>"><?= htmlspecialchars($etqUnion, ENT_QUOTES, "UTF-8") ?></option>
                         <?php endforeach; ?>
                     </select>
                     <p class="pf-nota">Si la remisión va junto con un pedido que ya hizo, elíjalo aquí. En el Control de despachos saldrá el número del pedido al que va.</p>
@@ -323,6 +323,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         <div class="pf-card">
             <h2>Condiciones comerciales</h2>
 
+            <div class="pf-aviso ok" id="pfJuntoBox" hidden><svg class="vi" aria-hidden="true"><use href="#vi-truck"/></svg><span id="pfJuntoTexto"></span></div>
+            <div id="pfEnvioBox">
             <label id="pfFormaPagoLabel">Forma de pago *</label>
             <div class="pf-segmento pf-seg-2" id="pfFormaPago" role="group" aria-labelledby="pfFormaPagoLabel">
                 <?php foreach (formasPagoDespacho() as $clave => $etiqueta): ?>
@@ -338,6 +340,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                 <?php endforeach; ?>
             </div>
             <p class="pf-nota">Estos dos datos pasan al Control de despachos de la oficina.</p>
+            </div><!-- /pfEnvioBox -->
 
             <label for="pfObs">Observaciones del pedido</label>
             <textarea id="pfObs" rows="3" maxlength="2000"></textarea>
@@ -448,9 +451,24 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         var n = NOMBRE_DOC[S.doc];
         $("pfNumeroLabel").textContent = "Número de " + n;
         if ($("pfUnirBox")) { $("pfUnirBox").hidden = S.doc !== "remision"; }   // «Unir a un pedido» solo para remisiones
+        actualizarEnvio();
         $("pfNumero").placeholder = CFG.numeroAuto ? "Automático: " + CFG.numeroAuto : "Automático";
         // El botón final dice «Enviar remisión», «Enviar cotización»… (al editar sigue diciendo «Guardar cambios»)
         if (S.paso === 3) { $("pfPrincipal").textContent = textoPrincipal(); }
+    }
+    /* Remisión unida a un pedido: no se piden forma de pago ni transportadora, solo sale «Enviar junto al pedido #N» */
+    function remisionUnida() {
+        var sel = $("pfUnir");
+        return !!(sel && S.doc === "remision" && sel.value);
+    }
+    function actualizarEnvio() {
+        var unida = remisionUnida();
+        $("pfEnvioBox").hidden = unida;
+        $("pfJuntoBox").hidden = !unida;
+        if (unida) {
+            var opt = $("pfUnir").options[$("pfUnir").selectedIndex];
+            $("pfJuntoTexto").textContent = "Enviar junto al pedido #" + (opt.getAttribute("data-numero") || "");
+        }
     }
     function textoPrincipal() {
         return CFG.textoEnviar === "Enviar pedido" ? "Enviar " + NOMBRE_DOC[S.doc] : CFG.textoEnviar;
@@ -904,7 +922,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             observaciones: $("pfObs").value.trim()
         };
         // Pedido al que va la remisión (solo si esta pantalla ofrece la lista; si no, el servidor conserva el que ya tenía)
-        if ($("pfUnir")) { r.pedido_vinculado_id = S.doc === "remision" ? ($("pfUnir").value || "") : ""; }
+        if (remisionUnida()) { r.forma_pago = ""; r.transportadora = ""; }   // el servidor toma los del pedido
+                if ($("pfUnir")) { r.pedido_vinculado_id = S.doc === "remision" ? ($("pfUnir").value || "") : ""; }
         return r;
     }
 
@@ -981,7 +1000,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (!Object.keys(S.items).length && !Object.keys(S.bonos).length && !Object.keys(S.fletes).length) { return [2, "Elija al menos un producto.", "pfBuscarProd"]; }
         // Forma de pago y transportadora son obligatorias en documentos nuevos (uno enviado antes de existir este dato puede seguir sin ellos)
         var enviadoAntes = S.pedidoId && CFG.estadoPedido !== "borrador" && CFG.estadoPedido !== "nuevo";
-        if (!S.fp && !(enviadoAntes && !D.forma_pago)) { return [3, "Seleccione la forma de pago.", "pfFormaPago"]; }
+        if (remisionUnida()) { return null; }   // va junto a un pedido: no necesita forma de pago ni transportadora
+                if (!S.fp && !(enviadoAntes && !D.forma_pago)) { return [3, "Seleccione la forma de pago.", "pfFormaPago"]; }
         if (!S.tr && !(enviadoAntes && !D.transportadora)) { return [3, "Seleccione la transportadora.", "pfTransportadora"]; }
         return null;
     }
@@ -1159,6 +1179,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         $("pfUnir").value = D.pedido_vinculado_id ? String(D.pedido_vinculado_id) : "";
         $("pfUnir").addEventListener("change", function () {
             llenarClienteDesdePedido();
+            actualizarEnvio();
             sucio();
         });
     }
@@ -1190,7 +1211,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         $("pfDireccion").value = c.direccion || "";
         $("pfPuntos").value = c.puntos || "";
         colombiaSet($("pfDepto"), $("pfMuni"), c.departamento, c.municipio).then(function () { S.ignorar = false; sucio(); });
-        msgCliente("Se cargaron los datos del cliente del pedido #" + ((opt.textContent.match(/#(\S+)/) || [])[1] || "") + ". Revíselos y corrija si hace falta.", "ok", "check");
+        msgCliente("Se cargaron los datos del cliente del pedido #" + (opt.getAttribute("data-numero") || "") + ". Revíselos y corrija si hace falta.", "ok", "check");
     }
     setDoc(D.tipo_documento);
     setTipo(D.tipo_persona);
