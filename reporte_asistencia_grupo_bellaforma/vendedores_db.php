@@ -7,7 +7,7 @@
 
 require_once __DIR__ . "/despachos_lib.php";
 
-const ESQUEMA_VEND_VERSION = 14;
+const ESQUEMA_VEND_VERSION = 15;
 
 function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
 {
@@ -300,6 +300,9 @@ function asegurarTablasVendedores(mysqli $c): void
     $ok = agregarColumna($c, "pedidos_vendedores", "numero_pedido", "VARCHAR(12) NULL") && $ok;
     // Productos bonificados (se entregan sin costo: 100 % de descuento)
     $ok = agregarColumna($c, "pedido_vendedor_items", "bonificado", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
+    // Servicios (ej. FLETE, código 001): van a Syscafe en la columna de servicio (CodServ) y no en Referencia
+    $ok = agregarColumna($c, "productos_mayoristas", "es_servicio", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
+    $ok = agregarColumna($c, "pedido_vendedor_items", "es_servicio", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
     // Permiso para que el ejecutivo descargue el PDF y el Excel de sus pedidos (lo autoriza el administrador)
     $ok = agregarColumna($c, "vendedores", "puede_descargar", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
     // Forma de pago y transportadora (las elige el ejecutivo en el pedido) + control de despachos diarios
