@@ -216,6 +216,26 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         }
     }
 
+    // ---- Remisión unida a un pedido (solo aplica a remisiones; se ve en el Control de despachos) ----
+    $pedidoVinculado = null;
+    if ($tipoDoc === "remision") {
+        $vinculoActual = !empty($existente["pedido_vinculado_id"]) ? (int) $existente["pedido_vinculado_id"] : null;
+        // Si la solicitud no trae el dato (pantalla del administrador, pantalla vieja), se conserva el que ya tenía
+        $pedidoVinculado = array_key_exists("pedido_vinculado_id", $d) ? ((int) $d["pedido_vinculado_id"] ?: null) : $vinculoActual;
+        if ($pedidoVinculado !== null && $pedidoVinculado !== $vinculoActual) {
+            // Solo se valida si cambió: debe ser un pedido de cliente enviado, no anulado, del mismo ejecutivo, y no la remisión misma
+            $stv = $c->prepare("SELECT vendedor_id FROM pedidos_vendedores WHERE id = ? AND tipo_pedido = 'pedido' AND estado IN ('pendiente','procesado') LIMIT 1");
+            $stv->bind_param("i", $pedidoVinculado);
+            $stv->execute();
+            $filaV = $stv->get_result()->fetch_assoc();
+            $stv->close();
+            $valido = $filaV && ($rol === "admin" || (int) $filaV["vendedor_id"] === $vendedorId) && $pedidoVinculado !== (int) ($existente["id"] ?? 0);
+            if (!$valido) {
+                return $falla("El pedido al que quiere unir la remisión ya no está disponible. Elija otro o déjela sin unir.");
+            }
+        }
+    }
+
     // ---- Datos del cliente ----
     $tipo = (($d["tipo_persona"] ?? "") === "natural") ? "natural" : "juridica";
     $tipoDocCliente = $tipo === "natural" ? "CC" : "NIT";
@@ -419,6 +439,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         "dias_credito"              => ["i", $dias],
         "forma_pago"                => ["s", $formaPago !== "" ? $formaPago : null],
         "transportadora"            => ["s", $transportadora !== "" ? $transportadora : null],
+        "pedido_vinculado_id"       => ["i", $pedidoVinculado],
         "observaciones"             => ["s", $obs],
         "total"                     => ["d", $total],
         "estado"                    => ["s", $estado],
@@ -481,6 +502,28 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
 
     $titulo = etiquetaTipoDocumento($tipoDoc) . " #" . ($numeroDoc !== "" ? $numeroDoc : numeroPedido($idFinal));
     return ["ok" => true, "id" => $idFinal, "total" => $total, "estado" => $estado, "titulo" => $titulo];
+}
+
+/**
+ * Pedidos de cliente del ejecutivo a los que se puede unir una remisión (enviados, no anulados), los más recientes primero.
+ * $incluirId: pedido al que la remisión ya está unida (se incluye aunque sea antiguo o haya cambiado de estado).
+ */
+function pedidosParaUnirRemision(mysqli $c, int $vendedorId, ?int $incluirId = null): array
+{
+    $incluir = (int) $incluirId;
+    $st = $c->prepare(
+        "SELECT id, numero_pedido, cliente_nombre, cliente_nombre_comercial, total, creado_en
+         FROM pedidos_vendedores
+         WHERE vendedor_id = ? AND tipo_pedido = 'pedido' AND (estado IN ('pendiente','procesado') OR id = ?)
+         ORDER BY creado_en DESC, id DESC
+         LIMIT 120"
+    );
+    $st->bind_param("ii", $vendedorId, $incluir);
+    $st->execute();
+    $res = $st->get_result();
+    $lista = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+    $st->close();
+    return $lista;
 }
 
 /**
