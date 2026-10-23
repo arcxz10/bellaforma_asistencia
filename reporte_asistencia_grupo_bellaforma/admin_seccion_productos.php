@@ -3,7 +3,7 @@
 
 $productosLista = [];
 $resPM = $conexion->query(
-    "SELECT p.id, p.referencia, p.nombre, p.precio_mayorista, p.precio_detal, p.activo,
+    "SELECT p.id, p.referencia, p.nombre, p.precio_mayorista, p.precio_detal, p.activo, p.es_servicio,
             (SELECT UNIX_TIMESTAMP(f.actualizado_en) FROM producto_fotos f WHERE f.producto_id = p.id) AS foto_v
      FROM productos_mayoristas p ORDER BY p.referencia ASC"
 );
@@ -95,7 +95,7 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
                                 <?php endif; ?>
                             </td>
                             <td><strong><?= escapar($p["referencia"]) ?></strong></td>
-                            <td><?= escapar($p["nombre"]) ?></td>
+                            <td><?= escapar($p["nombre"]) ?><?= !empty($p["es_servicio"]) ? ' <span class="estado estado-activo" style="background:#E8F0FE;color:#1A4FA0;">Servicio</span>' : "" ?></td>
                             <td class="num-der"><?= (float) $p["precio_mayorista"] > 0 ? formatoCOP($p["precio_mayorista"]) : '<span class="sin-precio">sin precio</span>' ?></td>
                             <td class="num-der"><?= (float) $p["precio_detal"] > 0 ? formatoCOP($p["precio_detal"]) : '<span class="sin-precio">sin precio</span>' ?></td>
                             <td>
@@ -111,6 +111,7 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
                                         "id" => (int) $p["id"],
                                         "referencia" => $p["referencia"],
                                         "nombre" => $p["nombre"],
+                                        "es_servicio" => !empty($p["es_servicio"]) ? 1 : 0,
                                         "precio_mayorista" => (float) $p["precio_mayorista"] > 0 ? rtrim(rtrim(number_format((float) $p["precio_mayorista"], 2, ".", ""), "0"), ".") : "",
                                         "precio_detal" => (float) $p["precio_detal"] > 0 ? rtrim(rtrim(number_format((float) $p["precio_detal"], 2, ".", ""), "0"), ".") : "",
                                         "foto" => !empty($p["foto_v"]) ? "foto.php?id=" . (int) $p["id"] . "&v=" . (int) $p["foto_v"] : "",
@@ -154,6 +155,12 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
             <div>
                 <label for="prodNom">Nombre del producto *</label>
                 <input type="text" id="prodNom" name="nombre" maxlength="255" required>
+            </div>
+            <div>
+                <label style="font-weight:normal;">
+                    <input type="checkbox" id="prodServ" name="es_servicio" value="1" style="width:auto;"> <strong>Es un servicio</strong> (ej. FLETE, código 001)
+                </label>
+                <small style="color:#667;">En el Excel de Syscafe la referencia sale en la columna de servicio (CodServ) y la columna Referencia queda vacía.</small>
             </div>
             <div>
                 <label for="prodMay">Precio mayorista (COP)</label>
@@ -228,6 +235,7 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
         document.getElementById("prodAccion").value = "prod_crear";
         document.getElementById("prodId").value = "";
         ["prodRef", "prodNom", "prodMay", "prodDet", "prodFoto"].forEach(function (id) { document.getElementById(id).value = ""; });
+        document.getElementById("prodServ").checked = false;
         document.getElementById("prodQuitarBox").style.display = "none";
         mostrarPrevProd("");
         reiniciarZonaPegar();
@@ -243,6 +251,7 @@ $sinDet = count(array_filter($productosLista, fn($p) => (float) $p["precio_detal
         document.getElementById("prodNom").value = d.nombre;
         document.getElementById("prodMay").value = d.precio_mayorista;
         document.getElementById("prodDet").value = d.precio_detal;
+        document.getElementById("prodServ").checked = !!d.es_servicio;
         document.getElementById("prodFoto").value = "";
         document.getElementById("prodQuitarBox").style.display = d.foto ? "block" : "none";
         document.querySelector("#prodQuitarBox input").checked = false;
