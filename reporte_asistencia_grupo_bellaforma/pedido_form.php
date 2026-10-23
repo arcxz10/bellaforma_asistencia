@@ -35,6 +35,7 @@ $datosIniciales = [
 $itemsIniciales = [];
 $bonosIniciales = [];   // productos bonificados (sin costo)
 $docenasIniciales = [];   // productos cuya unidad bonificada es la «docena de 13»
+$fletesIniciales = [];   // productos con «apoyo a flete» (1 unidad al 100 % de descuento)
 if ($ped) {
     $idsProductos = [];
     $idPorRef = [];
@@ -47,7 +48,9 @@ if ($ped) {
         if (!isset($idsProductos[$pid]) && isset($idPorRef[$it["referencia"]])) {
             $pid = $idPorRef[$it["referencia"]];   // respaldo: si el id no coincide, se une por referencia
         }
-        if (!empty($it["bonificado"])) {
+        if ((int) ($it["bonificado"] ?? 0) === 3) {
+            $fletesIniciales[$pid] = 1;   // bonificado = 3 -> apoyo a flete
+        } elseif (!empty($it["bonificado"])) {
             $bonosIniciales[$pid] = ($bonosIniciales[$pid] ?? 0) + (int) $it["cantidad"];
             if ((int) $it["bonificado"] === 2) {
                 $docenasIniciales[$pid] = 1;   // bonificado = 2 -> docena de 13
@@ -72,6 +75,7 @@ $cfgJs = [
     "items" => (object) $itemsIniciales,
     "bonos" => (object) $bonosIniciales,
     "docenas" => (object) $docenasIniciales,
+    "fletes" => (object) $fletesIniciales,
     "textoEnviar" => $pf["texto_enviar"] ?? "Enviar pedido",
     // Documento enviado antes de que existieran estos datos: se muestra cómo estaba el pago para que el ejecutivo lo tenga de referencia
     "pagoAnterior" => ($ped && $ped["estado"] !== "borrador" && trim((string) ($ped["forma_pago"] ?? "")) === "") ? etiquetaCondicion($ped) : "",
@@ -278,6 +282,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                             <b><svg class="vi" aria-hidden="true"><use href="#vi-gift"/></svg>Bonificado</b>
                             <span>Sin costo · 100 % de descuento · precio lista <s class="pf-bonif-precio"></s></span>
                             <button type="button" class="pf-docena" aria-pressed="false" title="Docena de 13: al llevar 12 unidades se regala 1 (queda en 100 % de descuento)">Docena de 13 · 1 gratis</button>
+                            <button type="button" class="pf-flete" aria-pressed="false" title="Apoyo a flete: 1 unidad sin costo (100 % de descuento) que aparece con su precio en el PDF">Apoyo a flete</button>
                         </div>
                         <div class="pf-step">
                             <button type="button" class="bmenos" aria-label="Quitar un bonificado">−</button>
@@ -368,7 +373,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (icono) { el.insertAdjacentHTML("beforeend", ico(icono)); }
         el.appendChild(document.createTextNode(texto || ""));
     }
-    var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, fp: "", tr: "", pedidoId: CFG.pedidoId, items: {}, bonos: {}, docenas: {}, abiertos: {},
+    var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, fp: "", tr: "", pedidoId: CFG.pedidoId, items: {}, bonos: {}, docenas: {}, fletes: {}, abiertos: {},
               ocupado: false, sucio: false, timer: null, ignorar: false, docOk: "" };
 
     var todasLasFilas = Array.prototype.slice.call(document.querySelectorAll(".pf-prod"));
@@ -570,13 +575,16 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 
     function esDocena(id) { return !!S.docenas[id] && bonoDe(id) > 0; }
 
+    function esFlete(id) { return !!S.fletes[id]; }
+
     function pintarFila(f) {
         var id = f.dataset.id, q = cantidadDe(id), qb = bonoDe(id);
         var inp = f.querySelector(".cant");
         if (document.activeElement !== inp) { inp.value = q; }
-        f.classList.toggle("sel", q > 0 || qb > 0);
+        var fl = esFlete(id);
+        f.classList.toggle("sel", q > 0 || qb > 0 || fl);
         // Bonificado: el panel se muestra al pulsar el botón (o si ya hay unidades bonificadas)
-        var abierto = !!S.abiertos[id] || qb > 0;
+        var abierto = !!S.abiertos[id] || qb > 0 || fl;
         f.querySelector(".pf-bonif").hidden = !abierto;
         var btn = f.querySelector(".bonif");
         btn.classList.toggle("activo", abierto);
@@ -592,6 +600,10 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         f.querySelector(".bmenos").disabled = doc;
         f.querySelector(".bmas").disabled = doc;
         f.querySelector(".pf-bonif-info b").lastChild.textContent = doc ? "Bonificado · Docena de 13" : "Bonificado";
+        // Apoyo a flete: 1 unidad al 100 % de descuento (independiente de la docena)
+        var bf = f.querySelector(".pf-flete");
+        bf.classList.toggle("activo", fl);
+        bf.setAttribute("aria-pressed", fl ? "true" : "false");
     }
 
     function fijarCantidad(id, q) {
@@ -616,6 +628,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     // El total NO incluye los bonificados (100 % de descuento)
     function totales() {
         var total = 0, n = 0, nb = Object.keys(S.bonos).length;
+        Object.keys(S.fletes).forEach(function (id) { if (!S.bonos[id]) { nb++; } });
         Object.keys(S.items).forEach(function (id) { total += S.items[id] * (PRECIO[id] || 0); n++; });
         $("pfTotal").textContent = dinero(total);
         $("pfTotal2").textContent = dinero(total);
@@ -633,10 +646,10 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         // Bonificado
         var inb = f.querySelector(".cantb");
         f.querySelector(".bonif").addEventListener("click", function () {
-            if (S.abiertos[id] || bonoDe(id) > 0) {
-                var tenia = bonoDe(id) > 0;
+            if (S.abiertos[id] || bonoDe(id) > 0 || esFlete(id)) {
+                var tenia = bonoDe(id) > 0 || esFlete(id);
                 S.abiertos[id] = false;
-                if (tenia) { fijarBono(id, 0); toast("Se quitó el bonificado de " + INFO[id].ref + ".", ""); }
+                if (tenia) { delete S.fletes[id]; fijarBono(id, 0); toast("Se quitó el bonificado de " + INFO[id].ref + ".", ""); }
                 else { pintarFila(f); }
             } else {
                 S.abiertos[id] = true;
@@ -648,6 +661,13 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             if (esDocena(id)) { delete S.docenas[id]; fijarBono(id, 0); }
             else { S.docenas[id] = true; fijarBono(id, 1); }
             pintarFila(f);
+        });
+        f.querySelector(".pf-flete").addEventListener("click", function () {
+            S.abiertos[id] = true;
+            if (esFlete(id)) { delete S.fletes[id]; } else { S.fletes[id] = true; }
+            pintarFila(f);
+            totales();
+            sucio();
         });
         f.querySelector(".bmas").addEventListener("click", function () { fijarBono(id, bonoDe(id) + 1); });
         f.querySelector(".bmenos").addEventListener("click", function () { fijarBono(id, bonoDe(id) - 1); });
@@ -791,6 +811,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         var lineas = [];
         Object.keys(S.items).forEach(function (id) { lineas.push({ id: id, bon: false }); });
         Object.keys(S.bonos).forEach(function (id) { lineas.push({ id: id, bon: true }); });
+        Object.keys(S.fletes).forEach(function (id) { lineas.push({ id: id, bon: true, flete: true }); });
         if (!lineas.length) {
             var p = document.createElement("p");
             p.className = "pf-vacio"; p.textContent = "Aún no ha elegido productos. Vaya al paso 2.";
@@ -798,12 +819,12 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         }
         lineas.forEach(function (l) {
             var id = l.id, bon = l.bon;
-            var cant = bon ? S.bonos[id] : S.items[id];
+            var cant = l.flete ? 1 : (bon ? S.bonos[id] : S.items[id]);
             var fila = document.createElement("div"); fila.className = "pf-res-fila" + (bon ? " bonif" : "");
             var info = document.createElement("div"); info.className = "pf-res-info";
             var b = document.createElement("b"); b.textContent = INFO[id].ref;
             if (bon) {
-                var tag = document.createElement("small"); tag.className = "pf-tag-bonif"; tag.insertAdjacentHTML("beforeend", ico("gift")); tag.appendChild(document.createTextNode(esDocena(id) ? "DOCENA DE 13 · BONIFICADO" : "BONIFICADO"));
+                var tag = document.createElement("small"); tag.className = "pf-tag-bonif"; tag.insertAdjacentHTML("beforeend", ico("gift")); tag.appendChild(document.createTextNode(l.flete ? "APOYO A FLETE · BONIFICADO" : (esDocena(id) ? "DOCENA DE 13 · BONIFICADO" : "BONIFICADO")));
                 b.appendChild(tag);
             }
             var s = document.createElement("span"); s.textContent = INFO[id].nombre;
@@ -816,9 +837,9 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             var m = document.createElement("button"); m.type = "button"; m.textContent = "−";
             var q = document.createElement("span"); q.className = "pf-qty"; q.textContent = cant;
             var a = document.createElement("button"); a.type = "button"; a.textContent = "+";
-            if (bon && esDocena(id)) { m.disabled = true; a.disabled = true; }
-            m.addEventListener("click", function () { if (bon) { fijarBono(id, bonoDe(id) - 1); } else { fijarCantidad(id, cantidadDe(id) - 1); } renderResumen(); });
-            a.addEventListener("click", function () { if (bon) { fijarBono(id, bonoDe(id) + 1); } else { fijarCantidad(id, cantidadDe(id) + 1); } renderResumen(); });
+            if (bon && (l.flete || esDocena(id))) { a.disabled = true; m.disabled = !l.flete; }
+            m.addEventListener("click", function () { if (l.flete) { delete S.fletes[id]; pintarFila(document.querySelector('#pfLista .pf-prod[data-id="' + id + '"]')); totales(); sucio(); } else if (bon) { fijarBono(id, bonoDe(id) - 1); } else { fijarCantidad(id, cantidadDe(id) - 1); } renderResumen(); });
+            a.addEventListener("click", function () { if (l.flete) { return; } if (bon) { fijarBono(id, bonoDe(id) + 1); } else { fijarCantidad(id, cantidadDe(id) + 1); } renderResumen(); });
             st.appendChild(m); st.appendChild(q); st.appendChild(a);
             fila.appendChild(info); fila.appendChild(st);
             cont.appendChild(fila);
@@ -874,7 +895,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     function hayContenido() {
         if (!S.lista) { return false; }
         var d = datos();
-        return Object.keys(S.items).length > 0 || Object.keys(S.bonos).length > 0 || d.identificacion || d.cliente_nombre || d.telefono || d.direccion;
+        return Object.keys(S.items).length > 0 || Object.keys(S.bonos).length > 0 || Object.keys(S.fletes).length > 0 || d.identificacion || d.cliente_nombre || d.telefono || d.direccion;
     }
 
     function estadoTexto(t, icono) { conIcono($("pfEstado"), t || "", t ? icono : ""); }
@@ -883,7 +904,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         opciones = opciones || {};
         if (S.ocupado && !opciones.keepalive) { return Promise.resolve(null); }
         S.ocupado = true;
-        var payload = { accion: "guardar", modo: modo, pedido_id: S.pedidoId, datos: datos(), items: S.items, bonos: S.bonos, docenas: S.docenas };
+        var payload = { accion: "guardar", modo: modo, pedido_id: S.pedidoId, datos: datos(), items: S.items, bonos: S.bonos, docenas: S.docenas, fletes: S.fletes };
         return llamar(payload, opciones).then(function (r) {
             S.ocupado = false;
             return r;
@@ -941,7 +962,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (!ubicacionOpcional && !d.departamento) { return [1, "Seleccione el departamento.", "pfDepto"]; }
         if (!d.direccion) { return [1, "Ingrese la dirección de entrega.", "pfDireccion"]; }
         if (S.fe && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email_fe || d.email)) { return [1, "Ingrese un correo válido para la factura electrónica.", "pfEmailFe"]; }
-        if (!Object.keys(S.items).length && !Object.keys(S.bonos).length) { return [2, "Elija al menos un producto.", "pfBuscarProd"]; }
+        if (!Object.keys(S.items).length && !Object.keys(S.bonos).length && !Object.keys(S.fletes).length) { return [2, "Elija al menos un producto.", "pfBuscarProd"]; }
         // Forma de pago y transportadora son obligatorias en documentos nuevos (uno enviado antes de existir este dato puede seguir sin ellos)
         var enviadoAntes = S.pedidoId && CFG.estadoPedido !== "borrador" && CFG.estadoPedido !== "nuevo";
         if (!S.fp && !(enviadoAntes && !D.forma_pago)) { return [3, "Seleccione la forma de pago.", "pfFormaPago"]; }
@@ -1100,6 +1121,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         var quitados = 0;
         Object.keys(S.items).forEach(function (id) { if (PRECIO[id] === undefined) { delete S.items[id]; quitados++; } });
         Object.keys(S.bonos).forEach(function (id) { if (PRECIO[id] === undefined) { delete S.bonos[id]; delete S.docenas[id]; quitados++; } });
+        Object.keys(S.fletes).forEach(function (id) { if (PRECIO[id] === undefined) { delete S.fletes[id]; quitados++; } });
         todasLasFilas.forEach(pintarFila);
         totales();
         aplicarBloqueo();
@@ -1148,6 +1170,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     Object.keys(CFG.items).forEach(function (id) { if (PRECIO[id] !== undefined) { S.items[id] = CFG.items[id]; } });
     Object.keys(CFG.bonos || {}).forEach(function (id) { if (PRECIO[id] !== undefined) { S.bonos[id] = CFG.bonos[id]; } });
     Object.keys(CFG.docenas || {}).forEach(function (id) { if (S.bonos[id]) { S.docenas[id] = true; S.bonos[id] = 1; } });
+    Object.keys(CFG.fletes || {}).forEach(function (id) { if (PRECIO[id] !== undefined) { S.fletes[id] = true; } });
     todasLasFilas.forEach(pintarFila);
     totales();
 
