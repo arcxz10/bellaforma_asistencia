@@ -147,6 +147,7 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                     <?php endif; ?>
                     <?php if ($verExcel): ?>
                         <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00796B;" href="pedido_excel.php?id=<?= (int) $ped["id"] ?>">📊 Descargar Excel</a>
+                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00695C;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>">📥 Excel para Syscafe</a>
                     <?php endif; ?>
                 </span>
             <?php endif; ?>
