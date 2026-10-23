@@ -1328,6 +1328,16 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     $("pfDepto").addEventListener("change", sucio);
     $("pfMuni").addEventListener("change", sucio);
 
+    /* Observación para despacho: en un pedido ya enviado se guarda sola al salir del campo */
+    $("pfObsDespacho").addEventListener("change", function () {
+        if (!S.pedidoId || CFG.autosave) { return; }   // en borradores ya lo guarda el autoguardado
+        llamar({ accion: "guardar_obs_despacho", pedido_id: S.pedidoId, obs_despacho: this.value.trim() })
+            .then(function (j) {
+                if (j && j.ok) { toast("Observación guardada."); }
+                else { toast((j && j.error) || "No se pudo guardar la observación.", "error"); }
+            });
+    });
+
     /* ---------- Tipo de cliente: mayorista / detal ---------- */
     function cambiarLista(l) {
         if (l === S.lista) { return; }
