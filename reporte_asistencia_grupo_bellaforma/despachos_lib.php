@@ -44,7 +44,18 @@ function formaPagoDias($clave): ?int
 
 function fletesTipoDespacho(): array
 {
-    return ["anticipado" => "Anticipado", "cuenta_corriente" => "Cuenta corriente", "contra_entrega" => "Contra entrega"];
+    return [
+        "contra_entrega"      => "Contra entrega",
+        "cuenta_corriente"    => "Cuenta corriente",
+        "coordinadora"        => "Coordinadora",
+        "domicilio_sandra"    => "Domicilio Sandra",
+        "terminal"            => "Terminal",
+        "recoge_oficina"      => "Recoge en oficina",
+        "domicilio"           => "Domicilio",
+        "domicilio_don_jairo" => "Domicilio Don Jairo",
+        "tcc"                 => "TCC",
+        "anticipado"          => "Anticipado",
+    ];
 }
 
 function empresasDespacho(): array
