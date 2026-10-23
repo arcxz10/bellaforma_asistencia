@@ -102,6 +102,19 @@ function pdSelectHtml(int $id, string $campo, array $catalogo, string $actual, s
     #pedidos_despachar .pd-estado[data-valor="en_proceso"] { background: #FFF1CC; color: #8A6100; }
     #pedidos_despachar .pd-estado[data-valor="con_novedad"] { background: #FFE0D6; color: #B23B16; }
     #pedidos_despachar .pd-obs { min-width: 220px; }
+    #pedidos_despachar td.pd-obs-celda { min-width: 240px; }
+    #pedidos_despachar .pd-obs-ej { margin-top: 6px; padding: 6px 9px; border-left: 3px solid #3F51B5; border-radius: 6px; background: #EEF1FC; color: #243071; font-size: 12.5px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
+    #pedidos_despachar .pd-obs-ej b { display: block; margin-bottom: 1px; font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; color: #3F51B5; }
+    #pedidos_despachar .pd-comp { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; padding: 4px 10px 4px 4px; border: 1.5px solid #CFE8D6; border-radius: 8px; background: #F1FAF4; color: #1E7A3C; font-size: 12px; font-weight: 700; cursor: pointer; text-align: left; }
+    #pedidos_despachar .pd-comp:hover { background: #E3F5E9; border-color: #2E9E5B; }
+    #pedidos_despachar .pd-comp img { display: block; width: 46px; height: 38px; border-radius: 5px; object-fit: cover; background: #fff; }
+    .pd-visor { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; padding: 20px; background: rgba(10, 20, 40, .72); }
+    .pd-visor.abierto { display: flex; }
+    .pd-visor-caja { display: flex; flex-direction: column; gap: 12px; max-width: min(92vw, 760px); max-height: 94vh; padding: 14px; border-radius: 14px; background: #fff; }
+    .pd-visor-caja h4 { margin: 0; font-size: 15px; color: #1B2A41; }
+    .pd-visor-caja img { max-width: 100%; max-height: 74vh; object-fit: contain; border-radius: 8px; }
+    .pd-visor-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .pd-visor-btns a, .pd-visor-btns button { display: inline-flex; align-items: center; padding: 9px 14px; border: 0; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; background: #EDF1F7; color: #1B2A41; }
     #pedidos_despachar .pd-vacio { padding: 28px; text-align: center; color: #667; }
 </style>
 
@@ -110,7 +123,7 @@ function pdSelectHtml(int $id, string $campo, array $catalogo, string $actual, s
     <div class="cabecera-seccion">
         <div>
             <h2><svg class="ico" aria-hidden="true"><use href="#i-clipboard"/></svg> Pedidos para despachar</h2>
-            <p>La hoja del mes: cada pedido, remisión o cotización que envía un ejecutivo entra sola, con lo más reciente arriba. Usted solo cambia el estado y escribe la observación (se guarda solo). Los datos de envío (guía, flete, rótulo) se llenan en «Control de despachos».</p>
+            <p>La hoja del mes: cada pedido, remisión o cotización que envía un ejecutivo entra sola, con lo más reciente arriba. Usted solo cambia el estado y escribe la observación (se guarda solo). En la misma columna verá la observación que dejó el ejecutivo y el comprobante de pago si el pedido es anticipado. Los datos de envío (guía, flete, rótulo) se llenan en «Control de despachos».</p>
         </div>
     </div>
 
@@ -163,8 +176,8 @@ function pdSelectHtml(int $id, string $campo, array $catalogo, string $actual, s
                         $estadoPD = $d["anulado"] ? "anulado" : (isset($conteoEstadoPD[$d["estado_pedido"]]) ? $d["estado_pedido"] : "en_proceso");
                         $codigoPD = $d["codigo_doc"] !== "" ? $d["codigo_doc"] : ($d["factura"] !== "" ? $d["factura"] : "—");
                         $textoBusqueda = function_exists("mb_strtolower")
-                            ? mb_strtolower($d["vendedor"] . " " . $codigoPD . " " . $d["empresa"] . " " . $d["cliente"] . " " . $d["comercial"] . " " . $d["observacion"], "UTF-8")
-                            : strtolower($d["vendedor"] . " " . $codigoPD . " " . $d["empresa"] . " " . $d["cliente"] . " " . $d["comercial"] . " " . $d["observacion"]);
+                            ? mb_strtolower($d["vendedor"] . " " . $codigoPD . " " . $d["empresa"] . " " . $d["cliente"] . " " . $d["comercial"] . " " . $d["observacion"] . " " . $d["obs_ejecutivo"], "UTF-8")
+                            : strtolower($d["vendedor"] . " " . $codigoPD . " " . $d["empresa"] . " " . $d["cliente"] . " " . $d["comercial"] . " " . $d["observacion"] . " " . $d["obs_ejecutivo"]);
                         ?>
                         <?php if ($diaPD !== $diaAnteriorPD): ?>
                             <?php $tsDiaPD = strtotime($diaPD); $nDiaPD = (int) ($porDiaPD[$diaPD] ?? 0); ?>
@@ -184,7 +197,18 @@ function pdSelectHtml(int $id, string $campo, array $catalogo, string $actual, s
                             </td>
                             <td><?= pdSelectHtml($did, "empresa", empresasDespacho(), (string) $d["empresa"]) ?></td>
                             <td><?= pdSelectHtml($did, "estado_pedido", estadosPedidoDespachar(), $d["estado_pedido"], "pd-estado") ?></td>
-                            <td><input type="text" class="pd-in pd-obs" data-id="<?= $did ?>" data-campo="observacion" data-prev="<?= escapar($d["observacion"]) ?>" value="<?= escapar($d["observacion"]) ?>" maxlength="255" autocomplete="off"></td>
+                            <td class="pd-obs-celda">
+                                <input type="text" class="pd-in pd-obs" data-id="<?= $did ?>" data-campo="observacion" data-prev="<?= escapar($d["observacion"]) ?>" value="<?= escapar($d["observacion"]) ?>" maxlength="255" autocomplete="off">
+                                <?php if (trim((string) $d["obs_ejecutivo"]) !== ""): ?>
+                                    <div class="pd-obs-ej"><b>Observación del ejecutivo</b><?= escapar($d["obs_ejecutivo"]) ?></div>
+                                <?php endif; ?>
+                                <?php if (!empty($d["tiene_comprobante"]) && !empty($d["pedido_id"])): ?>
+                                    <button type="button" class="pd-comp" data-pedido="<?= (int) $d["pedido_id"] ?>" data-titulo="<?= escapar($codigoPD) ?>" title="Ver comprobante de pago">
+                                        <img src="pedido_comprobante.php?id=<?= (int) $d["pedido_id"] ?>" alt="" loading="lazy">
+                                        <span>Comprobante de pago</span>
+                                    </button>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -282,6 +306,32 @@ function pdSelectHtml(int $id, string $campo, array $catalogo, string $actual, s
         });
         cerrarGrupo();
     }
+
+    /* ---------- Comprobante de pago: ver grande o descargar ---------- */
+    var visor = null;
+    function crearVisor() {
+        visor = document.createElement("div");
+        visor.className = "pd-visor";
+        visor.innerHTML = '<div class="pd-visor-caja"><h4></h4><img alt="Comprobante de pago"><div class="pd-visor-btns">' +
+            '<a class="pd-bajar" download>⬇ Descargar imagen</a><button type="button" class="pd-cerrar">Cerrar</button></div></div>';
+        document.body.appendChild(visor);
+        visor.addEventListener("click", function (e) { if (e.target === visor) { cerrarVisor(); } });
+        visor.querySelector(".pd-cerrar").addEventListener("click", cerrarVisor);
+    }
+    function abrirVisor(id, titulo) {
+        if (!visor) { crearVisor(); }
+        var base = "pedido_comprobante.php?id=" + encodeURIComponent(id);
+        visor.querySelector("h4").textContent = "Comprobante de pago" + (titulo ? " · " + titulo : "");
+        visor.querySelector("img").src = base;
+        visor.querySelector(".pd-bajar").href = base + "&descargar=1";
+        visor.classList.add("abierto");
+    }
+    function cerrarVisor() { if (visor) { visor.classList.remove("abierto"); } }
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { cerrarVisor(); } });
+    tabla.addEventListener("click", function (e) {
+        var b = e.target.closest ? e.target.closest(".pd-comp") : null;
+        if (b) { abrirVisor(b.dataset.pedido, b.dataset.titulo); }
+    });
 
     document.getElementById("pdBuscar").addEventListener("input", aplicar);
     Array.prototype.forEach.call(raiz.querySelectorAll(".pd-chip"), function (b) {
