@@ -332,6 +332,7 @@ if ($accion === "ped_eliminar") {
     try {
         $conexion->begin_transaction();
         borrarRotuloDePedido($conexion, $id);
+        borrarComprobanteDePedido($conexion, $id);
         $stmt = $conexion->prepare("DELETE FROM despachos WHERE pedido_id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
