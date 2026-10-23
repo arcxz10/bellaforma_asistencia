@@ -146,7 +146,6 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                         <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-file"/></svg>Descargar PDF</a>
                     <?php endif; ?>
                     <?php if ($verExcel): ?>
-                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00796B;" href="pedido_excel.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-chart"/></svg>Descargar Excel</a>
                         <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00695C;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-download"/></svg>Excel para Syscafe</a>
                     <?php endif; ?>
                 </span>
