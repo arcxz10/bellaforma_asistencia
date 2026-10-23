@@ -278,7 +278,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
     // Forma de pago y transportadora (alimentan el Control de despachos). Si la solicitud no las trae (pantalla vieja), se conserva lo que ya tenía el pedido.
     $formaPago = array_key_exists("forma_pago", $d) ? (string) $d["forma_pago"] : (string) ($existente["forma_pago"] ?? "");
     $transportadora = array_key_exists("transportadora", $d) ? (string) $d["transportadora"] : (string) ($existente["transportadora"] ?? "");
-    if (!array_key_exists($formaPago, formasPagoDespacho())) {
+    if (!formaPagoValida($formaPago)) {
         $formaPago = "";
     }
     if (!array_key_exists($transportadora, transportadorasDespacho())) {
@@ -291,6 +291,10 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         $dias = $diasFp ?: null;
     }
     $obs = textoCorto($d["observaciones"] ?? "", 2000, false);
+    // Observación para la oficina: solo se ve en «Pedidos para despachar» (no sale en el PDF, el Excel ni Syscafe)
+    $obsDespacho = array_key_exists("obs_despacho", $d)
+        ? textoCorto($d["obs_despacho"], 500, false)
+        : (string) ($existente["obs_despacho"] ?? "");
     $clienteId = (int) ($d["cliente_id"] ?? 0) ?: null;
 
     if ($modo === "enviar") {
@@ -482,6 +486,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         "transportadora"            => ["s", $transportadora !== "" ? $transportadora : null],
         "pedido_vinculado_id"       => ["i", $pedidoVinculado],
         "observaciones"             => ["s", $obs],
+        "obs_despacho"              => ["s", $obsDespacho],
         "total"                     => ["d", $total],
         "estado"                    => ["s", $estado],
     ];
@@ -536,6 +541,11 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         $insItem->close();
 
         $c->commit();
+
+        // El comprobante de pago solo aplica a «Anticipado»: si cambió la forma de pago, se quita
+        if ($formaPago !== "" && $formaPago !== "anticipado") {
+            borrarComprobanteDePedido($c, $idFinal);
+        }
 
         // Al enviarse por primera vez, el documento entra al Control de despachos del día de hoy
         if ($modo === "enviar" && $estado === "pendiente" && (!$existente || $existente["estado"] === "borrador")) {
