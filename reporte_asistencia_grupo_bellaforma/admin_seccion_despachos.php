@@ -117,7 +117,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
 
     <!-- NUMERACIÓN AUTOMÁTICA DEL # DE FACTURA -->
     <details style="background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:14px 18px; margin:0 0 16px;">
-        <summary style="cursor:pointer; font-weight:700; font-size:15px;">🔢 Numeración automática del # de factura</summary>
+        <summary style="cursor:pointer; font-weight:700; font-size:15px;"><svg class="ico" aria-hidden="true" style="vertical-align:-.2em; margin-right:6px;"><use href="#i-list"/></svg>Numeración automática del # de factura</summary>
         <form method="POST" action="admin.php" style="margin-top:14px;">
             <input type="hidden" name="accion" value="desp_numeracion">
             <p style="margin:0 0 12px; font-size:13px; color:#667;">Escriba el <b>número de factura con el que quiere que salga la próxima</b>. Cada pedido de cliente que envíen los ejecutivos entra aquí con su factura: <b>FV-número</b> si es PE5 (sin factura electrónica) o <b>FE-número</b> si es PE1 (con factura electrónica), y el número sigue solo (ej.: escribe 7815 y la próxima será FV-7815, luego FV-7816...). El cuadro siempre muestra la que sigue. Las remisiones y cotizaciones no se tocan. Vacío = la factura queda en blanco para escribirla a mano. Después puede corregir cualquier factura en la tabla.</p>
@@ -220,7 +220,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                                 <?php if ($ligado): ?>
                                     <span class="desp-origen">#<?= escapar($d["numero_doc"]) ?><?= $d["anulado"] ? " · anulado" : "" ?></span>
                                     <?php if ($d["vinculo_numero"] !== ""): ?>
-                                        <span class="desp-origen desp-union">🔗 Va con el pedido #<?= escapar($d["vinculo_numero"]) ?></span>
+                                        <span class="desp-origen desp-union"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-.2em; margin-right:4px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Va con el pedido #<?= escapar($d["vinculo_numero"]) ?></span>
                                     <?php endif; ?>
                                 <?php else: ?>
                                     <span class="desp-origen">manual</span>
