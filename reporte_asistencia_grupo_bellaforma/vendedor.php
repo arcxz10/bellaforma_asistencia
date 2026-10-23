@@ -174,7 +174,7 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                 <table class="p-items">
                     <?php foreach ($ped["items"] as $it): $esBon = !empty($it["bonificado"]); ?>
                         <tr<?= $esBon ? ' class="bonif"' : "" ?>>
-                            <td><b><?= e($it["referencia"]) ?></b><?= $esBon ? ' <span class="pf-tag-bonif"><svg class="vi" aria-hidden="true"><use href="#vi-gift"/></svg>' . ((int) $it["bonificado"] === 2 ? "DOCENA DE 13 · " : "") . 'BONIFICADO</span>' : "" ?><br><?= e($it["nombre"]) ?></td>
+                            <td><b><?= e($it["referencia"]) ?></b><?= $esBon ? ' <span class="pf-tag-bonif"><svg class="vi" aria-hidden="true"><use href="#vi-gift"/></svg>' . ((int) $it["bonificado"] === 3 ? "APOYO A FLETE · " : ((int) $it["bonificado"] === 2 ? "DOCENA DE 13 · " : "")) . 'BONIFICADO</span>' : "" ?><br><?= e($it["nombre"]) ?></td>
                             <td class="n"><?= (int) $it["cantidad"] ?> × <?= formatoCOP($it["precio_unitario"]) ?><br><b><?= formatoCOP($esBon ? 0 : $it["subtotal"]) ?></b></td>
                         </tr>
                     <?php endforeach; ?>
