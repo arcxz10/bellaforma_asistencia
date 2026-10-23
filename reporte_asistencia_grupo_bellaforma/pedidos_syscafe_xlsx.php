@@ -412,7 +412,10 @@ function syscafe_pedidos_xls(array $pedidos, bool $conEncabezado = true): string
         $r = $k + $desp;
         foreach ($cols as $i => $c) {
             $v = $fila[$i];
-            if ($c[1] === "T") {
+            if ($i === 7) {
+                // Plazo (días): en el .XLS va como NÚMERO. Como texto ("8") Syscafe lo leía como 0 días
+                $out .= biff2_numero($r, $i, (float) $v);
+            } elseif ($c[1] === "T") {
                 $out .= biff2_label($r, $i, (string) $v);
             } elseif ($c[1] === "B") {
                 $out .= biff2_logico($r, $i, (bool) $v);
