@@ -472,6 +472,55 @@ function valorDespachoNumero($v): ?float
 }
 
 /**
+ * Copia un dato de envío (transportadora, guía, tipo de flete, valor del flete) a los despachos de los documentos
+ * vinculados (remisión <-> pedido de cliente), porque salen juntos. Devuelve [["id"=>, "campo"=>, "valor"=>], ...]
+ * para que la pantalla actualice las otras filas sin recargar. Nunca interrumpe el guardado principal.
+ */
+function sincronizarDespachoVinculado(mysqli $c, int $despachoId, string $campo, $valorDb, $valorPantalla): array
+{
+    $salida = [];
+    try {
+        $st = $c->prepare(
+            "SELECT d2.id AS did, d2.pedido_id AS pid
+             FROM despachos d
+             JOIN pedidos_vendedores p ON p.id = d.pedido_id
+             JOIN pedidos_vendedores p2 ON (p2.id = p.pedido_vinculado_id OR p2.pedido_vinculado_id = p.id)
+             JOIN despachos d2 ON d2.pedido_id = p2.id
+             WHERE d.id = ? AND d2.id <> d.id"
+        );
+        $st->bind_param("i", $despachoId);
+        $st->execute();
+        $res = $st->get_result();
+        $otros = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+        $st->close();
+
+        foreach ($otros as $o) {
+            $otroId = (int) $o["did"];
+            $otroPedido = (int) $o["pid"];
+            if ($campo === "transportadora") {
+                $up = $c->prepare("UPDATE pedidos_vendedores SET transportadora = ? WHERE id = ?");
+                $up->bind_param("si", $valorDb, $otroPedido);
+            } elseif ($campo === "valor_flete") {
+                $up = $c->prepare("UPDATE despachos SET valor_flete = ? WHERE id = ?");
+                $up->bind_param("di", $valorDb, $otroId);
+            } elseif (in_array($campo, ["numero_guia", "flete_tipo"], true)) {
+                // $campo viene de la lista blanca de arriba
+                $up = $c->prepare("UPDATE despachos SET `$campo` = ? WHERE id = ?");
+                $up->bind_param("si", $valorDb, $otroId);
+            } else {
+                continue;
+            }
+            $up->execute();
+            $up->close();
+            $salida[] = ["id" => $otroId, "campo" => $campo, "valor" => $valorPantalla];
+        }
+    } catch (Throwable $e) {
+        // la sincronización es un extra: si falla, el cambio principal ya quedó guardado
+    }
+    return $salida;
+}
+
+/**
  * Cambia UN campo de un despacho (edición en línea de la tabla).
  * Devuelve ["ok" => bool, "error" => string, "valor" => valor ya guardado, "texto" => etiqueta].
  */
@@ -536,7 +585,12 @@ function actualizarCampoDespacho(mysqli $c, int $id, string $campo, string $valo
             }
             $up->execute();
             $up->close();
-            return ["ok" => true, "valor" => $valor, "texto" => $cat[$valor]];
+            $resp = ["ok" => true, "valor" => $valor, "texto" => $cat[$valor]];
+            if ($campo === "transportadora") {
+                // Pedido y remisión van juntos: la transportadora también se pone en el documento vinculado
+                $resp["vinculados"] = sincronizarDespachoVinculado($c, $id, "transportadora", $valor, $valor);
+            }
+            return $resp;
         }
         if ($valor !== "" && !isset($cat[$valor])) {
             return $falla("Opción no válida.");
@@ -553,6 +607,11 @@ function actualizarCampoDespacho(mysqli $c, int $id, string $campo, string $valo
     $up->execute();
     $up->close();
     $resp = ["ok" => true, "valor" => $guardar, "texto" => is_string($guardar) ? $guardar : ($guardar === null ? "" : (string) $guardar)];
+
+    // Pedido y remisión vinculados van juntos: guía, tipo de flete y valor del flete se copian al otro documento
+    if (in_array($campo, ["numero_guia", "flete_tipo", "valor_flete"], true)) {
+        $resp["vinculados"] = sincronizarDespachoVinculado($c, $id, $campo, $guardar, $guardar);
+    }
 
     // El prefijo del documento define la empresa (PE5 = MIRELY, PE1 = GRUPO BELLAFORMA…)
     if ($campo === "factura") {
