@@ -225,7 +225,7 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
         "SELECT d.*, p.id AS p_id, p.estado AS p_estado, p.tipo_pedido AS p_tipo, p.numero_pedido AS p_numero,
                 p.cliente_nit AS p_nit, p.cliente_nombre AS p_nombre, p.cliente_nombre_comercial AS p_comercial,
                 p.cliente_ciudad AS p_ciudad, p.cliente_departamento AS p_depto, p.total AS p_total,
-                p.forma_pago AS p_forma, p.transportadora AS p_transp, v.nombre AS p_vendedor
+                p.forma_pago AS p_forma, p.transportadora AS p_transp, p.factura_electronica AS p_fe, v.nombre AS p_vendedor
          FROM despachos d
          LEFT JOIN pedidos_vendedores p ON p.id = d.pedido_id
          LEFT JOIN vendedores v ON v.id = p.vendedor_id
@@ -241,12 +241,19 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
     $filas = [];
     foreach ($raw as $r) {
         $ligado = $r["p_id"] !== null;
+        // Empresa: la que la oficina haya elegido a mano; si está vacía, sale sola.
+        //  - Pedido con factura electrónica => GRUPO BELLAFORMA; sin factura electrónica => MIRELY.
+        //  - Fila manual / histórica (sin pedido) => según el prefijo del # de factura, si se reconoce.
+        $empresa = (string) $r["empresa"];
+        if ($empresa === "") {
+            $empresa = $ligado ? empresaPorFacturaElectronica($r["p_fe"]) : empresaPorFactura((string) $r["factura"]);
+        }
         $fila = [
             "id" => (int) $r["id"],
             "pedido_id" => $ligado ? (int) $r["p_id"] : null,
             "fecha" => $r["fecha"],
             "anulado" => $ligado && $r["p_estado"] === "anulado",
-            "empresa" => $r["empresa"], "factura" => $r["factura"], "numero_guia" => $r["numero_guia"],
+            "empresa" => $empresa, "factura" => $r["factura"], "numero_guia" => $r["numero_guia"],
             "flete_tipo" => $r["flete_tipo"], "valor_flete" => $r["valor_flete"] !== null ? (float) $r["valor_flete"] : null,
             "estado_entrega" => $r["estado_entrega"], "estado_pago" => $r["estado_pago"],
         ];
@@ -290,6 +297,12 @@ function empresaPorFactura(string $factura): string
         return "";
     }
     return $mapa[strtoupper($m[1])] ?? "";
+}
+
+/** Empresa que emite el documento: con factura electrónica sale por GRUPO BELLAFORMA; sin ella, por MIRELY. */
+function empresaPorFacturaElectronica($facturaElectronica): string
+{
+    return !empty($facturaElectronica) ? "GRUPO BELLAFORMA" : "MIRELY";
 }
 
 /** Pasa un despacho al día siguiente (por si ese día no se logró despachar). Devuelve la nueva fecha o null si no existe. */
