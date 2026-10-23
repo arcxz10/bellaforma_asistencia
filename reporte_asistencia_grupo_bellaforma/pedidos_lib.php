@@ -552,7 +552,9 @@ function pedidosParaUnirRemision(mysqli $c, int $vendedorId, ?int $incluirId = n
 {
     $incluir = (int) $incluirId;
     $st = $c->prepare(
-        "SELECT id, numero_pedido, cliente_nombre, cliente_nombre_comercial, total, creado_en
+        "SELECT id, numero_pedido, cliente_nombre, cliente_nombre_comercial, total, creado_en,
+                tipo_cliente, cliente_id, cliente_tipo_persona, cliente_nit, cliente_telefono, cliente_email,
+                cliente_departamento, cliente_ciudad, cliente_barrio, cliente_direcciones, cliente_puntos_referencia
          FROM pedidos_vendedores
          WHERE vendedor_id = ? AND tipo_pedido = 'pedido' AND (estado IN ('pendiente','procesado') OR id = ?)
          ORDER BY creado_en DESC, id DESC
