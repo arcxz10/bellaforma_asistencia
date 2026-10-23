@@ -73,6 +73,47 @@ $cfgJs = [
 ];
 $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 ?>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="vi-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></symbol>
+<symbol id="vi-truck" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></symbol>
+<symbol id="vi-note" viewBox="0 0 24 24"><path d="M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v10"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-4 1 1-4Z"/></symbol>
+<symbol id="vi-store" viewBox="0 0 24 24"><path d="m2 7 2-4h16l2 4"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20v3a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0 2 2 0 0 1-2-2"/><path d="M9 22v-5h6v5"/></symbol>
+<symbol id="vi-bag" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
+<symbol id="vi-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+<symbol id="vi-building" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/></symbol>
+<symbol id="vi-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+<symbol id="vi-package" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></symbol>
+<symbol id="vi-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+<symbol id="vi-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></symbol>
+<symbol id="vi-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+<symbol id="vi-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"/></symbol>
+<symbol id="vi-chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+<symbol id="vi-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/></symbol>
+<symbol id="vi-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="vi-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="vi-clipboard" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/></symbol>
+<symbol id="vi-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+<symbol id="vi-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+<symbol id="vi-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="vi-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></symbol>
+</defs></svg>
+<style>
+    /* Íconos vectoriales (reemplazan a los emojis; mismo estilo de línea del panel administrativo) */
+    .vi { display: inline-block; flex: none; width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; margin-right: .4em; }
+    .pf-dialogo-icono .vi { width: 28px; height: 28px; margin: 0; stroke-width: 1.7; vertical-align: middle; }
+    .pf-dialogo-icono { color: var(--azul-600); }
+    .pf-dialogo-icono.peligro, .pf-dialogo.peligro .pf-dialogo-icono { color: var(--peligro); }
+    .pf-thumb-vacio .vi { width: 26px; height: 26px; margin: 0; color: var(--tinta-tenue); vertical-align: middle; }
+    .pf-aviso .vi, .pf-estado .vi { margin-right: .35em; }
+    .pf-aviso.ok .vi { color: var(--verde-600); }
+    .pf-tag-bonif .vi { width: 1.05em; height: 1.05em; margin-right: .25em; vertical-align: -.18em; }
+    .pf-step button.bonif .vi { vertical-align: -.22em; }
+    #pfBuscarProd {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238793A8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: 14px center; background-size: 18px; padding-left: 42px;
+    }
+</style>
+
 <div class="pf" id="pf">
 
     <div class="pf-pasos">
@@ -88,9 +129,9 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         <div class="pf-card" id="pfCardTipoDoc">
             <h2>¿Qué documento va a generar?</h2>
             <div class="pf-segmento pf-seg-3" id="pfDocTipo">
-                <button type="button" data-doc="pedido">🛒 Pedido de cliente</button>
-                <button type="button" data-doc="remision">🚚 Remisión</button>
-                <button type="button" data-doc="cotizacion">📝 Cotización</button>
+                <button type="button" data-doc="pedido"><svg class="vi" aria-hidden="true"><use href="#vi-cart"/></svg>Pedido de cliente</button>
+                <button type="button" data-doc="remision"><svg class="vi" aria-hidden="true"><use href="#vi-truck"/></svg>Remisión</button>
+                <button type="button" data-doc="cotizacion"><svg class="vi" aria-hidden="true"><use href="#vi-note"/></svg>Cotización</button>
             </div>
             <div id="pfNumeroBox" <?= ($pf["rol"] === "admin" || !empty($pf["editar_numero"])) ? "" : "hidden" ?>>
                 <label for="pfNumero" id="pfNumeroLabel">Número de pedido</label>
@@ -121,10 +162,10 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             <h2>¿Qué tipo de cliente es?</h2>
             <p class="pf-nota" style="margin:0 0 10px;">Elija primero el tipo: define la lista de precios del pedido.</p>
             <div class="pf-segmento" id="pfListaTipo">
-                <button type="button" data-lista="mayorista">🏪 Cliente mayorista<small>Precio mayorista</small></button>
-                <button type="button" data-lista="detal">🛍️ Cliente detal<small>Precio detal</small></button>
+                <button type="button" data-lista="mayorista"><svg class="vi" aria-hidden="true"><use href="#vi-store"/></svg>Cliente mayorista<small>Precio mayorista</small></button>
+                <button type="button" data-lista="detal"><svg class="vi" aria-hidden="true"><use href="#vi-bag"/></svg>Cliente detal<small>Precio detal</small></button>
             </div>
-            <div class="pf-aviso alerta" id="pfAvisoLista" style="margin-top:10px;">👆 Elija una de las dos opciones para continuar.</div>
+            <div class="pf-aviso alerta" id="pfAvisoLista" style="margin-top:10px;"><svg class="vi" aria-hidden="true"><use href="#vi-info"/></svg>Elija una de las dos opciones para continuar.</div>
         </div>
 
         <div id="pfResto" class="pf-bloqueado">
@@ -145,8 +186,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             <h2>Datos del cliente</h2>
 
             <div class="pf-segmento" id="pfTipo">
-                <button type="button" data-tipo="juridica" class="activo">🏢 Persona jurídica<small>Con NIT</small></button>
-                <button type="button" data-tipo="natural">👤 Persona natural<small>Con cédula</small></button>
+                <button type="button" data-tipo="juridica" class="activo"><svg class="vi" aria-hidden="true"><use href="#vi-building"/></svg>Persona jurídica<small>Con NIT</small></button>
+                <button type="button" data-tipo="natural"><svg class="vi" aria-hidden="true"><use href="#vi-user"/></svg>Persona natural<small>Con cédula</small></button>
             </div>
 
             <label for="pfDoc" id="pfDocLabel">NIT *</label>
@@ -194,7 +235,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     <!-- ============ PASO 2: PRODUCTOS ============ -->
     <section class="pf-seccion" data-paso="2">
         <div class="pf-busqueda">
-            <input type="search" id="pfBuscarProd" placeholder="🔍 Buscar referencia o nombre" autocomplete="off">
+            <input type="search" id="pfBuscarProd" placeholder="Buscar referencia o nombre" autocomplete="off">
             <button type="button" class="pf-chip" id="pfSoloSel">Elegidos</button>
         </div>
         <div class="pf-busq-nota" id="pfBusqNota" hidden></div>
@@ -214,7 +255,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                             <img src="foto.php?id=<?= (int) $p["id"] ?>&amp;v=<?= (int) $p["foto_v"] ?>" alt="" loading="lazy" decoding="async">
                         </button>
                     <?php else: ?>
-                        <div class="pf-thumb pf-thumb-vacio">🧴</div>
+                        <div class="pf-thumb pf-thumb-vacio"><svg class="vi" aria-hidden="true"><use href="#vi-package"/></svg></div>
                     <?php endif; ?>
                     <div class="pf-prod-info">
                         <b><?= htmlspecialchars($p["referencia"], ENT_QUOTES, "UTF-8") ?></b>
@@ -225,11 +266,11 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                         <button type="button" class="menos" aria-label="Quitar uno">−</button>
                         <input type="number" class="cant" inputmode="numeric" min="0" max="100000" step="1" value="0" aria-label="Cantidad">
                         <button type="button" class="mas" aria-label="Agregar uno">+</button>
-                        <button type="button" class="bonif" aria-pressed="false" title="Agregar unidades de este producto sin costo (100 % de descuento)">🎁 Bonificado</button>
+                        <button type="button" class="bonif" aria-pressed="false" title="Agregar unidades de este producto sin costo (100 % de descuento)"><svg class="vi" aria-hidden="true"><use href="#vi-gift"/></svg>Bonificado</button>
                     </div>
                     <div class="pf-bonif" hidden>
                         <div class="pf-bonif-info">
-                            <b>🎁 Bonificado</b>
+                            <b><svg class="vi" aria-hidden="true"><use href="#vi-gift"/></svg>Bonificado</b>
                             <span>Sin costo · 100 % de descuento · precio lista <s class="pf-bonif-precio"></s></span>
                         </div>
                         <div class="pf-step">
@@ -277,7 +318,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 
         <?php if ($pf["autosave"]): ?>
             <div class="pf-card">
-                <button type="button" class="pf-btn-sec pf-ancho" id="pfBorrador">💾 Guardar como borrador y salir</button>
+                <button type="button" class="pf-btn-sec pf-ancho" id="pfBorrador"><svg class="vi" aria-hidden="true"><use href="#vi-save"/></svg>Guardar como borrador y salir</button>
                 <p class="pf-nota">El pedido también se guarda solo como borrador mientras lo llena. Lo encuentra en «Mis pedidos».</p>
             </div>
         <?php endif; ?>
@@ -293,7 +334,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 
     <div class="pf-dialogo" id="pfDialogo" hidden>
         <div class="pf-dialogo-caja" role="dialog" aria-modal="true" aria-labelledby="pfDialogoTitulo">
-            <div class="pf-dialogo-icono" id="pfDialogoIcono">🛒</div>
+            <div class="pf-dialogo-icono" id="pfDialogoIcono"><svg class="vi" aria-hidden="true"><use href="#vi-cart"/></svg></div>
             <h3 id="pfDialogoTitulo">¿Confirmar?</h3>
             <p id="pfDialogoTexto"></p>
             <div class="pf-dialogo-botones">
@@ -314,6 +355,13 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
 (function () {
     var CFG = window.PF_CFG;
     var $ = function (id) { return document.getElementById(id); };
+    // Ícono vectorial del sprite #vi-* (reemplaza a los emojis)
+    function ico(n) { return '<svg class="vi" aria-hidden="true"><use href="#vi-' + n + '"/></svg>'; }
+    function conIcono(el, texto, icono) {
+        el.textContent = "";
+        if (icono) { el.insertAdjacentHTML("beforeend", ico(icono)); }
+        el.appendChild(document.createTextNode(texto || ""));
+    }
     var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, fp: "", tr: "", pedidoId: CFG.pedidoId, items: {}, bonos: {}, abiertos: {},
               ocupado: false, sucio: false, timer: null, ignorar: false, docOk: "" };
 
@@ -455,10 +503,10 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         });
     }
 
-    function msgCliente(texto, clase) {
+    function msgCliente(texto, clase, icono) {
         var m = $("pfClienteMsg");
         if (!texto) { m.hidden = true; return; }
-        m.textContent = texto; m.className = "pf-aviso " + (clase || ""); m.hidden = false;
+        conIcono(m, texto, icono); m.className = "pf-aviso " + (clase || ""); m.hidden = false;
     }
 
     function aplicarCliente(c) {
@@ -478,8 +526,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         // Si el cliente ya tiene crédito pactado con un plazo de la lista, se sugiere esa forma de pago (solo si aún no eligió una)
         if (!S.fp && c.condicion_pago === "credito" && FP_DIAS[String(parseInt(c.dias_credito, 10))]) { setFP(FP_DIAS[String(parseInt(c.dias_credito, 10))]); }
         colombiaSet($("pfDepto"), $("pfMuni"), c.departamento, c.municipio).then(function () { S.ignorar = false; sucio(); });
-        if (c.inactivo) { msgCliente("⚠️ Cliente encontrado, pero está INACTIVO en el sistema. Consulte con la oficina.", "alerta"); }
-        else { msgCliente("✔ Cliente encontrado. Se cargaron sus datos; revíselos y corrija si hace falta. Los datos que le faltaban y usted complete quedarán guardados para los próximos pedidos.", "ok"); }
+        if (c.inactivo) { msgCliente("Cliente encontrado, pero está INACTIVO en el sistema. Consulte con la oficina.", "alerta", "alert"); }
+        else { msgCliente("Cliente encontrado. Se cargaron sus datos; revíselos y corrija si hace falta. Los datos que le faltaban y usted complete quedarán guardados para los próximos pedidos.", "ok", "check"); }
     }
 
     function buscarCliente() {
@@ -494,8 +542,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             if (r.encontrado) { aplicarCliente(r.cliente); }
             else if (r.otro_tipo) {
                 S.clienteId = null;
-                msgCliente("⚠️ Este cliente está registrado como " + (r.otro_tipo === "detal" ? "DETAL" : "MAYORISTA") +
-                           ". Elija arriba «Cliente " + (r.otro_tipo === "detal" ? "detal" : "mayorista") + "» para cargar sus datos y su lista de precios.", "alerta");
+                msgCliente("Este cliente está registrado como " + (r.otro_tipo === "detal" ? "DETAL" : "MAYORISTA") +
+                           ". Elija arriba «Cliente " + (r.otro_tipo === "detal" ? "detal" : "mayorista") + "» para cargar sus datos y su lista de precios.", "alerta", "alert");
             }
             else { S.clienteId = null; msgCliente("Cliente nuevo: complete sus datos. Al enviar el pedido quedará guardado en la base de clientes y la próxima vez aparecerá al buscar su NIT / cédula.", ""); }
         }).catch(function () { msgCliente("Sin conexión: no se pudo buscar el cliente.", "alerta"); });
@@ -731,7 +779,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             var info = document.createElement("div"); info.className = "pf-res-info";
             var b = document.createElement("b"); b.textContent = INFO[id].ref;
             if (bon) {
-                var tag = document.createElement("small"); tag.className = "pf-tag-bonif"; tag.textContent = "🎁 BONIFICADO";
+                var tag = document.createElement("small"); tag.className = "pf-tag-bonif"; tag.insertAdjacentHTML("beforeend", ico("gift")); tag.appendChild(document.createTextNode("BONIFICADO"));
                 b.appendChild(tag);
             }
             var s = document.createElement("span"); s.textContent = INFO[id].nombre;
@@ -804,7 +852,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         return Object.keys(S.items).length > 0 || Object.keys(S.bonos).length > 0 || d.identificacion || d.cliente_nombre || d.telefono || d.direccion;
     }
 
-    function estadoTexto(t) { $("pfEstado").textContent = t || ""; }
+    function estadoTexto(t, icono) { conIcono($("pfEstado"), t || "", t ? icono : ""); }
 
     function guardar(modo, opciones) {
         opciones = opciones || {};
@@ -838,7 +886,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                     if (CFG.urlBase && history.replaceState) { history.replaceState(null, "", CFG.urlBase + "?pedido=" + r.id); }
                 }
                 var h = new Date();
-                estadoTexto("✔ Borrador guardado " + h.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }));
+                estadoTexto("Borrador guardado " + h.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }), "check");
             } else if (r.red) {
                 estadoTexto("Sin conexión: se guardará al volver la señal.");
                 S.timer = setTimeout(autoGuardar, 8000);
@@ -891,7 +939,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         pfConfirmar({
             titulo: edicion ? "¿Guardar los cambios?" : "¿Enviar " + (S.doc === "pedido" ? "el pedido" : "la " + NOMBRE_DOC[S.doc]) + "?",
             texto: texto,
-            icono: edicion ? "✏️" : "🛒",
+            icono: edicion ? "edit" : "cart",
             si: edicion ? "Guardar cambios" : "Sí, enviar",
             onSi: function () {
                 clearTimeout(S.timer);
@@ -924,7 +972,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     var dialogoSi = null;
     function cerrarDialogo() { $("pfDialogo").hidden = true; dialogoSi = null; }
     window.pfConfirmar = function (o) {
-        $("pfDialogoIcono").textContent = o.icono || "❔";
+        $("pfDialogoIcono").innerHTML = ico(o.icono || "help");
         $("pfDialogoTitulo").textContent = o.titulo || "¿Confirmar?";
         $("pfDialogoTexto").textContent = o.texto || "";
         $("pfDialogoSi").textContent = o.si || "Aceptar";
@@ -934,7 +982,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         $("pfDialogoSi").focus();
     };
     window.pfConfirmarForm = function (form, texto, titulo) {
-        pfConfirmar({ titulo: titulo || "¿Eliminar?", texto: texto, icono: "🗑️", si: "Sí, eliminar", peligro: true,
+        pfConfirmar({ titulo: titulo || "¿Eliminar?", texto: texto, icono: "trash", si: "Sí, eliminar", peligro: true,
                       onSi: function () { form.submit(); } });
         return false;
     };
