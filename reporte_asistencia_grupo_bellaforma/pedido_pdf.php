@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Descarga de pedidos en PDF (para digitarlos en Syscafe).
@@ -148,6 +147,7 @@ foreach ($pedidos as $p) {
     $fill = false;
     $totalUnidades = 0;
     $unidadesBonificadas = 0;
+    $unidadesDocena = 0;
 
     // Productos ordenados alfabéticamente por referencia (A-Z; los números se ordenan
     // de forma natural: 2 antes que 10). Si se repite una referencia, primero la cobrada
@@ -165,9 +165,14 @@ foreach ($pedidos as $p) {
             encabezadoTabla($pdf);
         }
         $esBon = !empty($it["bonificado"]);   // bonificado: 100 % de descuento, no se cobra
+        $esDoc = ((int) ($it["bonificado"] ?? 0) === 2);   // 2 = docena de 13 (la unidad gratis)
         $totalUnidades += (int) $it["cantidad"];
         if ($esBon) {
-            $unidadesBonificadas += (int) $it["cantidad"];
+            if ($esDoc) {
+                $unidadesDocena += (int) $it["cantidad"];
+            } else {
+                $unidadesBonificadas += (int) $it["cantidad"];
+            }
             $pdf->SetFillColor(255, 244, 214);
             $relleno = true;
         } else {
@@ -177,7 +182,14 @@ foreach ($pedidos as $p) {
         $pdf->SetFont("Arial", "B", 9);
         $pdf->Cell(32, 6.5, recortar($pdf, $it["referencia"], 30), "LRB", 0, "L", $relleno);
         $pdf->SetFont("Arial", "", 9);
-        $pdf->Cell(80, 6.5, recortar($pdf, $it["nombre"] . ($esBon ? " (BONIFICADO)" : ""), 78), "RB", 0, "L", $relleno);
+        if ($esDoc) {
+            // La etiqueta nunca se corta: se recorta solo el nombre del producto
+            $etiqueta = t(" (DOCENA DE 13 - BONIF.)");
+            $nombreDoc = recortar($pdf, $it["nombre"], max(20, 78 - $pdf->GetStringWidth($etiqueta)));
+            $pdf->Cell(80, 6.5, $nombreDoc . $etiqueta, "RB", 0, "L", $relleno);
+        } else {
+            $pdf->Cell(80, 6.5, recortar($pdf, $it["nombre"] . ($esBon ? " (BONIFICADO)" : ""), 78), "RB", 0, "L", $relleno);
+        }
         $pdf->Cell(16, 6.5, (string) (int) $it["cantidad"], "RB", 0, "R", $relleno);
         $pdf->Cell(29, 6.5, cop($it["precio_unitario"]), "RB", 0, "R", $relleno);
         $pdf->Cell(29, 6.5, $esBon ? cop(0) : cop($it["subtotal"]), "RB", 1, "R", $relleno);
@@ -197,6 +209,10 @@ foreach ($pedidos as $p) {
     if ($unidadesBonificadas > 0) {
         $pdf->SetFont("Arial", "", 9);
         $pdf->Cell(0, 6, t("Incluye " . $unidadesBonificadas . " unidad(es) BONIFICADA(S): 100% de descuento, sin costo."), 0, 1, "L");
+    }
+    if ($unidadesDocena > 0) {
+        $pdf->SetFont("Arial", "", 9);
+        $pdf->Cell(0, 6, t("Incluye " . $unidadesDocena . " unidad(es) por DOCENA DE 13 (1 gratis por cada 12): 100% de descuento, sin costo."), 0, 1, "L");
     }
 }
 
