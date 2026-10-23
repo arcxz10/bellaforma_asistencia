@@ -96,12 +96,19 @@ if ($idEditar > 0) {
 $misPedidos = obtenerPedidos($conexion, ["vendedor" => $vendedorId, "con_borradores" => true], 150);
 $borradores = array_values(array_filter($misPedidos, fn($p) => $p["estado"] === "borrador"));
 $enviados = array_values(array_filter($misPedidos, fn($p) => $p["estado"] !== "borrador"));
+// id => número visible del documento (para mostrar «Unida al pedido #…» en las remisiones)
+$numerosPedidos = [];
+foreach ($misPedidos as $mp) {
+    $numerosPedidos[(int) $mp["id"]] = numeroDocumento($mp);
+}
 
 $pf = [
     "rol" => "vendedor",
     "editar_numero" => $puedeDescargar,   // ejecutivo autorizado: puede escribir el número del documento
     "csrf" => $_SESSION["csrf_pedido"],
     "pedido" => $pedidoEditar,
+    // Pedidos del ejecutivo a los que puede unir una remisión
+    "pedidos_union" => pedidosParaUnirRemision($conexion, $vendedorId, $pedidoEditar ? (int) ($pedidoEditar["pedido_vinculado_id"] ?? 0) : null),
     "productos" => productosParaFormulario($conexion, $pedidoEditar),
     "volver" => "vendedor.php#mis-pedidos",
     "autosave" => !$pedidoEditar || $pedidoEditar["estado"] === "borrador",
@@ -112,6 +119,7 @@ $pf = [
 
 function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): void
 {
+    global $numerosPedidos;
     $esBorrador = $ped["estado"] === "borrador";
     $nombre = $ped["cliente_nombre"] !== "" ? $ped["cliente_nombre"] : "(sin cliente todavía)";
     ?>
@@ -128,8 +136,12 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
             $verPdf = !$esBorrador && ($esCotizacion || $puedeDescargar);
             $verExcel = !$esBorrador && $puedeDescargar;
             ?>
-            <?php if ($verPdf || $verExcel): ?>
+            <?php $puedeEditar = $ped["estado"] === "pendiente"; ?>
+            <?php if ($verPdf || $verExcel || $puedeEditar): ?>
                 <span style="grid-column:1 / -1; display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+                    <?php if ($puedeEditar): ?>
+                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Editar <?= e(nombreCortoDocumento($ped["tipo_pedido"] ?? "pedido")) ?></a>
+                    <?php endif; ?>
                     <?php if ($verPdf): ?>
                         <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>">📄 Descargar PDF</a>
                     <?php endif; ?>
@@ -154,6 +166,7 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                 <?php if (!empty($ped["cliente_direcciones"])): ?>Dirección: <?= e($ped["cliente_direcciones"]) ?><?= !empty($ped["cliente_barrio"]) ? " · " . e($ped["cliente_barrio"]) : "" ?><br><?php endif; ?>
                 <?php if (!empty($ped["cliente_puntos_referencia"])): ?>Referencia: <?= e($ped["cliente_puntos_referencia"]) ?><br><?php endif; ?>
                 Pago: <?= e(etiquetaCondicion($ped)) ?><?= !empty($ped["transportadora"]) ? " · Transportadora: " . e(etiquetaTransportadora($ped["transportadora"])) : "" ?> · Factura electrónica: <?= !empty($ped["factura_electronica"]) ? "Sí" : "No" ?>
+                <?php if (($ped["tipo_pedido"] ?? "") === "remision" && !empty($ped["pedido_vinculado_id"]) && isset($numerosPedidos[(int) $ped["pedido_vinculado_id"]])): ?><br>🔗 Unida al pedido #<?= e($numerosPedidos[(int) $ped["pedido_vinculado_id"]]) ?><?php endif; ?>
                 <?php if (!empty($ped["observaciones"])): ?><br>Obs.: <?= nl2br(e($ped["observaciones"])) ?><?php endif; ?>
             </div>
             <?php if ($ped["items"]): ?>
@@ -167,6 +180,7 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                 </table>
             <?php endif; ?>
 
+            <?php if ($ped["estado"] !== "pendiente"): ?>   <?php /* el botón «Editar» de los pedidos enviados ya está arriba, junto a las descargas */ ?>
             <div class="acciones-ped">
                 <?php if ($esBorrador): ?>
                     <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Continuar</a>
@@ -176,12 +190,11 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                         <input type="hidden" name="pedido_id" value="<?= (int) $ped["id"] ?>">
                         <button type="submit" class="btn btn-rojo">🗑️ Eliminar</button>
                     </form>
-                <?php elseif ($ped["estado"] === "pendiente"): ?>
-                    <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Editar <?= e(nombreCortoDocumento($ped["tipo_pedido"] ?? "pedido")) ?></a>
                 <?php else: ?>
                     <p class="bloqueado">🔒 <?= $ped["estado"] === "procesado" ? "Ya fue subido a Syscafe: no se puede editar." : "Pedido anulado." ?></p>
                 <?php endif; ?>
             </div>
+            <?php endif; ?>
         </div>
     </details>
     <?php
