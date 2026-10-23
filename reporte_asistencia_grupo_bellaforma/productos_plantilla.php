@@ -5,6 +5,7 @@ if (!isset($_SESSION["admin_id"])) {
     header("Location: login.html");
     exit;
 }
+require_once __DIR__ . "/conexion.php";   // aplica los permisos de subadministradores
 header("Content-Type: text/csv; charset=utf-8");
 header("Content-Disposition: attachment; filename=plantilla_productos.csv");
 echo "\xEF\xBB\xBF";
