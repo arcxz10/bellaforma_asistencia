@@ -197,17 +197,136 @@ function sembrarDespachosIniciales(mysqli $c): void
 
 /* ================= CREAR / CONSULTAR ================= */
 
-/** Registra el pedido en el control de despachos del día de hoy (una sola vez por pedido). No interrumpe el guardado si falla. */
+/* ---------- Numeración automática del # de factura: FV (pedido sin factura electrónica, PE5) y FE (con factura electrónica, PE1) ---------- */
+
+/** [prefijo => etiqueta]. Los contadores viven en la tabla numeracion_documentos con clave FV / FE. */
+function prefijosFacturaDespacho(): array
+{
+    return [
+        "FV" => "Factura de venta (pedidos PE5, sin factura electrónica)",
+        "FE" => "Factura electrónica (pedidos PE1, con factura electrónica)",
+    ];
+}
+
+/** [prefijo => último número usado]. 0 = sin configurar (la factura queda vacía para escribirla a mano, como antes). */
+function ultimosNumerosFactura(mysqli $c): array
+{
+    asegurarTablaNumeracion($c);
+    $r = ["FV" => 0, "FE" => 0];
+    $res = $c->query("SELECT clave, ultimo FROM numeracion_documentos WHERE clave IN ('FV', 'FE')");
+    while ($res && ($f = $res->fetch_assoc())) {
+        $r[$f["clave"]] = (int) $f["ultimo"];
+    }
+    return $r;
+}
+
+/** Guarda lo que escribió el administrador. Vacío o 0 = sin numeración automática. Devuelve null si salió bien, o el mensaje de error. */
+function guardarNumeracionFacturas(mysqli $c, $valores): ?string
+{
+    asegurarTablaNumeracion($c);
+    $valores = is_array($valores) ? $valores : [];
+    $nuevos = [];
+    foreach (prefijosFacturaDespacho() as $pref => $etiqueta) {
+        $v = trim((string) ($valores[$pref] ?? ""));
+        if ($v === "") {
+            $v = "0";
+        }
+        if (!preg_match('/^\d{1,9}$/', $v)) {
+            return "El número de «" . $pref . "» solo puede tener dígitos (máximo 9).";
+        }
+        $nuevos[$pref] = (int) $v;
+    }
+    try {
+        $c->begin_transaction();
+        $st = $c->prepare("INSERT INTO numeracion_documentos (clave, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE ultimo = VALUES(ultimo)");
+        foreach ($nuevos as $pref => $n) {
+            $st->bind_param("si", $pref, $n);
+            $st->execute();
+        }
+        $st->close();
+        $c->commit();
+    } catch (Throwable $e) {
+        $c->rollback();
+        return "No se pudo guardar la numeración de facturas.";
+    }
+    return null;
+}
+
+/**
+ * Siguiente # de factura ("FV-7815") o "" si ese prefijo no tiene numeración configurada.
+ * Llamar DENTRO de una transacción: el número queda bloqueado hasta guardar y, si falla, no se gasta. Salta los que ya estén escritos en el control.
+ */
+function siguienteFacturaDespacho(mysqli $c, string $prefijo): string
+{
+    for ($i = 0; $i < 500; $i++) {
+        $st = $c->prepare("UPDATE numeracion_documentos SET ultimo = LAST_INSERT_ID(ultimo + 1) WHERE clave = ? AND ultimo > 0");
+        $st->bind_param("s", $prefijo);
+        $st->execute();
+        $filas = $st->affected_rows;
+        $st->close();
+        if ($filas < 1) {
+            return "";
+        }
+        $factura = $prefijo . "-" . (int) $c->insert_id;
+        // ¿Ya está escrita (sola o junto a otra, ej. "FE-2264 / RM2-162")?
+        $a = $factura . " /%";
+        $b = "%/ " . $factura;
+        $m = "%/ " . $factura . " /%";
+        $st = $c->prepare("SELECT id FROM despachos WHERE factura = ? OR factura LIKE ? OR factura LIKE ? OR factura LIKE ? LIMIT 1");
+        $st->bind_param("ssss", $factura, $a, $b, $m);
+        $st->execute();
+        $uso = $st->get_result()->fetch_assoc();
+        $st->close();
+        if (!$uso) {
+            return $factura;
+        }
+    }
+    return "";
+}
+
+/**
+ * Registra el pedido en el control de despachos del día de hoy (una sola vez por pedido). No interrumpe el guardado si falla.
+ * Los pedidos de cliente (no remisiones ni cotizaciones) reciben su # de factura automático: FV-n (PE5) o FE-n (PE1), si hay numeración configurada.
+ */
 function crearDespachoDePedido(mysqli $c, int $pedidoId): void
 {
+    $hoy = (new DateTime("now", new DateTimeZone("America/Bogota")))->format("Y-m-d");
     try {
-        $hoy = (new DateTime("now", new DateTimeZone("America/Bogota")))->format("Y-m-d");
-        $st = $c->prepare("INSERT IGNORE INTO despachos (fecha, pedido_id) VALUES (?, ?)");
-        $st->bind_param("si", $hoy, $pedidoId);
+        asegurarTablaNumeracion($c);   // DDL: antes de la transacción
+        $c->begin_transaction();
+        $st = $c->prepare("SELECT tipo_pedido, factura_electronica FROM pedidos_vendedores WHERE id = ? LIMIT 1");
+        $st->bind_param("i", $pedidoId);
         $st->execute();
+        $p = $st->get_result()->fetch_assoc();
         $st->close();
+        $factura = "";
+        if ($p && tipoDocumentoValido($p["tipo_pedido"] ?? "pedido") === "pedido") {
+            $factura = siguienteFacturaDespacho($c, !empty($p["factura_electronica"]) ? "FE" : "FV");
+        }
+        $st = $c->prepare("INSERT IGNORE INTO despachos (fecha, pedido_id, factura) VALUES (?, ?, ?)");
+        $st->bind_param("sis", $hoy, $pedidoId, $factura);
+        $st->execute();
+        $creado = $st->affected_rows === 1;
+        $st->close();
+        if ($creado) {
+            $c->commit();
+        } else {
+            $c->rollback();   // ya existía: no se gasta el número
+        }
     } catch (Throwable $e) {
-        // el control de despachos nunca debe impedir que el pedido se envíe
+        try {
+            $c->rollback();
+        } catch (Throwable $e2) {
+        }
+        // Si algo falló con la numeración, el despacho se crea igual (sin factura) para no perderlo
+        try {
+            $st = $c->prepare("INSERT IGNORE INTO despachos (fecha, pedido_id) VALUES (?, ?)");
+            $st->bind_param("si", $hoy, $pedidoId);
+            $st->execute();
+            $st->close();
+        } catch (Throwable $e3) {
+            // el control de despachos nunca debe impedir que el pedido se envíe
+        }
     }
 }
 
