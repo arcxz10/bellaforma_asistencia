@@ -120,7 +120,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
         <summary style="cursor:pointer; font-weight:700; font-size:15px;">🔢 Numeración automática del # de factura</summary>
         <form method="POST" action="admin.php" style="margin-top:14px;">
             <input type="hidden" name="accion" value="desp_numeracion">
-            <p style="margin:0 0 12px; font-size:13px; color:#667;">Escriba el <b>último número de factura que ya usó</b>. Cada pedido de cliente que envíen los ejecutivos entra aquí con su factura: <b>FV-número</b> si es PE5 (sin factura electrónica) o <b>FE-número</b> si es PE1 (con factura electrónica), y el número sigue solo (ej.: escribe 7814 y el próximo será FV-7815). Las remisiones y cotizaciones no se tocan. Vacío = la factura queda en blanco para escribirla a mano. Después puede corregir cualquier factura en la tabla.</p>
+            <p style="margin:0 0 12px; font-size:13px; color:#667;">Escriba el <b>número de factura con el que quiere que salga la próxima</b>. Cada pedido de cliente que envíen los ejecutivos entra aquí con su factura: <b>FV-número</b> si es PE5 (sin factura electrónica) o <b>FE-número</b> si es PE1 (con factura electrónica), y el número sigue solo (ej.: escribe 7815 y la próxima será FV-7815, luego FV-7816...). El cuadro siempre muestra la que sigue. Las remisiones y cotizaciones no se tocan. Vacío = la factura queda en blanco para escribirla a mano. Después puede corregir cualquier factura en la tabla.</p>
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
                 <?php foreach (prefijosFacturaDespacho() as $prefF => $etiqF): $ultF = (int) ($ultimosFactura[$prefF] ?? 0); ?>
                     <div>
@@ -128,7 +128,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                         <input type="text" name="fact[<?= $prefF ?>]" id="fact_<?= $prefF ?>" inputmode="numeric" pattern="[0-9]*" maxlength="9" autocomplete="off"
                                value="<?= $ultF > 0 ? $ultF : "" ?>" placeholder="Sin numeración" data-prox="proxf_<?= $prefF ?>" data-pref="<?= $prefF ?>"
                                style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
-                        <small id="proxf_<?= $prefF ?>" style="color:#0D47A1;"><?= $ultF > 0 ? "Próxima: " . $prefF . "-" . ($ultF + 1) : "" ?></small>
+                        <small id="proxf_<?= $prefF ?>" style="color:#0D47A1;"><?= $ultF > 0 ? "Próxima: " . $prefF . "-" . $ultF : "" ?></small>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -140,7 +140,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
             document.querySelectorAll("input[data-pref]").forEach(function (inp) {
                 inp.addEventListener("input", function () {
                     var n = parseInt(inp.value, 10);
-                    document.getElementById(inp.dataset.prox).textContent = n > 0 ? "Próxima: " + inp.dataset.pref + "-" + (n + 1) : "";
+                    document.getElementById(inp.dataset.prox).textContent = n > 0 ? "Próxima: " + inp.dataset.pref + "-" + n : "";
                 });
             });
         </script>
