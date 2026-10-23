@@ -262,6 +262,19 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
     $condicion = (($d["condicion_pago"] ?? "") === "credito") ? "credito" : "contado";
     $dias = $condicion === "credito" ? (int) ($d["dias_credito"] ?? 0) : null;
 
+    // Remisión unida a un pedido: va junto a ese pedido, así que no se piden forma de pago ni transportadora;
+    // se toman las del pedido para que el Control de despachos siga mostrándolas.
+    $remisionUnida = $tipoDoc === "remision" && $pedidoVinculado !== null;
+    if ($remisionUnida) {
+        $stp = $c->prepare("SELECT forma_pago, transportadora FROM pedidos_vendedores WHERE id = ? LIMIT 1");
+        $stp->bind_param("i", $pedidoVinculado);
+        $stp->execute();
+        $filaP = $stp->get_result()->fetch_assoc();
+        $stp->close();
+        $d["forma_pago"] = (string) ($filaP["forma_pago"] ?? "");
+        $d["transportadora"] = (string) ($filaP["transportadora"] ?? "");
+    }
+
     // Forma de pago y transportadora (alimentan el Control de despachos). Si la solicitud no las trae (pantalla vieja), se conserva lo que ya tenía el pedido.
     $formaPago = array_key_exists("forma_pago", $d) ? (string) $d["forma_pago"] : (string) ($existente["forma_pago"] ?? "");
     $transportadora = array_key_exists("transportadora", $d) ? (string) $d["transportadora"] : (string) ($existente["transportadora"] ?? "");
@@ -300,10 +313,10 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         // Documentos nuevos: forma de pago y transportadora son obligatorias.
         // (Un documento ya enviado antes de existir este dato puede seguir editándose sin completarlo.)
         $enviadoAntes = $existente && $existente["estado"] !== "borrador";
-        if ($formaPago === "" && !($enviadoAntes && trim((string) ($existente["forma_pago"] ?? "")) === "")) {
+        if (!$remisionUnida && $formaPago === "" && !($enviadoAntes && trim((string) ($existente["forma_pago"] ?? "")) === "")) {
             return $falla("Seleccione la forma de pago.");
         }
-        if ($transportadora === "" && !($enviadoAntes && trim((string) ($existente["transportadora"] ?? "")) === "")) {
+        if (!$remisionUnida && $transportadora === "" && !($enviadoAntes && trim((string) ($existente["transportadora"] ?? "")) === "")) {
             return $falla("Seleccione la transportadora.");
         }
         if ($condicion === "credito" && ($dias === null || $dias < 1 || $dias > 365)) {
