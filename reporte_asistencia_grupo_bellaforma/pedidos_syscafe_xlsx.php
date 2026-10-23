@@ -159,8 +159,18 @@ function syscafe_pe_digitos(string $v): string
 function syscafe_pe_filas(array $p): array
 {
     $ts = strtotime((string) ($p["creado_en"] ?? "now")) ?: time();
-    $credito = ($p["condicion_pago"] ?? "contado") === "credito";
-    $plazo = $credito ? max(0, (int) ($p["dias_credito"] ?? 0)) : 0;
+    // Plazo (días) que se escribe en Syscafe junto a la forma de pago:
+    //  - Si el pedido tiene forma de pago, los días salen de ahí: 3, 5, 8, 30 o 45 días; anticipado / contra entrega = 0.
+    //  - Los pedidos anteriores, que no tienen forma de pago, conservan los días de crédito que ya tenían.
+    // La fecha de vencimiento (AnoE / MesE / DiaE) se calcula con ese mismo plazo.
+    $formaPago = trim((string) ($p["forma_pago"] ?? ""));
+    if ($formaPago !== "") {
+        $plazo = max(0, (int) formaPagoDias($formaPago));
+        $credito = $plazo > 0;
+    } else {
+        $credito = ($p["condicion_pago"] ?? "contado") === "credito";
+        $plazo = $credito ? max(0, (int) ($p["dias_credito"] ?? 0)) : 0;
+    }
     $tsVence = strtotime("+" . $plazo . " days", $ts) ?: $ts;
 
     $conFE = !empty($p["factura_electronica"]);
