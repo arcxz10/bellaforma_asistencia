@@ -208,7 +208,7 @@ function prefijosFacturaDespacho(): array
     ];
 }
 
-/** [prefijo => último número usado]. 0 = sin configurar (la factura queda vacía para escribirla a mano, como antes). */
+/** [prefijo => PRÓXIMO número que se asignará]. 0 = sin configurar (la factura queda vacía para escribirla a mano, como antes). */
 function ultimosNumerosFactura(mysqli $c): array
 {
     asegurarTablaNumeracion($c);
@@ -259,7 +259,7 @@ function guardarNumeracionFacturas(mysqli $c, $valores): ?string
 function siguienteFacturaDespacho(mysqli $c, string $prefijo): string
 {
     for ($i = 0; $i < 500; $i++) {
-        $st = $c->prepare("UPDATE numeracion_documentos SET ultimo = LAST_INSERT_ID(ultimo + 1) WHERE clave = ? AND ultimo > 0");
+        $st = $c->prepare("UPDATE numeracion_documentos SET ultimo = LAST_INSERT_ID(ultimo) + 1 WHERE clave = ? AND ultimo > 0");
         $st->bind_param("s", $prefijo);
         $st->execute();
         $filas = $st->affected_rows;
