@@ -63,7 +63,7 @@ foreach ($pedidosAdmin as $pp) {
 
     <!-- NUMERACIÓN AUTOMÁTICA -->
     <details style="background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:14px 18px; margin:0 0 16px;">
-        <summary style="cursor:pointer; font-weight:700; font-size:15px;">🔢 Numeración automática de documentos</summary>
+        <summary style="cursor:pointer; font-weight:700; font-size:15px;"><svg class="ico" aria-hidden="true" style="vertical-align:-.2em; margin-right:6px;"><use href="#i-list"/></svg>Numeración automática de documentos</summary>
         <form method="POST" action="admin.php" style="margin-top:14px;">
             <input type="hidden" name="accion" value="ped_numeracion">
             <p style="margin:0 0 12px; font-size:13px; color:#667;">Escriba el <b>número con el que quiere que salga el próximo documento</b> de cada clase (ej.: escribe 1000 y el próximo saldrá con el 1000, luego el 1001, 1002...). El cuadro siempre muestra el número que sigue. Déjelo vacío para mantener el número automático de antes. Si el ejecutivo escribe un número a mano, se respeta.</p>
