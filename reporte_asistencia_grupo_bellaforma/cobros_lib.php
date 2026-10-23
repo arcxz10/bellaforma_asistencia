@@ -281,6 +281,57 @@ function cobroContarNuevos(mysqli $c): int
     }
 }
 
+/** Lista de la campanita: comprobantes sin leer primero y, después, los ya leídos (siguen hasta que el pedido se cobra). */
+function cobroListarNuevos(mysqli $c): array
+{
+    return cobroNotificaciones($c);
+}
+
+/**
+ * Notificaciones de la campanita: comprobantes subidos de pedidos aún no cobrados.
+ * Primero los no leídos, luego los leídos (más recientes arriba). Siguen ahí hasta que el pedido se marca como cobrado.
+ */
+function cobroNotificaciones(mysqli $c, int $limite = 30): array
+{
+    asegurarTablaCobros($c);
+    $lista = [];
+    try {
+        $r = $c->query("SELECT p.id, p.numero_pedido, p.tipo_pedido, p.cliente_nombre, p.total, v.nombre AS vendedor,
+                               cb.mime, cb.subido_en, cb.visto
+                        FROM pedido_cobros cb
+                        JOIN pedidos_vendedores p ON p.id = cb.pedido_id
+                        JOIN vendedores v ON v.id = p.vendedor_id
+                        WHERE cb.datos IS NOT NULL AND cb.cobrado = 0 AND p.estado IN ('pendiente','procesado')
+                        ORDER BY cb.visto ASC, cb.subido_en DESC
+                        LIMIT " . (int) $limite);
+        while ($r && ($f = $r->fetch_assoc())) {
+            $lista[] = [
+                "id" => (int) $f["id"],
+                "numero" => numeroDocumento($f),
+                "cliente" => (string) $f["cliente_nombre"],
+                "vendedor" => (string) $f["vendedor"],
+                "total" => formatoCOP($f["total"]),
+                "mime" => (string) $f["mime"],
+                "subido" => $f["subido_en"] ? date("d/m/Y H:i", strtotime($f["subido_en"])) : "",
+                "visto" => (int) $f["visto"] === 1,
+            ];
+        }
+    } catch (Throwable $e) {
+    }
+    return $lista;
+}
+
+/** Estado completo para la campanita (lo usan el endpoint y admin.php). */
+function cobroEstadoCampana(mysqli $c): array
+{
+    return [
+        "ok" => true,
+        "nuevos" => cobroContarNuevos($c),
+        "por_cobrar" => cobroContarPorCobrar($c),
+        "lista" => cobroNotificaciones($c),
+    ];
+}
+
 /** Cantidad de pedidos que faltan por cobrar (para la insignia del menú). */
 function cobroContarPorCobrar(mysqli $c): int
 {
