@@ -12,6 +12,7 @@ $filtrosPed = [
 ];
 
 $pedidosAdmin = obtenerPedidos($conexion, $filtrosPed, 300);
+$ultimosNumeros = ultimosNumerosDocumento($conexion);
 
 $listaVendedoresFiltro = [];
 $resLV = $conexion->query("SELECT id, nombre FROM vendedores ORDER BY nombre ASC");
@@ -59,6 +60,37 @@ foreach ($pedidosAdmin as $pp) {
             </div>
         <?php endif; ?>
     </div>
+
+    <!-- NUMERACIÓN AUTOMÁTICA -->
+    <details style="background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:14px 18px; margin:0 0 16px;">
+        <summary style="cursor:pointer; font-weight:700; font-size:15px;">🔢 Numeración automática de documentos</summary>
+        <form method="POST" action="admin.php" style="margin-top:14px;">
+            <input type="hidden" name="accion" value="ped_numeracion">
+            <p style="margin:0 0 12px; font-size:13px; color:#667;">Escriba el <b>último número que ya usó</b> en cada clase; el siguiente documento que envíen los ejecutivos saldrá con ese número + 1 (ej.: escribe 1000 y el próximo será 1001) y de ahí seguirá solo. Déjelo vacío para mantener el número automático de antes. Si el ejecutivo escribe un número a mano, se respeta.</p>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+                <?php foreach (clasesNumeracionDocumento() as $claveNum => $infoNum): $ultNum = (int) ($ultimosNumeros[$claveNum] ?? 0); ?>
+                    <div>
+                        <label for="num_<?= $claveNum ?>" style="display:block; font-weight:600; font-size:13px; margin-bottom:4px;"><?= escapar($infoNum[2]) ?> <span style="color:#889; font-weight:400;">(Syscafe <?= $claveNum ?>)</span></label>
+                        <input type="text" name="num[<?= $claveNum ?>]" id="num_<?= $claveNum ?>" inputmode="numeric" pattern="[0-9]*" maxlength="9" autocomplete="off"
+                               value="<?= $ultNum > 0 ? $ultNum : "" ?>" placeholder="Automático" data-prox="prox_<?= $claveNum ?>"
+                               style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                        <small id="prox_<?= $claveNum ?>" style="color:#0D47A1;"><?= $ultNum > 0 ? "Próximo: " . ($ultNum + 1) : "" ?></small>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+                <button type="submit" class="btn-nuevo">Guardar numeración</button>
+            </div>
+        </form>
+        <script>
+            document.querySelectorAll("input[data-prox]").forEach(function (inp) {
+                inp.addEventListener("input", function () {
+                    var n = parseInt(inp.value, 10);
+                    document.getElementById(inp.dataset.prox).textContent = n > 0 ? "Próximo: " + (n + 1) : "";
+                });
+            });
+        </script>
+    </details>
 
     <form method="GET" action="admin.php#pedidos" class="filtros">
         <input type="hidden" name="seccion" value="pedidos">
