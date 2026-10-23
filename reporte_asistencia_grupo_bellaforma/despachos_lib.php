@@ -252,12 +252,19 @@ function obtenerDespachosDelDia(mysqli $c, string $fecha): array
         if ($empresa === "") {
             $empresa = $ligado ? empresaPorFacturaElectronica($r["p_fe"]) : empresaPorFactura((string) $r["factura"]);
         }
+        // # Factura: lo que la oficina haya escrito. Si está vacío y es una REMISIÓN de un ejecutivo, sale su código:
+        // RM1-797 (sin factura electrónica, Mirely) o RM2-162 (con factura electrónica, Grupo Bellaforma).
+        $factura = (string) $r["factura"];
+        if ($factura === "" && $ligado && tipoDocumentoValido($r["p_tipo"] ?? "pedido") === "remision") {
+            $numDoc = numeroDocumento(["numero_pedido" => $r["p_numero"], "id" => $r["p_id"]]);
+            $factura = (!empty($r["p_fe"]) ? "RM2" : "RM1") . "-" . (int) $numDoc;
+        }
         $fila = [
             "id" => (int) $r["id"],
             "pedido_id" => $ligado ? (int) $r["p_id"] : null,
             "fecha" => $r["fecha"],
             "anulado" => $ligado && $r["p_estado"] === "anulado",
-            "empresa" => $empresa, "factura" => $r["factura"], "numero_guia" => $r["numero_guia"],
+            "empresa" => $empresa, "factura" => $factura, "numero_guia" => $r["numero_guia"],
             "flete_tipo" => $r["flete_tipo"], "valor_flete" => $r["valor_flete"] !== null ? (float) $r["valor_flete"] : null,
             "estado_entrega" => $r["estado_entrega"], "estado_pago" => $r["estado_pago"],
         ];
