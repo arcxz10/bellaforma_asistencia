@@ -31,6 +31,15 @@ foreach ($despachosDia as $dd) {
     }
 }
 
+// Rótulos anexados (imagen pegada en cada fila): cuántos hay hoy para el botón de descarga
+$idsRotulosDesp = idsConRotuloDelDia($conexion, $fechaDesp);
+$cuentaRotulosDesp = 0;
+foreach ($despachosDia as $dd) {
+    if (!$dd["anulado"] && isset($idsRotulosDesp[(int) $dd["id"]])) {
+        $cuentaRotulosDesp++;
+    }
+}
+
 $nombresVendedoresDesp = [];
 $resVD = $conexion->query("SELECT nombre FROM vendedores ORDER BY nombre ASC");
 if ($resVD) {
@@ -167,6 +176,19 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
         <?php endif; ?>
     </div>
 
+    <div class="rot-barra" id="rotBarra" data-fecha="<?= escapar($fechaDesp) ?>">
+        <span class="rot-barra-txt"><svg class="ico" aria-hidden="true"><use href="#i-paperclip"/></svg> Rótulos anexados este día: <strong id="rotCuenta"><?= (int) $cuentaRotulosDesp ?></strong></span>
+        <a class="btn-nuevo rot-descargar<?= $cuentaRotulosDesp === 0 ? " rot-off" : "" ?>" id="rotDescargar" href="despacho_rotulo.php?pdf=1&amp;fecha=<?= escapar($fechaDesp) ?>&amp;por=4"
+           title="Descarga un PDF con todos los rótulos anexados, listo para imprimir"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> Descargar todos los rótulos (PDF)</a>
+        <label class="rot-por">Por hoja:
+            <select id="rotPor">
+                <option value="4" selected>4 rótulos</option>
+                <option value="2">2 rótulos</option>
+                <option value="1">1 rótulo</option>
+            </select>
+        </label>
+    </div>
+
     <h3 class="desp-titulo">CONTROL DE DESPACHOS DIARIOS — <?= escapar($tituloDiaDesp) ?></h3>
     <p class="desp-resumen">
         <strong><?= (int) $cuentaDesp ?></strong> <?= $cuentaDesp === 1 ? "despacho" : "despachos" ?> ·
@@ -192,6 +214,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                     <th>Forma de pago</th>
                     <th>Transportadora</th>
                     <th>N.º de guía</th>
+                    <th>Rótulo</th>
                     <th>Flete</th>
                     <th class="num-der">Valor del flete</th>
                     <th>Estado de entrega</th>
@@ -201,11 +224,11 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
             </thead>
             <tbody>
                 <?php if (!$despachosDia): ?>
-                    <tr><td colspan="20" class="desp-vacio">No hay despachos registrados el <?= escapar(date("d/m/Y", $tsDesp)) ?>.</td></tr>
+                    <tr><td colspan="21" class="desp-vacio">No hay despachos registrados el <?= escapar(date("d/m/Y", $tsDesp)) ?>.</td></tr>
                 <?php else: ?>
                     <?php foreach ($despachosDia as $i => $d): ?>
                         <?php $did = (int) $d["id"]; $ligado = $d["pedido_id"] !== null; ?>
-                        <tr class="<?= $d["anulado"] ? "desp-anulado" : "" ?>">
+                        <tr class="<?= $d["anulado"] ? "desp-anulado" : "" ?>" data-did="<?= $did ?>">
                             <td class="nw"><?= $i + 1 ?></td>
                             <td class="nw"><?= escapar(date("d/m/Y", strtotime($d["fecha"]))) ?></td>
                             <td class="nw"><?= escapar($d["nit"]) ?></td>
@@ -231,6 +254,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                             <td><?= despSelectHtml($did, "forma_pago", formasPagoDespacho(), (string) $d["forma_pago"], !$ligado || (string) $d["forma_pago"] === "") ?></td>
                             <td><?= despSelectHtml($did, "transportadora", transportadorasDespacho(), (string) $d["transportadora"], !$ligado || (string) $d["transportadora"] === "") ?></td>
                             <td><?= despInputHtml($did, "numero_guia", (string) $d["numero_guia"], 40, "guia") ?></td>
+                            <td class="rot-celda" data-id="<?= $did ?>" data-tiene="<?= isset($idsRotulosDesp[$did]) ? "1" : "0" ?>"></td>
                             <td><?= despSelectHtml($did, "flete_tipo", fletesTipoDespacho(), (string) $d["flete_tipo"]) ?></td>
                             <td><?= despInputHtml($did, "valor_flete", $d["valor_flete"] !== null ? number_format($d["valor_flete"], 0, ",", ".") : "", 14, "flete") ?></td>
                             <td><?= despSelectHtml($did, "estado_entrega", estadosEntregaDespacho(), (string) $d["estado_entrega"]) ?></td>
@@ -275,7 +299,7 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                     <tr class="desp-total">
                         <td colspan="10" class="num">TOTAL</td>
                         <td class="num"><?= formatoCOP($totalValorDesp) ?></td>
-                        <td colspan="9"></td>
+                        <td colspan="10"></td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -524,6 +548,239 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
     });
     document.addEventListener("keydown", function (e) {
         if (e.key === "Escape") { cerrarDespacho(); cerrarQuitarDespacho(); }
+    });
+})();
+</script>
+
+<style>
+    #despachos .rot-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 14px; padding: 12px 16px; background: var(--superficie, #fff); border: 1px solid var(--linea, #E2E8F0); border-radius: 12px; }
+    #despachos .rot-barra-txt { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; margin-right: auto; }
+    #despachos .rot-descargar { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+    #despachos .rot-descargar.rot-off { opacity: .45; cursor: not-allowed; }
+    #despachos .rot-por { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #556; }
+    #despachos .rot-por select { padding: 7px 8px; border: 1.5px solid var(--linea, #E2E8F0); border-radius: 8px; background: #fff; font-size: 13px; }
+    #despachos td.rot-celda { min-width: 132px; }
+    #despachos .rot-zona { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 46px; padding: 6px 8px; border: 1.5px dashed #B8C4D8; border-radius: 8px; background: #F6F8FC; color: #5A6B85; font-size: 12px; text-align: center; cursor: pointer; }
+    #despachos .rot-zona:hover, #despachos .rot-zona:focus, #despachos .rot-celda.rot-arrastre .rot-zona { outline: none; border-color: var(--azul-500, #2563EB); background: #EEF4FF; color: var(--azul-700, #1D4ED8); }
+    #despachos .rot-zona.rot-subiendo { border-style: solid; border-color: #F0B429; background: #FFF8E1; cursor: progress; }
+    #despachos .rot-subir { display: block; margin-top: 4px; text-align: center; font-size: 11px; color: #667; cursor: pointer; text-decoration: underline; }
+    #despachos .rot-subir input { display: none; }
+    #despachos .rot-mini { display: block; max-width: 104px; max-height: 64px; margin: 0 auto; border: 1px solid var(--linea, #E2E8F0); border-radius: 6px; cursor: zoom-in; background: #fff; }
+    #despachos .rot-ok { display: block; margin-top: 3px; text-align: center; font-size: 11px; color: #1E7A3C; font-weight: 600; }
+    .rot-visor { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; padding: 20px; background: rgba(10, 20, 40, .72); }
+    .rot-visor.abierto { display: flex; }
+    .rot-visor-caja { display: flex; flex-direction: column; gap: 12px; max-width: min(92vw, 760px); max-height: 94vh; padding: 14px; border-radius: 14px; background: #fff; }
+    .rot-visor-caja img { max-width: 100%; max-height: 74vh; object-fit: contain; border-radius: 8px; }
+    .rot-visor-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .rot-visor-btns a, .rot-visor-btns button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border: 0; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; background: #EDF1F7; color: #1B2A41; }
+    .rot-visor-btns .rot-quitar { background: #FDECEE; color: #B42334; }
+</style>
+
+<script>
+(function () {
+    var RUTA = "despacho_rotulo.php";
+    var raiz = document.getElementById("despachos");
+    if (!raiz) { return; }
+
+    /* ---------- Dibujar la celda (con rótulo o con la zona para pegar) ---------- */
+    function pintar(td) {
+        var id = td.dataset.id;
+        td.textContent = "";
+        td.classList.remove("rot-arrastre");
+        if (td.dataset.tiene === "1") {
+            var img = document.createElement("img");
+            img.className = "rot-mini";
+            img.alt = "Rótulo";
+            img.loading = "lazy";
+            img.src = RUTA + "?id=" + encodeURIComponent(id) + (td.dataset.v ? "&v=" + td.dataset.v : "");
+            img.title = "Clic para ver, descargar o quitar";
+            img.addEventListener("click", function () { abrirVisor(td); });
+            var ok = document.createElement("span");
+            ok.className = "rot-ok";
+            ok.textContent = "✓ Anexado";
+            td.appendChild(img);
+            td.appendChild(ok);
+        } else {
+            var zona = document.createElement("div");
+            zona.className = "rot-zona";
+            zona.tabIndex = 0;
+            zona.setAttribute("role", "button");
+            zona.title = "Haga clic aquí y pegue la imagen con Ctrl + V";
+            zona.textContent = "📋 Clic y Ctrl + V para pegar";
+            var sub = document.createElement("label");
+            sub.className = "rot-subir";
+            sub.appendChild(document.createTextNode("o elegir archivo"));
+            var inp = document.createElement("input");
+            inp.type = "file";
+            inp.accept = "image/*";
+            inp.addEventListener("change", function () { if (inp.files && inp.files[0]) { subir(td, inp.files[0]); } });
+            sub.appendChild(inp);
+            td.appendChild(zona);
+            td.appendChild(sub);
+        }
+    }
+    Array.prototype.forEach.call(raiz.querySelectorAll("td.rot-celda"), pintar);
+
+    function recontar() {
+        var n = 0;
+        Array.prototype.forEach.call(raiz.querySelectorAll("tr[data-did]"), function (tr) {
+            var td = tr.querySelector("td.rot-celda");
+            if (td && td.dataset.tiene === "1" && !tr.classList.contains("desp-anulado")) { n++; }
+        });
+        document.getElementById("rotCuenta").textContent = n;
+        document.getElementById("rotDescargar").classList.toggle("rot-off", n === 0);
+    }
+
+    /* ---------- Convertir cualquier imagen a JPG liviano (máx. 1600 px) ---------- */
+    function aJpeg(archivo) {
+        return new Promise(function (resolver, rechazar) {
+            var url = URL.createObjectURL(archivo);
+            var im = new Image();
+            im.onload = function () {
+                var max = 1600, w = im.naturalWidth, h = im.naturalHeight;
+                if (!w || !h) { URL.revokeObjectURL(url); rechazar(new Error("vacía")); return; }
+                var esc = Math.min(1, max / Math.max(w, h));
+                var c = document.createElement("canvas");
+                c.width = Math.round(w * esc);
+                c.height = Math.round(h * esc);
+                var g = c.getContext("2d");
+                g.fillStyle = "#fff";
+                g.fillRect(0, 0, c.width, c.height);
+                g.drawImage(im, 0, 0, c.width, c.height);
+                URL.revokeObjectURL(url);
+                c.toBlob(function (b) { b ? resolver(b) : rechazar(new Error("no convertida")); }, "image/jpeg", 0.88);
+            };
+            im.onerror = function () { URL.revokeObjectURL(url); rechazar(new Error("no es imagen")); };
+            im.src = url;
+        });
+    }
+
+    /* ---------- Subir / quitar ---------- */
+    function subir(td, archivo) {
+        var zona = td.querySelector(".rot-zona");
+        if (zona) { zona.classList.add("rot-subiendo"); zona.textContent = "Subiendo…"; }
+        aJpeg(archivo).then(function (blob) {
+            var fd = new FormData();
+            fd.append("op", "subir");
+            fd.append("id", td.dataset.id);
+            fd.append("imagen", blob, "rotulo.jpg");
+            return fetch(RUTA, { method: "POST", body: fd, credentials: "same-origin" });
+        }).then(function (r) { return r.text(); }).then(function (t) {
+            var j = null;
+            try { j = JSON.parse(t); } catch (e) { j = null; }
+            if (j && j.ok) {
+                td.dataset.tiene = "1";
+                td.dataset.v = String(Date.now());
+                pintar(td);
+                recontar();
+            } else {
+                pintar(td);
+                alert((j && j.error) || "No se pudo anexar el rótulo.");
+            }
+        }).catch(function () {
+            pintar(td);
+            alert("No se pudo leer esa imagen. Copie el rótulo como imagen e intente de nuevo.");
+        });
+    }
+
+    function quitar(td) {
+        var fd = new FormData();
+        fd.append("op", "quitar");
+        fd.append("id", td.dataset.id);
+        fetch(RUTA, { method: "POST", body: fd, credentials: "same-origin" })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j && j.ok) { td.dataset.tiene = "0"; td.dataset.v = ""; pintar(td); recontar(); cerrarVisor(); }
+                else { alert((j && j.error) || "No se pudo quitar el rótulo."); }
+            })
+            .catch(function () { alert("Sin conexión: no se quitó el rótulo."); });
+    }
+
+    /* ---------- Pegar con Ctrl + V (estando en cualquier celda de la fila) ---------- */
+    document.addEventListener("paste", function (e) {
+        var activo = document.activeElement;
+        var fila = activo && activo.closest ? activo.closest("#despachos tr[data-did]") : null;
+        if (!fila || !e.clipboardData) { return; }
+        var archivo = null;
+        Array.prototype.forEach.call(e.clipboardData.items || [], function (it) {
+            if (!archivo && it.kind === "file" && it.type.indexOf("image/") === 0) { archivo = it.getAsFile(); }
+        });
+        if (!archivo) { return; }   // texto normal: se pega como siempre
+        var td = fila.querySelector("td.rot-celda");
+        if (!td) { return; }
+        e.preventDefault();
+        subir(td, archivo);
+    });
+
+    /* ---------- Arrastrar una imagen sobre la celda ---------- */
+    raiz.addEventListener("dragover", function (e) {
+        var td = e.target.closest ? e.target.closest("td.rot-celda") : null;
+        if (!td) { return; }
+        e.preventDefault();
+        td.classList.add("rot-arrastre");
+    });
+    raiz.addEventListener("dragleave", function (e) {
+        var td = e.target.closest ? e.target.closest("td.rot-celda") : null;
+        if (td) { td.classList.remove("rot-arrastre"); }
+    });
+    raiz.addEventListener("drop", function (e) {
+        var td = e.target.closest ? e.target.closest("td.rot-celda") : null;
+        if (!td) { return; }
+        e.preventDefault();
+        td.classList.remove("rot-arrastre");
+        var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f && f.type.indexOf("image/") === 0) { subir(td, f); }
+    });
+    // Un clic en la zona la deja lista para Ctrl + V
+    raiz.addEventListener("click", function (e) {
+        var z = e.target.closest ? e.target.closest(".rot-zona") : null;
+        if (z) { z.focus(); }
+    });
+
+    /* ---------- Visor: ver grande, descargar o quitar ---------- */
+    var visor = null, celdaVisor = null;
+    function crearVisor() {
+        visor = document.createElement("div");
+        visor.className = "rot-visor";
+        visor.innerHTML = '<div class="rot-visor-caja"><img alt="Rótulo"><div class="rot-visor-btns">' +
+            '<a class="rot-bajar" download>⬇ Descargar imagen</a>' +
+            '<button type="button" class="rot-quitar">Quitar rótulo</button>' +
+            '<button type="button" class="rot-cerrar">Cerrar</button></div></div>';
+        document.body.appendChild(visor);
+        visor.addEventListener("click", function (e) { if (e.target === visor) { cerrarVisor(); } });
+        visor.querySelector(".rot-cerrar").addEventListener("click", cerrarVisor);
+        visor.querySelector(".rot-quitar").addEventListener("click", function () {
+            var td = celdaVisor;
+            if (!td) { return; }
+            if (typeof window.bfConfirmar === "function") {
+                window.bfConfirmar({ titulo: "Quitar rótulo", texto: "¿Quitar el rótulo anexado a este despacho?", si: "Sí, quitar", peligro: true, onSi: function () { quitar(td); } });
+            } else if (confirm("¿Quitar el rótulo anexado a este despacho?")) { quitar(td); }
+        });
+    }
+    function abrirVisor(td) {
+        if (!visor) { crearVisor(); }
+        celdaVisor = td;
+        var base = RUTA + "?id=" + encodeURIComponent(td.dataset.id);
+        visor.querySelector("img").src = base + (td.dataset.v ? "&v=" + td.dataset.v : "");
+        visor.querySelector(".rot-bajar").href = base + "&descargar=1";
+        visor.classList.add("abierto");
+    }
+    function cerrarVisor() { if (visor) { visor.classList.remove("abierto"); celdaVisor = null; } }
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { cerrarVisor(); } });
+
+    /* ---------- Botón de descarga de todos los rótulos del día ---------- */
+    var barra = document.getElementById("rotBarra");
+    var boton = document.getElementById("rotDescargar");
+    var selPor = document.getElementById("rotPor");
+    function armarEnlace() {
+        boton.href = RUTA + "?pdf=1&fecha=" + encodeURIComponent(barra.dataset.fecha) + "&por=" + encodeURIComponent(selPor.value);
+    }
+    selPor.addEventListener("change", armarEnlace);
+    boton.addEventListener("click", function (e) {
+        if (boton.classList.contains("rot-off")) {
+            e.preventDefault();
+            alert("Aún no hay rótulos anexados en este día. Pegue la imagen del rótulo en cada fila (columna «Rótulo»).");
+        }
     });
 })();
 </script>
