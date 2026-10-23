@@ -1244,7 +1244,7 @@ $resultadoEmpleados =
 
                 <span>
                     <svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg>
-                    <?= date("d/m/Y H:i:s") ?>
+                    <span id="relojAdmin" data-ts="<?= time() * 1000 ?>" data-off="<?= (int) date("Z") * 1000 ?>"><?= date("d/m/Y H:i:s") ?></span>
                 </span>
 
             </div>
@@ -3586,6 +3586,22 @@ $resultadoEmpleados =
 </script>
 
     <script src="js/bellaforma-ui.js"></script>
+<script>
+(function () {
+    var el = document.getElementById("relojAdmin");
+    if (!el) return;
+    var desfase = parseInt(el.dataset.ts, 10) - Date.now();
+    var off = parseInt(el.dataset.off, 10) || 0;
+    function dos(n) { return (n < 10 ? "0" : "") + n; }
+    function pintar() {
+        var d = new Date(Date.now() + desfase + off);
+        el.textContent = dos(d.getUTCDate()) + "/" + dos(d.getUTCMonth() + 1) + "/" + d.getUTCFullYear() + " " +
+            dos(d.getUTCHours()) + ":" + dos(d.getUTCMinutes()) + ":" + dos(d.getUTCSeconds());
+    }
+    pintar();
+    setInterval(pintar, 1000);
+})();
+</script>
 </body>
 
 </html>
