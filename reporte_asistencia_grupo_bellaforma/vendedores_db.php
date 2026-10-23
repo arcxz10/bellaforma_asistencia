@@ -454,7 +454,7 @@ function asegurarTablaNumeracion(mysqli $c): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 
-/** [clave => último número usado]. 0 = sin configurar (el documento usa el número automático de siempre, su id). */
+/** [clave => PRÓXIMO número que se asignará (la columna `ultimo` guarda el próximo)]. 0 = sin configurar (el documento usa el número automático de siempre, su id). */
 function ultimosNumerosDocumento(mysqli $c): array
 {
     asegurarTablaNumeracion($c);
@@ -517,14 +517,14 @@ function contadorNumeracionActivo(mysqli $c, string $tipo, $fe): bool
 }
 
 /**
- * Toma el siguiente número de la clase (último + 1) y lo deja guardado. Llamar DENTRO de la transacción del pedido:
+ * Toma el número que toca de la clase (el que escribió el administrador) y deja guardado el que sigue. Llamar DENTRO de la transacción del pedido:
  * así el número queda bloqueado hasta guardar y, si el pedido falla, no se gasta. Salta los números que ya estén en uso.
  */
 function siguienteNumeroDocumento(mysqli $c, string $tipo, $fe, int $excluirId): ?int
 {
     $clave = claveNumeracionDocumento($tipo, $fe);
     for ($i = 0; $i < 500; $i++) {
-        $st = $c->prepare("UPDATE numeracion_documentos SET ultimo = LAST_INSERT_ID(ultimo + 1) WHERE clave = ? AND ultimo > 0");
+        $st = $c->prepare("UPDATE numeracion_documentos SET ultimo = LAST_INSERT_ID(ultimo) + 1 WHERE clave = ? AND ultimo > 0");
         $st->bind_param("s", $clave);
         $st->execute();
         $filas = $st->affected_rows;
