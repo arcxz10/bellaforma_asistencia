@@ -16,6 +16,7 @@ if (empty($_SESSION["vendedor_id"])) {
 require_once "conexion.php";
 require_once "vendedores_db.php";
 require_once "pedidos_lib.php";
+require_once "cobros_lib.php";
 date_default_timezone_set("America/Bogota");
 asegurarTablasVendedores($conexion);
 
@@ -96,6 +97,32 @@ if ($idEditar > 0) {
 $misPedidos = obtenerPedidos($conexion, ["vendedor" => $vendedorId, "con_borradores" => true], 150);
 $borradores = array_values(array_filter($misPedidos, fn($p) => $p["estado"] === "borrador"));
 $enviados = array_values(array_filter($misPedidos, fn($p) => $p["estado"] !== "borrador"));
+
+// Pedidos a crédito que aún no se han pagado: van de primeros, del que vence antes al que vence después
+$porPagar = [];
+try {
+    $porIdPedido = [];
+    foreach ($misPedidos as $mp) {
+        $porIdPedido[(int) $mp["id"]] = $mp;
+    }
+    $listaCobro = cobroObtenerPedidos($conexion, ["vendedor" => $vendedorId, "estado_cobro" => "por_cobrar", "orden" => "dias_menos"]);
+    foreach ($listaCobro as $cp) {
+        $idCp = (int) $cp["id"];
+        $completo = $porIdPedido[$idCp] ?? (obtenerPedidos($conexion, ["con_borradores" => true], null, $idCp)[0] ?? null);
+        if ($completo) {
+            $porPagar[] = $completo;
+        }
+    }
+    $idsPorPagar = [];
+    foreach ($porPagar as $pp) {
+        $idsPorPagar[(int) $pp["id"]] = true;
+    }
+    $enviados = array_values(array_filter($enviados, fn($p) => !isset($idsPorPagar[(int) $p["id"]])));
+} catch (Throwable $e) {
+    $porPagar = [];   // si algo falla, la lista se ve como antes
+}
+// Estado del comprobante de cada pedido (id => [cobrado, tiene, subido_en])
+$cobroEstados = cobroEstadoPorPedido($conexion, array_map(fn($p) => (int) $p["id"], array_merge($porPagar, $enviados)));
 // id => número visible del documento (para mostrar «Unida al pedido #…» en las remisiones)
 $numerosPedidos = [];
 foreach ($misPedidos as $mp) {
@@ -119,8 +146,13 @@ $pf = [
 
 function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): void
 {
-    global $numerosPedidos;
+    global $numerosPedidos, $cobroEstados;
     $esBorrador = $ped["estado"] === "borrador";
+    // Crédito: días que le quedan para pagar y estado del comprobante
+    $esCredito = !$esBorrador && cobroEsACredito($ped);
+    $estCobro = $esCredito ? ($cobroEstados[(int) $ped["id"]] ?? ["cobrado" => false, "tiene" => false, "subido_en" => null]) : null;
+    $plazo = $esCredito ? cobroPlazo($ped) : null;
+    $puedeSubirComp = $esCredito && !$estCobro["cobrado"];
     $nombre = $ped["cliente_nombre"] !== "" ? $ped["cliente_nombre"] : "(sin cliente todavía)";
     ?>
     <details class="pedido-item">
@@ -136,11 +168,27 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
             $verPdf = !$esBorrador && ($esCotizacion || $puedeDescargar);
             $verExcel = !$esBorrador && $puedeDescargar;
             ?>
+            <?php if ($esCredito): ?>
+                <span class="cr-linea">
+                    <?php if ($estCobro["cobrado"]): ?>
+                        <span class="cr-badge cr-pagado">Pagado</span>
+                        <span class="cr-detalle">Crédito a <?= (int) $plazo["dias"] ?> días</span>
+                    <?php else: ?>
+                        <span class="cr-badge cr-<?= e(cobroClaseRestantes($plazo["restantes"])) ?>"><?= e(cobroTextoRestantes($plazo["restantes"])) ?></span>
+                        <span class="cr-detalle">Crédito a <?= (int) $plazo["dias"] ?> días · vence <?= date("d/m/Y", strtotime($plazo["vence"])) ?></span>
+                        <?php if ($estCobro["tiene"]): ?><span class="cr-badge cr-enviado">Comprobante enviado</span><?php endif; ?>
+                    <?php endif; ?>
+                </span>
+            <?php endif; ?>
             <?php $puedeEditar = $ped["estado"] === "pendiente"; ?>
-            <?php if ($verPdf || $verExcel || $puedeEditar): ?>
+            <?php if ($verPdf || $verExcel || $puedeEditar || $puedeSubirComp): ?>
                 <span style="grid-column:1 / -1; display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
                     <?php if ($puedeEditar): ?>
                         <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-edit"/></svg>Editar <?= e(nombreCortoDocumento($ped["tipo_pedido"] ?? "pedido")) ?></a>
+                    <?php endif; ?>
+                    <?php if ($puedeSubirComp): ?>
+                        <button type="button" class="btn btn-verde-pago" style="min-height:40px; padding:6px 14px; font-size:14px;"
+                            onclick="event.preventDefault(); event.stopPropagation(); bfSubirComprobante(<?= (int) $ped["id"] ?>);"><svg class="vi" aria-hidden="true"><use href="#vi-download"/></svg><?= $estCobro["tiene"] ? "Cambiar comprobante" : "Subir comprobante de pago" ?></button>
                     <?php endif; ?>
                     <?php if ($verPdf): ?>
                         <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-file"/></svg>Descargar PDF</a>
@@ -165,6 +213,7 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                 <?php if ($ped["cliente_ciudad"] !== ""): ?><?= e($ped["cliente_ciudad"]) ?><?= !empty($ped["cliente_departamento"]) ? ", " . e($ped["cliente_departamento"]) : "" ?><br><?php endif; ?>
                 <?php if (!empty($ped["cliente_direcciones"])): ?>Dirección: <?= e($ped["cliente_direcciones"]) ?><?= !empty($ped["cliente_barrio"]) ? " · " . e($ped["cliente_barrio"]) : "" ?><br><?php endif; ?>
                 <?php if (!empty($ped["cliente_puntos_referencia"])): ?>Referencia: <?= e($ped["cliente_puntos_referencia"]) ?><br><?php endif; ?>
+                <?php if ($esCredito && $estCobro["tiene"]): ?><a href="cobro_comprobante.php?id=<?= (int) $ped["id"] ?>" target="_blank" rel="noopener">Ver el comprobante que envió<?= !empty($estCobro["subido_en"]) ? " (" . e(date("d/m/Y H:i", strtotime($estCobro["subido_en"]))) . ")" : "" ?></a><br><?php endif; ?>
                 Pago: <?= e(etiquetaCondicion($ped)) ?><?= !empty($ped["transportadora"]) ? " · Transportadora: " . e(etiquetaTransportadora($ped["transportadora"])) : "" ?> · Factura electrónica: <?= !empty($ped["factura_electronica"]) ? "Sí" : "No" ?>
                 <?php if (($ped["tipo_pedido"] ?? "") === "remision" && !empty($ped["pedido_vinculado_id"]) && isset($numerosPedidos[(int) $ped["pedido_vinculado_id"]])): ?><br><svg class="vi" aria-hidden="true"><use href="#vi-link"/></svg>Unida al pedido #<?= e($numerosPedidos[(int) $ped["pedido_vinculado_id"]]) ?><?php endif; ?>
                 <?php if (!empty($ped["observaciones"])): ?><br>Obs.: <?= nl2br(e($ped["observaciones"])) ?><?php endif; ?>
@@ -210,6 +259,20 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
     <link rel="icon" type="image/x-icon" href="img/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
     <link rel="stylesheet" href="css/vendedor.css">
+    <style>
+        .cr-linea { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 4px; }
+        .cr-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .cr-ok { background: #E0F4F8; color: #0E6A7E; }
+        .cr-pronto { background: #FFF4D6; color: #8A5F00; }
+        .cr-hoy { background: #FFE3CC; color: #B24A00; }
+        .cr-vencido { background: #FDEBED; color: #A0192B; }
+        .cr-pagado, .cr-enviado { background: #E4F5E7; color: #1D6821; }
+        .cr-detalle { font-size: 13px; color: var(--tinta-suave); }
+        .btn-verde-pago { background: linear-gradient(180deg, #33B540, #27983A); color: #fff; box-shadow: 0 10px 20px -12px rgba(39, 152, 58, .85); }
+        .bf-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 9999; max-width: 90vw; padding: 13px 18px; border-radius: 12px; background: #0E1B33; color: #fff; font-size: 15px; font-weight: 600; box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .5); }
+        .bf-toast.error { background: #C62839; }
+        .bf-toast.exito { background: #1D6821; }
+    </style>
 </head>
 
 <body>
@@ -250,6 +313,11 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                 <?php foreach ($borradores as $ped) { tarjetaPedido($ped, $_SESSION["csrf_pedido"]); } ?>
             <?php endif; ?>
 
+            <?php if ($porPagar): ?>
+                <div class="ped-grupo">Créditos por pagar · del que vence primero al más lejano</div>
+                <?php foreach ($porPagar as $ped) { tarjetaPedido($ped, $_SESSION["csrf_pedido"], $puedeDescargar); } ?>
+            <?php endif; ?>
+
             <?php if ($enviados): ?>
                 <div class="ped-grupo">Pedidos enviados</div>
                 <?php foreach ($enviados as $ped) { tarjetaPedido($ped, $_SESSION["csrf_pedido"], $puedeDescargar); } ?>
@@ -269,7 +337,68 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
         </div>
     </div>
 
+    <input type="file" id="bfArchivoPago" accept="image/*,application/pdf" hidden>
+
     <script>
+        /* ---------- Comprobante de pago de pedidos a crédito ---------- */
+        var BF_CSRF = <?= json_encode($_SESSION["csrf_pedido"]) ?>;
+        var bfPedidoPago = 0;
+
+        function bfToast(texto, tipo) {
+            var t = document.createElement("div");
+            t.className = "bf-toast " + (tipo || "");
+            t.textContent = texto;
+            document.body.appendChild(t);
+            setTimeout(function () { t.remove(); }, tipo === "error" ? 6000 : 3500);
+        }
+        function bfSubirComprobante(id) {
+            bfPedidoPago = id;
+            var inp = document.getElementById("bfArchivoPago");
+            inp.value = "";
+            inp.click();
+        }
+        // Las fotos del celular pesan mucho: se reducen antes de enviarlas (los PDF van tal cual)
+        function bfReducirImagen(archivo) {
+            return new Promise(function (resolve) {
+                var url = URL.createObjectURL(archivo);
+                var img = new Image();
+                img.onload = function () {
+                    var max = 1600, w = img.naturalWidth, h = img.naturalHeight;
+                    var k = Math.min(1, max / Math.max(w, h));
+                    var c = document.createElement("canvas");
+                    c.width = Math.round(w * k); c.height = Math.round(h * k);
+                    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+                    URL.revokeObjectURL(url);
+                    c.toBlob(function (b) { resolve(b || archivo); }, "image/jpeg", 0.85);
+                };
+                img.onerror = function () { URL.revokeObjectURL(url); resolve(archivo); };
+                img.src = url;
+            });
+        }
+        document.getElementById("bfArchivoPago").addEventListener("change", function () {
+            var f = this.files && this.files[0];
+            if (!f || !bfPedidoPago) { return; }
+            var esPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+            if (!esPdf && f.type.indexOf("image/") !== 0) { bfToast("Elija una foto o un PDF del comprobante.", "error"); return; }
+            bfToast("Subiendo comprobante…");
+            var id = bfPedidoPago;
+            (esPdf ? Promise.resolve(f) : bfReducirImagen(f)).then(function (blob) {
+                if (blob.size > 6 * 1024 * 1024) { throw new Error("El archivo es muy pesado (máximo 6 MB)."); }
+                var fd = new FormData();
+                fd.append("op", "subir");
+                fd.append("pedido_id", id);
+                fd.append("csrf", BF_CSRF);
+                fd.append("archivo", blob, esPdf ? "comprobante.pdf" : "comprobante.jpg");
+                return fetch("cobro_comprobante.php", { method: "POST", body: fd, credentials: "same-origin" });
+            }).then(function (r) { return r.json(); }).then(function (j) {
+                if (!j.ok) { throw new Error(j.error || "No se pudo subir el comprobante."); }
+                bfToast(j.mensaje || "Comprobante enviado.", "exito");
+                setTimeout(function () { location.href = "vendedor.php#mis-pedidos"; location.reload(); }, 900);
+            }).catch(function (e) {
+                bfToast((e && e.message) || "No se pudo subir el comprobante. Intente de nuevo.", "error");
+            });
+        });
+
         var bfFormBorrador = null;
         function bfCerrarDialogo() { document.getElementById("bfDialogo").hidden = true; bfFormBorrador = null; }
         function bfEliminarBorrador(form) {
