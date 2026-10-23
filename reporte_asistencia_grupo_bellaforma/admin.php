@@ -13,6 +13,11 @@ if (!isset($_SESSION["admin_id"])) {
 require_once "conexion.php";
 require_once "vendedores_db.php";
 asegurarTablasVendedores($conexion);
+require_once __DIR__ . "/admin_permisos.php";
+if (adminEsPrincipal() && empty($_SESSION["admin_cols_ok"])) {
+    adminAsegurarColumnas($conexion);
+    $_SESSION["admin_cols_ok"] = 1;
+}
 
 date_default_timezone_set("America/Bogota");
 
@@ -122,6 +127,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     // Vendedores / productos al por mayor / pedidos
     require __DIR__ . "/admin_acciones_vendedores.php";
+    // Subadministradores (solo el administrador principal)
+    require __DIR__ . "/admin_acciones_subadmins.php";
 
     if ($accion === "agregar_empleado") {
 
@@ -1093,7 +1100,7 @@ $resultadoEmpleados =
             <img src="img/logo-blanco.png" alt="Grupo Bella Forma S.A.S." class="logo-marca-sidebar">
 
             <p>
-                Administrador
+                <?= adminEsPrincipal() ? "Administrador" : "Subadministrador" ?>
             </p>
 
         </div>
@@ -1101,41 +1108,52 @@ $resultadoEmpleados =
 
         <nav class="sidebar-nav">
 
+            <?php if (adminPuede("dashboard")): ?>
             <a
                 href="#dashboard"
-                class="nav-item active"
+                class="nav-item<?= adminPuede("dashboard") ? " active" : "" ?>"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-dashboard"/></svg> Dashboard
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("asistencias")): ?>
             <a
                 href="#asistencias"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-asistencias"/></svg> Asistencias
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("historial")): ?>
             <a
                 href="#historial"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg> Historial Completo
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("empleados")): ?>
             <a
                 href="#empleados"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-users"/></svg> Empleados
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("festivos")): ?>
             <a
                 href="#festivos"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-sparkles"/></svg> Festivos
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("codigo_qr")): ?>
             <a
                 href="codigo_qr.php"
                 class="nav-item"
@@ -1143,69 +1161,97 @@ $resultadoEmpleados =
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-qr"/></svg> Código QR
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("liquidacion")): ?>
             <a
                 href="liquidacion.php"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-wallet"/></svg> Liquidación
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("permisos")): ?>
             <a
                 href="#permisos"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-file-text"/></svg> Permisos
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("materiales")): ?>
             <a
                 href="#materiales"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-package"/></svg> Materiales
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("vendedores")): ?>
             <a
                 href="#vendedores"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-briefcase"/></svg> Ejecutivos de negocios
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("pedidos")): ?>
             <a
                 href="#pedidos"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-receipt"/></svg> Pedidos de ejecutivos
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("despachos")): ?>
             <a
                 href="#despachos"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-truck"/></svg> Control de despachos
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("pedidos_despachar")): ?>
             <a
                 href="#pedidos_despachar"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-clipboard"/></svg> Pedidos para despachar
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("productos")): ?>
             <a
                 href="#productos_mayoristas"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg> Productos
             </a>
+            <?php endif; ?>
 
+            <?php if (adminPuede("clientes")): ?>
             <a
                 href="#clientes"
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-users"/></svg> Clientes
             </a>
+            <?php endif; ?>
+
+            <?php if (adminEsPrincipal()): ?>
+            <a
+                href="#subadmins"
+                class="nav-item"
+            >
+                <svg class="ico" aria-hidden="true"><use href="#i-users-check"/></svg> Subadministradores
+            </a>
+            <?php endif; ?>
 
         </nav>
 
@@ -1273,6 +1319,7 @@ $resultadoEmpleados =
             <?php endif; ?>
 
 
+            <?php if (adminPuede("dashboard")): ?>
             <section
                 id="dashboard"
                 class="section active"
@@ -1418,8 +1465,10 @@ $resultadoEmpleados =
                 </div>
 
             </section>
+            <?php endif; ?>
 
 
+            <?php if (adminPuede("asistencias")): ?>
             <section
                 id="asistencias"
                 class="section"
@@ -1969,8 +2018,10 @@ $resultadoEmpleados =
                 <?php endif; ?>
 
             </section>
+            <?php endif; ?>
 
 
+            <?php if (adminPuede("historial")): ?>
            <section id="historial" class="section">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
                     <div>
@@ -2243,8 +2294,10 @@ $resultadoEmpleados =
                     document.addEventListener("DOMContentLoaded", actualizarGraficoAcumulado);
                 </script>
             </section>
+            <?php endif; ?>
 
 
+            <?php if (adminPuede("empleados")): ?>
             <section
                 id="empleados"
                 class="section"
@@ -2526,10 +2579,12 @@ $resultadoEmpleados =
                 </div>
 
             </section>
+            <?php endif; ?>
 
 
 
 
+            <?php if (adminPuede("festivos")): ?>
             <section
                 id="festivos"
                 class="section"
@@ -2564,8 +2619,10 @@ $resultadoEmpleados =
                 </div>
 
             </section>
+            <?php endif; ?>
 
             <!-- SECCIÓN PERMISOS INTEGRADA -->
+            <?php if (adminPuede("permisos")): ?>
             <section
                 id="permisos"
                 class="section"
@@ -2620,17 +2677,20 @@ $resultadoEmpleados =
                     </table>
                 </div>
             </section>
+            <?php endif; ?>
 
             <?php
-            include __DIR__ . "/admin_seccion_vendedores.php";
-            include __DIR__ . "/admin_seccion_pedidos.php";
-            include __DIR__ . "/admin_seccion_despachos.php";
-            include __DIR__ . "/admin_seccion_pedidos_despachar.php";
-            include __DIR__ . "/admin_seccion_productos.php";
-            include __DIR__ . "/admin_seccion_clientes.php";
+            if (adminPuede("vendedores")) { include __DIR__ . "/admin_seccion_vendedores.php"; }
+            if (adminPuede("pedidos")) { include __DIR__ . "/admin_seccion_pedidos.php"; }
+            if (adminPuede("despachos")) { include __DIR__ . "/admin_seccion_despachos.php"; }
+            if (adminPuede("pedidos_despachar")) { include __DIR__ . "/admin_seccion_pedidos_despachar.php"; }
+            if (adminPuede("productos")) { include __DIR__ . "/admin_seccion_productos.php"; }
+            if (adminPuede("clientes")) { include __DIR__ . "/admin_seccion_clientes.php"; }
+            if (adminEsPrincipal()) { include __DIR__ . "/admin_seccion_subadmins.php"; }
             ?>
 
             <!-- SECCIÓN MATERIALES INTEGRADA -->
+            <?php if (adminPuede("materiales")): ?>
             <section
                 id="materiales"
                 class="section"
@@ -2677,6 +2737,7 @@ $resultadoEmpleados =
                     </table>
                 </div>
             </section>
+            <?php endif; ?>
 
         </div>
 
@@ -3086,6 +3147,23 @@ $resultadoEmpleados =
             objetivo.classList.add("active");
         }
     }
+
+
+    (function seccionInicialPermitida()
+    {
+        const permitidas = <?= json_encode(adminSeccionesPermitidas()) ?>;
+
+        if (!permitidas) {
+            return;   // administrador principal: sin restricción
+        }
+
+        const hashActual =
+            window.location.hash.replace("#", "");
+
+        if (permitidas.length > 0 && permitidas.indexOf(hashActual) === -1) {
+            window.location.hash = "#" + permitidas[0];
+        }
+    })();
 
 
     (function inicializarSeccionActiva()
