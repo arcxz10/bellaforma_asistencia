@@ -398,7 +398,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         $idsLista = implode(",", array_map("intval", $idsTodos));
         $tablaProd = tablaProductos($tipoCliente);
         $colPrecio = columnaPrecio($tipoCliente);   // precio_mayorista o precio_detal
-        $res = $c->query("SELECT id, referencia, nombre, `$colPrecio` AS precio, activo FROM `$tablaProd` WHERE id IN ($idsLista)");
+        $res = $c->query("SELECT id, referencia, nombre, `$colPrecio` AS precio, activo, es_servicio FROM `$tablaProd` WHERE id IN ($idsLista)");
         $porId = [];
         while ($res && ($p = $res->fetch_assoc())) {
             $porId[(int) $p["id"]] = $p;
@@ -419,17 +419,17 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
                 $cant = $cantidades[$pid];
                 $sub = round($precio * $cant, 2);
                 $total += $sub;
-                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
+                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"], "servicio" => (int) $p["es_servicio"],
                              "precio" => $precio, "cantidad" => $cant, "subtotal" => $sub, "bonificado" => 0];
             }
             if (isset($cantBonos[$pid])) {
                 // Bonificado: queda el precio de lista como referencia, pero no se cobra (subtotal 0)
-                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
+                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"], "servicio" => (int) $p["es_servicio"],
                              "precio" => $precio, "cantidad" => $cantBonos[$pid], "subtotal" => 0.0, "bonificado" => isset($esDocena[$pid]) ? 2 : 1];
             }
             if (isset($esFlete[$pid])) {
                 // Apoyo a flete: precio de lista visible en el PDF, 100 % de descuento (subtotal 0, no suma al total)
-                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
+                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"], "servicio" => (int) $p["es_servicio"],
                              "precio" => $precio, "cantidad" => 1, "subtotal" => 0.0, "bonificado" => 3];
             }
         }
@@ -531,11 +531,11 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         }
 
         $insItem = $c->prepare(
-            "INSERT INTO pedido_vendedor_items (pedido_id, producto_id, referencia, nombre, precio_unitario, cantidad, subtotal, bonificado)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO pedido_vendedor_items (pedido_id, producto_id, referencia, nombre, precio_unitario, cantidad, subtotal, bonificado, es_servicio)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         foreach ($lineas as $l) {
-            $insItem->bind_param("iissdidi", $idFinal, $l["id"], $l["referencia"], $l["nombre"], $l["precio"], $l["cantidad"], $l["subtotal"], $l["bonificado"]);
+            $insItem->bind_param("iissdidii", $idFinal, $l["id"], $l["referencia"], $l["nombre"], $l["precio"], $l["cantidad"], $l["subtotal"], $l["bonificado"], $l["servicio"]);
             $insItem->execute();
         }
         $insItem->close();
