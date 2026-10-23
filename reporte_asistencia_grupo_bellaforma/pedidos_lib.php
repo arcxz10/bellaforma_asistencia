@@ -156,11 +156,12 @@ function vendedorPuedeEditarNumero(mysqli $c, int $vendedorId): bool
  *  $items  [producto_id => cantidad]
  *  $bonos  [producto_id => cantidad] productos BONIFICADOS (se entregan sin costo)
  *  $docenas [producto_id => true] bonificados que son la «docena de 13» (1 unidad gratis; se guarda con bonificado = 2)
+ *  $fletes [producto_id => true] «apoyo a flete» (1 unidad al 100 % de descuento; se guarda con bonificado = 3)
  *  $modo   'borrador' | 'enviar'
  *  $rol    'vendedor' | 'admin'
  * Devuelve ['ok'=>bool, 'error'=>string, 'id'=>int, 'total'=>float, 'estado'=>string]
  */
-function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, array $items, string $modo, string $rol = "vendedor", array $bonos = [], array $docenas = []): array
+function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, array $items, string $modo, string $rol = "vendedor", array $bonos = [], array $docenas = [], array $fletes = []): array
 {
     $falla = fn(string $m) => ["ok" => false, "error" => $m];
 
@@ -350,7 +351,14 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
             $cantBonos[$pid] = 1;
         }
     }
-    if ($modo === "enviar" && !$cantidades && !$cantBonos) {
+    $esFlete = [];   // apoyo a flete: 1 unidad al 100 % de descuento, línea aparte
+    foreach ($fletes as $pid => $v) {
+        $pid = (int) $pid;
+        if ($v && $pid > 0) {
+            $esFlete[$pid] = true;
+        }
+    }
+    if ($modo === "enviar" && !$cantidades && !$cantBonos && !$esFlete) {
         return $falla("Seleccione al menos un producto con cantidad.");
     }
 
@@ -368,8 +376,8 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
 
     $lineas = [];
     $total = 0.0;
-    if ($cantidades || $cantBonos) {
-        $idsTodos = array_values(array_unique(array_merge(array_keys($cantidades), array_keys($cantBonos))));
+    if ($cantidades || $cantBonos || $esFlete) {
+        $idsTodos = array_values(array_unique(array_merge(array_keys($cantidades), array_keys($cantBonos), array_keys($esFlete))));
         $idsLista = implode(",", array_map("intval", $idsTodos));
         $tablaProd = tablaProductos($tipoCliente);
         $colPrecio = columnaPrecio($tipoCliente);   // precio_mayorista o precio_detal
@@ -401,6 +409,11 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
                 // Bonificado: queda el precio de lista como referencia, pero no se cobra (subtotal 0)
                 $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
                              "precio" => $precio, "cantidad" => $cantBonos[$pid], "subtotal" => 0.0, "bonificado" => isset($esDocena[$pid]) ? 2 : 1];
+            }
+            if (isset($esFlete[$pid])) {
+                // Apoyo a flete: precio de lista visible en el PDF, 100 % de descuento (subtotal 0, no suma al total)
+                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"],
+                             "precio" => $precio, "cantidad" => 1, "subtotal" => 0.0, "bonificado" => 3];
             }
         }
         if ($modo === "enviar" && !$lineas) {
@@ -702,12 +715,13 @@ function manejarApiPedido(mysqli $conexion): void
             $items = is_array($in["items"] ?? null) ? $in["items"] : [];
             $bonos = is_array($in["bonos"] ?? null) ? $in["bonos"] : [];
             $docenas = is_array($in["docenas"] ?? null) ? $in["docenas"] : [];
+            $fletes = is_array($in["fletes"] ?? null) ? $in["fletes"] : [];
 
             if ($rol === "admin" && !$pedidoId) {
                 api_responder(["ok" => false, "error" => "Falta el pedido a editar."], 400);
             }
 
-            $r = guardarPedido($conexion, $vendedorId, $pedidoId, $datos, $items, $modo, $rol, $bonos, $docenas);
+            $r = guardarPedido($conexion, $vendedorId, $pedidoId, $datos, $items, $modo, $rol, $bonos, $docenas, $fletes);
             if (!$r["ok"]) {
                 api_responder($r, 422);
             }
