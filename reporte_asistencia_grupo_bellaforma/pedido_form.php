@@ -654,7 +654,12 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     function llamarComprobante(fd) {
         return fetch("pedido_comprobante.php", { method: "POST", body: fd, credentials: "same-origin" }).then(function (r) {
             return r.text().then(function (t) {
-                try { return JSON.parse(t); } catch (e) { return { ok: false, error: "El servidor no respondió bien (código " + r.status + ")." }; }
+                try { return JSON.parse(t); } catch (e) {
+                    var ini = (t || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+                    var aviso = /login/i.test(r.url) || /<form[^>]+login|iniciar sesi/i.test(t || "")
+                        ? " Parece que el archivo pedido_comprobante.php no está subido al servidor." : "";
+                    return { ok: false, error: "El servidor no respondió bien (código " + r.status + ")." + aviso + (ini ? " Respuesta: " + ini : "") };
+                }
             });
         });
     }
