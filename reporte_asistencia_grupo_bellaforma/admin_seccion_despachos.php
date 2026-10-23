@@ -422,6 +422,18 @@ $qsDiaDesp = fn(string $f) => "admin.php?fecha_d=" . $f . "#despachos";
                         var selEmp = document.querySelector('#despachos select.desp-in[data-campo="empresa"][data-id="' + el.dataset.id + '"]');
                         if (selEmp) { selEmp.value = j.empresa; selEmp.dataset.prev = j.empresa; selEmp.classList.add("ok"); setTimeout(function () { selEmp.classList.remove("ok"); }, 1400); }
                     }
+                    // Pedido y remisión vinculados: se copian solos al otro documento (si está en esta pantalla)
+                    if (j.vinculados && j.vinculados.length) {
+                        j.vinculados.forEach(function (v) {
+                            var otro = document.querySelector('#despachos .desp-in[data-campo="' + v.campo + '"][data-id="' + v.id + '"]');
+                            if (!otro) { return; }
+                            if (v.campo === "valor_flete") { otro.value = (v.valor === null || v.valor === undefined) ? "" : formatoPesos(v.valor); }
+                            else { otro.value = (v.valor === null || v.valor === undefined) ? "" : v.valor; }
+                            otro.dataset.prev = otro.value;
+                            otro.classList.add("ok");
+                            setTimeout(function () { otro.classList.remove("ok"); }, 1400);
+                        });
+                    }
                     el.classList.add("ok");
                     setTimeout(function () { el.classList.remove("ok"); }, 1400);
                 } else {
