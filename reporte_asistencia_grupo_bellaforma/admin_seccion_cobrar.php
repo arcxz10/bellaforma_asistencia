@@ -4,6 +4,12 @@
 require_once __DIR__ . "/cobros_lib.php";
 asegurarTablaCobros($conexion);
 
+// Token para subir comprobantes desde el panel (el administrador también puede subirlos)
+if (empty($_SESSION["csrf_pedido"])) {
+    $_SESSION["csrf_pedido"] = bin2hex(random_bytes(16));
+}
+$csrfCobro = (string) $_SESSION["csrf_pedido"];
+
 $ordenesCobro = [
     "dias_menos"  => "Menos días por pagar (los más urgentes primero)",
     "dias_mas"    => "Más días por pagar (los más lejanos primero)",
@@ -83,6 +89,9 @@ $qsCobro = (string) ($_SERVER["QUERY_STRING"] ?? "");
     .cb-visor-btns { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
     .cb-visor-btns a, .cb-visor-btns button { padding: 9px 16px; border-radius: 8px; border: 1px solid var(--linea); background: #fff; color: var(--tinta); font-weight: 600; font-size: 13.5px; text-decoration: none; cursor: pointer; }
     .cb-btn-cobrar { background: #1D6F42; color: #fff; border: none; }
+    .cb-subir { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 5px 11px; border-radius: 999px; border: 1px dashed #7E8FD6; background: #F4F6FE; color: #2B3A9F; font-weight: 700; font-size: 12px; cursor: pointer; }
+    .cb-subir:hover { background: #E8EBFA; }
+    .cb-subir[disabled] { opacity: .6; cursor: wait; }
     .cb-btn-cobrar:hover { filter: brightness(1.1); }
 </style>
 
@@ -202,6 +211,11 @@ $qsCobro = (string) ($_SERVER["QUERY_STRING"] ?? "");
                                 <?php else: ?>
                                     <span class="cb-sin">Sin comprobante</span>
                                 <?php endif; ?>
+                                <?php if (!$pc["cobrado"]): ?>
+                                    <br><button type="button" class="cb-subir" data-id="<?= (int) $pc["id"] ?>" title="Si el cliente le envió el comprobante a usted, súbalo aquí">
+                                        <svg class="ico" aria-hidden="true" style="width:13px;height:13px;"><use href="#i-upload"/></svg> <?= $pc["tiene_comprobante"] ? "Cambiar comprobante" : "Subir comprobante" ?>
+                                    </button>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <form method="POST" action="admin.php" class="form-inline"
@@ -223,6 +237,8 @@ $qsCobro = (string) ($_SERVER["QUERY_STRING"] ?? "");
         </table>
     </div>
 </section>
+
+<input type="file" id="cbArchivo" accept="image/jpeg,image/png,image/webp,application/pdf" hidden>
 
 <div class="cb-visor" id="cbVisor">
     <div class="cb-visor-caja">
@@ -279,6 +295,56 @@ $qsCobro = (string) ($_SERVER["QUERY_STRING"] ?? "");
 
         document.querySelectorAll(".cb-comp").forEach(function (b) {
             b.addEventListener("click", function () { abrir(b.dataset.id, b.dataset.mime, b.dataset.titulo); });
+        });
+
+        /* Subir (o cambiar) el comprobante desde el panel: por si el cliente se lo envía directamente al administrador. */
+        var CB_CSRF = <?= json_encode($csrfCobro) ?>;
+        var inputArchivo = document.getElementById("cbArchivo");
+        var botonActual = null;
+
+        document.querySelectorAll(".cb-subir").forEach(function (b) {
+            b.addEventListener("click", function () {
+                botonActual = b;
+                inputArchivo.value = "";
+                inputArchivo.click();
+            });
+        });
+
+        inputArchivo.addEventListener("change", function () {
+            var archivo = inputArchivo.files && inputArchivo.files[0];
+            if (!archivo || !botonActual) { return; }
+            if (archivo.size > 6 * 1024 * 1024) {
+                window.alert("El archivo es muy pesado (máximo 6 MB).");
+                return;
+            }
+            var boton = botonActual;
+            var textoOriginal = boton.innerHTML;
+            boton.disabled = true;
+            boton.textContent = "Subiendo…";
+
+            var fd = new FormData();
+            fd.append("op", "subir");
+            fd.append("rol", "admin");
+            fd.append("pedido_id", boton.dataset.id);
+            fd.append("csrf", CB_CSRF);
+            fd.append("archivo", archivo);
+
+            fetch("cobro_comprobante.php", { method: "POST", body: fd, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+                .then(function (r) { return r.json().catch(function () { return { ok: false, error: "Respuesta no válida del servidor." }; }); })
+                .then(function (j) {
+                    if (j && j.ok) {
+                        window.location.reload();
+                    } else {
+                        window.alert((j && (j.error || j.mensaje)) || "No se pudo subir el comprobante.");
+                        boton.disabled = false;
+                        boton.innerHTML = textoOriginal;
+                    }
+                })
+                .catch(function () {
+                    window.alert("No se pudo subir el comprobante. Revise su conexión e intente de nuevo.");
+                    boton.disabled = false;
+                    boton.innerHTML = textoOriginal;
+                });
         });
     })();
 </script>
