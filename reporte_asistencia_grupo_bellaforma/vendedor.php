@@ -140,21 +140,21 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
             <?php if ($verPdf || $verExcel || $puedeEditar): ?>
                 <span style="grid-column:1 / -1; display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
                     <?php if ($puedeEditar): ?>
-                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Editar <?= e(nombreCortoDocumento($ped["tipo_pedido"] ?? "pedido")) ?></a>
+                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-edit"/></svg>Editar <?= e(nombreCortoDocumento($ped["tipo_pedido"] ?? "pedido")) ?></a>
                     <?php endif; ?>
                     <?php if ($verPdf): ?>
-                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>">📄 Descargar PDF</a>
+                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-file"/></svg>Descargar PDF</a>
                     <?php endif; ?>
                     <?php if ($verExcel): ?>
-                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00796B;" href="pedido_excel.php?id=<?= (int) $ped["id"] ?>">📊 Descargar Excel</a>
-                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00695C;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>">📥 Excel para Syscafe</a>
+                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00796B;" href="pedido_excel.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-chart"/></svg>Descargar Excel</a>
+                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00695C;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-download"/></svg>Excel para Syscafe</a>
                     <?php endif; ?>
                 </span>
             <?php endif; ?>
             <?php if ($esBorrador): ?>
                 <span style="grid-column:1 / -1; display:flex; gap:8px; margin-top:6px;">
                     <button type="button" class="btn btn-rojo" style="min-height:40px; padding:6px 14px; font-size:14px;"
-                        onclick="event.preventDefault(); event.stopPropagation(); bfEliminarBorrador(document.getElementById('del-borrador-<?= (int) $ped["id"] ?>'));">🗑️ Eliminar borrador</button>
+                        onclick="event.preventDefault(); event.stopPropagation(); bfEliminarBorrador(document.getElementById('del-borrador-<?= (int) $ped["id"] ?>'));"><svg class="vi" aria-hidden="true"><use href="#vi-trash"/></svg>Eliminar borrador</button>
                 </span>
             <?php endif; ?>
         </summary>
@@ -167,14 +167,14 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                 <?php if (!empty($ped["cliente_direcciones"])): ?>Dirección: <?= e($ped["cliente_direcciones"]) ?><?= !empty($ped["cliente_barrio"]) ? " · " . e($ped["cliente_barrio"]) : "" ?><br><?php endif; ?>
                 <?php if (!empty($ped["cliente_puntos_referencia"])): ?>Referencia: <?= e($ped["cliente_puntos_referencia"]) ?><br><?php endif; ?>
                 Pago: <?= e(etiquetaCondicion($ped)) ?><?= !empty($ped["transportadora"]) ? " · Transportadora: " . e(etiquetaTransportadora($ped["transportadora"])) : "" ?> · Factura electrónica: <?= !empty($ped["factura_electronica"]) ? "Sí" : "No" ?>
-                <?php if (($ped["tipo_pedido"] ?? "") === "remision" && !empty($ped["pedido_vinculado_id"]) && isset($numerosPedidos[(int) $ped["pedido_vinculado_id"]])): ?><br>🔗 Unida al pedido #<?= e($numerosPedidos[(int) $ped["pedido_vinculado_id"]]) ?><?php endif; ?>
+                <?php if (($ped["tipo_pedido"] ?? "") === "remision" && !empty($ped["pedido_vinculado_id"]) && isset($numerosPedidos[(int) $ped["pedido_vinculado_id"]])): ?><br><svg class="vi" aria-hidden="true"><use href="#vi-link"/></svg>Unida al pedido #<?= e($numerosPedidos[(int) $ped["pedido_vinculado_id"]]) ?><?php endif; ?>
                 <?php if (!empty($ped["observaciones"])): ?><br>Obs.: <?= nl2br(e($ped["observaciones"])) ?><?php endif; ?>
             </div>
             <?php if ($ped["items"]): ?>
                 <table class="p-items">
                     <?php foreach ($ped["items"] as $it): $esBon = !empty($it["bonificado"]); ?>
                         <tr<?= $esBon ? ' class="bonif"' : "" ?>>
-                            <td><b><?= e($it["referencia"]) ?></b><?= $esBon ? ' <span class="pf-tag-bonif">🎁 BONIFICADO</span>' : "" ?><br><?= e($it["nombre"]) ?></td>
+                            <td><b><?= e($it["referencia"]) ?></b><?= $esBon ? ' <span class="pf-tag-bonif"><svg class="vi" aria-hidden="true"><use href="#vi-gift"/></svg>BONIFICADO</span>' : "" ?><br><?= e($it["nombre"]) ?></td>
                             <td class="n"><?= (int) $it["cantidad"] ?> × <?= formatoCOP($it["precio_unitario"]) ?><br><b><?= formatoCOP($esBon ? 0 : $it["subtotal"]) ?></b></td>
                         </tr>
                     <?php endforeach; ?>
@@ -184,15 +184,15 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
             <?php if ($ped["estado"] !== "pendiente"): ?>   <?php /* el botón «Editar» de los pedidos enviados ya está arriba, junto a las descargas */ ?>
             <div class="acciones-ped">
                 <?php if ($esBorrador): ?>
-                    <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>">✏️ Continuar</a>
+                    <a class="btn btn-azul" href="vendedor.php?pedido=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-edit"/></svg>Continuar</a>
                     <form method="POST" action="vendedor.php" id="del-borrador-<?= (int) $ped["id"] ?>" onsubmit="return bfEliminarBorrador(this)">
                         <input type="hidden" name="accion" value="eliminar_borrador">
                         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
                         <input type="hidden" name="pedido_id" value="<?= (int) $ped["id"] ?>">
-                        <button type="submit" class="btn btn-rojo">🗑️ Eliminar</button>
+                        <button type="submit" class="btn btn-rojo"><svg class="vi" aria-hidden="true"><use href="#vi-trash"/></svg>Eliminar</button>
                     </form>
                 <?php else: ?>
-                    <p class="bloqueado">🔒 <?= $ped["estado"] === "procesado" ? "Ya fue subido a Syscafe: no se puede editar." : "Pedido anulado." ?></p>
+                    <p class="bloqueado"><svg class="vi" aria-hidden="true"><use href="#vi-lock"/></svg><?= $ped["estado"] === "procesado" ? "Ya fue subido a Syscafe: no se puede editar." : "Pedido anulado." ?></p>
                 <?php endif; ?>
             </div>
             <?php endif; ?>
@@ -230,8 +230,8 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
         <?php endif; ?>
 
         <div class="tabs">
-            <button type="button" class="tab-btn activo" data-panel="nuevo"><?= $pedidoEditar ? "✏️ Pedido" : "🛒 Nuevo pedido" ?></button>
-            <button type="button" class="tab-btn" data-panel="mis-pedidos">📋 Mis pedidos<?= $borradores ? " (" . count($borradores) . " borrador" . (count($borradores) > 1 ? "es" : "") . ")" : "" ?></button>
+            <button type="button" class="tab-btn activo" data-panel="nuevo"><?= $pedidoEditar ? '<svg class="vi" aria-hidden="true"><use href="#vi-edit"/></svg> Pedido' : '<svg class="vi" aria-hidden="true"><use href="#vi-cart"/></svg> Nuevo pedido' ?></button>
+            <button type="button" class="tab-btn" data-panel="mis-pedidos"><svg class="vi" aria-hidden="true"><use href="#vi-clipboard"/></svg>Mis pedidos<?= $borradores ? " (" . count($borradores) . " borrador" . (count($borradores) > 1 ? "es" : "") . ")" : "" ?></button>
         </div>
 
         <div id="panel-nuevo" class="panel activo">
@@ -260,7 +260,7 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
 
     <div class="pf-dialogo" id="bfDialogo" hidden>
         <div class="pf-dialogo-caja" role="dialog" aria-modal="true" aria-labelledby="bfDialogoTitulo">
-            <div class="pf-dialogo-icono">🗑️</div>
+            <div class="pf-dialogo-icono"><svg class="vi" aria-hidden="true"><use href="#vi-trash"/></svg></div>
             <h3 id="bfDialogoTitulo">¿Eliminar borrador?</h3>
             <p>Se eliminará este borrador y no se podrá recuperar. Los pedidos ya enviados no se pueden eliminar.</p>
             <div class="pf-dialogo-botones">
