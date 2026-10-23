@@ -94,6 +94,8 @@ function minutosAHoras($minutos)
 
 function redireccionar($mensaje, $tipo = "exito", $seccion = "")
 {
+    $GLOBALS["bf_mov_resultado"] = [(string) $mensaje, (string) $tipo];   // lo lee el registro de movimientos de subadministradores
+
     // Envíos hechos con fetch (guardar producto): se responde en JSON para mostrar el resultado real en pantalla
     if (($_SERVER["HTTP_X_REQUESTED_WITH"] ?? "") === "fetch") {
         header("Content-Type: application/json; charset=UTF-8");
@@ -1301,6 +1303,15 @@ $resultadoEmpleados =
                 class="nav-item"
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-users-check"/></svg> Subadministradores
+            </a>
+            <?php endif; ?>
+
+            <?php if (adminEsPrincipal()): ?>
+            <a
+                href="#movimientos"
+                class="nav-item"
+            >
+                <svg class="ico" aria-hidden="true"><use href="#i-clipboard"/></svg> Movimientos subadministradores
             </a>
             <?php endif; ?>
 
@@ -2755,6 +2766,7 @@ $resultadoEmpleados =
             if (adminPuede("productos")) { include __DIR__ . "/admin_seccion_productos.php"; }
             if (adminPuede("clientes")) { include __DIR__ . "/admin_seccion_clientes.php"; }
             if (adminEsPrincipal()) { include __DIR__ . "/admin_seccion_subadmins.php"; }
+            if (adminEsPrincipal()) { include __DIR__ . "/admin_seccion_movimientos.php"; }
             ?>
 
             <!-- SECCIÓN MATERIALES INTEGRADA -->
