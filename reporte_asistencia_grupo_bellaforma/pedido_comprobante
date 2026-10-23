@@ -1,0 +1,173 @@
+<?php
+/**
+ * Comprobante de pago de los pedidos «Anticipado» (la foto que sube el ejecutivo al crear o editar el pedido).
+ *   GET  pedido_comprobante.php?id=53                 -> la imagen (con &descargar=1 se baja como archivo)
+ *   POST pedido_comprobante.php  op=subir  pedido_id=53 imagen=<archivo> csrf=… rol=vendedor|admin  -> anexa / reemplaza (responde JSON)
+ *   POST pedido_comprobante.php  op=quitar pedido_id=53 csrf=… rol=vendedor|admin                    -> lo quita (responde JSON)
+ *
+ * Quién puede: el administrador (cualquier pedido) y el ejecutivo dueño del pedido mientras no esté subido a Syscafe ni anulado.
+ * La imagen se guarda en la base de datos (tabla pedido_comprobantes), igual que los rótulos.
+ */
+session_start();
+$adminId = (int) ($_SESSION["admin_id"] ?? 0);
+$vendedorSesion = (int) ($_SESSION["vendedor_id"] ?? 0);
+$csrfSesion = (string) ($_SESSION["csrf_pedido"] ?? "");
+session_write_close();
+
+ini_set("display_errors", 0);
+ob_start();
+
+require_once __DIR__ . "/conexion.php";
+require_once __DIR__ . "/vendedores_db.php";
+date_default_timezone_set("America/Bogota");
+
+function comprobanteJson(array $r, int $codigo = 200): void
+{
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    http_response_code($codigo);
+    header("Content-Type: application/json; charset=utf-8");
+    echo json_encode($r, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function comprobanteTexto(string $t, int $codigo): void
+{
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    http_response_code($codigo);
+    header("Content-Type: text/plain; charset=utf-8");
+    exit($t);
+}
+
+try {
+    asegurarTablasVendedores($conexion);
+    asegurarTablaComprobantes($conexion);
+} catch (Throwable $e) {
+    if ($_SERVER["REQUEST_METHOD"] === "POST") {
+        comprobanteJson(["ok" => false, "error" => "No se pudo preparar la base de datos. Intente de nuevo."], 500);
+    }
+    comprobanteTexto("Error del servidor.", 500);
+}
+
+/** Pedido (id, vendedor, estado) o null si no existe. */
+function comprobantePedido(mysqli $c, int $id): ?array
+{
+    $st = $c->prepare("SELECT id, vendedor_id, estado FROM pedidos_vendedores WHERE id = ? LIMIT 1");
+    $st->bind_param("i", $id);
+    $st->execute();
+    $f = $st->get_result()->fetch_assoc();
+    $st->close();
+    return $f ?: null;
+}
+
+/* ---------------- POST: subir / quitar ---------------- */
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $op = (string) ($_POST["op"] ?? "");
+    $id = (int) ($_POST["pedido_id"] ?? 0);
+    $rol = (($_POST["rol"] ?? "") === "admin") ? "admin" : "vendedor";
+
+    if ($csrfSesion === "" || !hash_equals($csrfSesion, (string) ($_POST["csrf"] ?? ""))) {
+        comprobanteJson(["ok" => false, "error" => "La sesión expiró. Recargue la página."], 403);
+    }
+    if ($rol === "admin" && $adminId <= 0) {
+        comprobanteJson(["ok" => false, "error" => "Sesión de administrador no válida."], 401);
+    }
+    if ($rol === "vendedor" && $vendedorSesion <= 0) {
+        comprobanteJson(["ok" => false, "error" => "Sesión no válida. Ingrese de nuevo."], 401);
+    }
+
+    try {
+        $ped = $id > 0 ? comprobantePedido($conexion, $id) : null;
+        if (!$ped) {
+            comprobanteJson(["ok" => false, "error" => "No se encontró el pedido."], 404);
+        }
+        if ($rol === "vendedor") {
+            if ((int) $ped["vendedor_id"] !== $vendedorSesion) {
+                comprobanteJson(["ok" => false, "error" => "Este pedido no te pertenece."], 403);
+            }
+            if (in_array($ped["estado"], ["procesado", "anulado"], true)) {
+                comprobanteJson(["ok" => false, "error" => "Este pedido ya no se puede modificar."], 422);
+            }
+        }
+
+        if ($op === "quitar") {
+            borrarComprobanteDePedido($conexion, $id);
+            comprobanteJson(["ok" => true]);
+        }
+        if ($op !== "subir") {
+            comprobanteJson(["ok" => false, "error" => "Operación no válida."], 400);
+        }
+
+        $f = $_FILES["imagen"] ?? null;
+        if (!$f || ($f["error"] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $msg = (($f["error"] ?? 0) === UPLOAD_ERR_INI_SIZE || ($f["error"] ?? 0) === UPLOAD_ERR_FORM_SIZE)
+                ? "La imagen es muy pesada."
+                : "No llegó la imagen. Intente de nuevo.";
+            comprobanteJson(["ok" => false, "error" => $msg], 422);
+        }
+        if ((int) $f["size"] > 6 * 1024 * 1024) {
+            comprobanteJson(["ok" => false, "error" => "La imagen es muy pesada (máximo 6 MB)."], 422);
+        }
+
+        $bin = file_get_contents($f["tmp_name"]);
+        $info = $bin !== false ? @getimagesizefromstring($bin) : false;
+        $tiposOk = [IMAGETYPE_JPEG => "image/jpeg", IMAGETYPE_PNG => "image/png"];
+        if (defined("IMAGETYPE_WEBP")) {
+            $tiposOk[IMAGETYPE_WEBP] = "image/webp";
+        }
+        if (!$info || !isset($tiposOk[$info[2]])) {
+            comprobanteJson(["ok" => false, "error" => "Solo se aceptan imágenes JPG, PNG o WEBP."], 422);
+        }
+        $mime = $tiposOk[$info[2]];
+
+        $st = $conexion->prepare("REPLACE INTO pedido_comprobantes (pedido_id, mime, datos) VALUES (?, ?, ?)");
+        $nulo = null;
+        $st->bind_param("isb", $id, $mime, $nulo);
+        $st->send_long_data(2, $bin);
+        $st->execute();
+        $st->close();
+        comprobanteJson(["ok" => true, "v" => time()]);
+    } catch (Throwable $e) {
+        comprobanteJson(["ok" => false, "error" => "No se pudo guardar el comprobante. Intente de nuevo."], 500);
+    }
+}
+
+/* ---------------- GET: la imagen ---------------- */
+$id = (int) ($_GET["id"] ?? 0);
+if ($id <= 0) {
+    comprobanteTexto("No encontrado.", 404);
+}
+$ped = comprobantePedido($conexion, $id);
+if (!$ped) {
+    comprobanteTexto("No encontrado.", 404);
+}
+$permitido = $adminId > 0 || ($vendedorSesion > 0 && (int) $ped["vendedor_id"] === $vendedorSesion);
+if (!$permitido) {
+    comprobanteTexto("Sin permiso.", 403);
+}
+
+$st = $conexion->prepare("SELECT mime, datos FROM pedido_comprobantes WHERE pedido_id = ?");
+$st->bind_param("i", $id);
+$st->execute();
+$st->bind_result($mime, $datos);
+$hay = $st->fetch();
+$st->close();
+if (!$hay) {
+    comprobanteTexto("No encontrado.", 404);
+}
+
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
+header("Content-Type: " . $mime);
+header("Content-Length: " . strlen($datos));
+header("Cache-Control: private, max-age=86400");
+header("X-Content-Type-Options: nosniff");
+if (!empty($_GET["descargar"])) {
+    $ext = $mime === "image/png" ? ".png" : ($mime === "image/webp" ? ".webp" : ".jpg");
+    header('Content-Disposition: attachment; filename="comprobante_pedido_' . $id . $ext . '"');
+}
+echo $datos;
