@@ -70,6 +70,10 @@ const SYSCAFE_PE_IVA = 19;
    false -> el IVA se suma ENCIMA del precio (el total sube un 19 %). */
 const SYSCAFE_PE_IVA_INCLUIDO = true;
 
+/* IVA de las líneas de SERVICIO (ej. FLETE 001). Syscafe ya trae el IVA configurado en el servicio (0 % en el FLETE),
+   así que por defecto se envía sin IVA. Si el servicio debe llevar IVA, escriba aquí el porcentaje (ej. 19). */
+const SYSCAFE_PE_IVA_SERVICIOS = 0;
+
 /* true -> el precio unitario también va en la columna Sugerido, para que Syscafe use ese valor como precio y no calcule descuentos. */
 const SYSCAFE_PE_USAR_SUGERIDO = true;
 
@@ -196,16 +200,18 @@ function syscafe_pe_filas(array $p): array
         // Syscafe toma VrSubtot (+ VrIva) como el TOTAL de la línea y calcula el unitario dividiendo entre Cantidad
         $precio = (float) $it["precio_unitario"];
         $esBon = !empty($it["bonificado"]);                 // bonificado: 100 % de descuento -> total de la línea en 0 (y sin IVA)
+        $esServ = !empty($it["es_servicio"]);               // servicio (ej. FLETE 001): va en CodServ y la Referencia queda vacía
+        $pIvaLinea = $esServ ? (float) SYSCAFE_PE_IVA_SERVICIOS : $pIva;
         $bruto = $esBon ? 0.0 : round($cant * $precio, 2);   // cantidad x precio (el valor que ya tenía la línea)
-        if ($pIva <= 0 || $esBon) {
+        if ($pIvaLinea <= 0 || $esBon) {
             $subtotal = $bruto;
             $vrIva = 0.0;
         } elseif (SYSCAFE_PE_IVA_INCLUIDO) {
-            $subtotal = round($bruto / (1 + $pIva / 100), 2);   // base sin IVA
-            $vrIva = round($bruto - $subtotal, 2);                // IVA incluido: base + IVA = valor original de la línea
+            $subtotal = round($bruto / (1 + $pIvaLinea / 100), 2);   // base sin IVA
+            $vrIva = round($bruto - $subtotal, 2);                     // IVA incluido: base + IVA = valor original de la línea
         } else {
             $subtotal = $bruto;
-            $vrIva = round($bruto * $pIva / 100, 2);              // IVA sumado encima del precio
+            $vrIva = round($bruto * $pIvaLinea / 100, 2);              // IVA sumado encima del precio
         }
         $filas[] = [
             $tipo,                          // A  Tipo
@@ -222,12 +228,12 @@ function syscafe_pe_filas(array $p): array
             $detalle,                       // L  Detalle
             $cliente,                       // M  Tercero1 (cédula / NIT del cliente)
             "",                             // N  Area
-            (string) $it["referencia"],     // O  Referencia
+            $esServ ? "" : (string) $it["referencia"],     // O  Referencia (vacía si es servicio)
             $cant,                          // P  Cantidad
             $subtotal,                      // Q  VrSubtot (valor de la línea SIN IVA; con IVA incluido: total / 1.19)
             $vrIva,                         // R  VrIva (Syscafe suma VrSubtot + VrIva = valor original de la línea)
-            $pIva,                          // S  pIva
-            "",                             // T  CodServ
+            $pIvaLinea,                     // S  pIva
+            $esServ ? (string) $it["referencia"] : "",   // T  CodServ (código del servicio, ej. 001)
             0.0,                            // U  vrretef
             0.0,                            // V  pretefte
             $fpago,                         // W  Fpago
