@@ -17,6 +17,8 @@ function transportadorasDespacho(): array
         "domicilio_don_jairo" => "Domicilio",
         "domicilio_sandra"    => "Domicilio Sandra",
         "recoge_oficina"      => "Recoge en oficina",
+        "tcc"                 => "TCC",
+        "interrapidisimo"     => "Interrapidísimo",
     ];
 }
 
