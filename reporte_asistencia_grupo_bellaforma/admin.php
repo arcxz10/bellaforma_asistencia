@@ -1187,6 +1187,13 @@ $resultadoEmpleados =
             </a>
 
             <a
+                href="#pedidos_despachar"
+                class="nav-item"
+            >
+                <svg class="ico" aria-hidden="true"><use href="#i-clipboard"/></svg> Pedidos para despachar
+            </a>
+
+            <a
                 href="#productos_mayoristas"
                 class="nav-item"
             >
@@ -2618,6 +2625,7 @@ $resultadoEmpleados =
             include __DIR__ . "/admin_seccion_vendedores.php";
             include __DIR__ . "/admin_seccion_pedidos.php";
             include __DIR__ . "/admin_seccion_despachos.php";
+            include __DIR__ . "/admin_seccion_pedidos_despachar.php";
             include __DIR__ . "/admin_seccion_productos.php";
             include __DIR__ . "/admin_seccion_clientes.php";
             ?>
