@@ -158,8 +158,24 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
                                 . " · " . ($pu["cliente_nombre"] !== "" ? $pu["cliente_nombre"] : "(sin cliente)")
                                 . " · " . formatoCOP($pu["total"])
                                 . " · " . date("d/m", strtotime((string) $pu["creado_en"]));
+                            // Datos del cliente del pedido: al elegirlo, el formulario de la remisión se llena solo
+                            $cliUnion = [
+                                "lista" => (string) ($pu["tipo_cliente"] ?? ""),
+                                "cliente_id" => !empty($pu["cliente_id"]) ? (int) $pu["cliente_id"] : null,
+                                "tipo_persona" => (string) ($pu["cliente_tipo_persona"] ?? ""),
+                                "identificacion" => (string) ($pu["cliente_nit"] ?? ""),
+                                "nombre" => (string) ($pu["cliente_nombre"] ?? ""),
+                                "comercial" => (string) ($pu["cliente_nombre_comercial"] ?? ""),
+                                "telefono" => (string) ($pu["cliente_telefono"] ?? ""),
+                                "email" => (string) ($pu["cliente_email"] ?? ""),
+                                "departamento" => (string) ($pu["cliente_departamento"] ?? ""),
+                                "municipio" => (string) ($pu["cliente_ciudad"] ?? ""),
+                                "barrio" => (string) ($pu["cliente_barrio"] ?? ""),
+                                "direccion" => (string) ($pu["cliente_direcciones"] ?? ""),
+                                "puntos" => (string) ($pu["cliente_puntos_referencia"] ?? ""),
+                            ];
                             ?>
-                            <option value="<?= (int) $pu["id"] ?>"><?= htmlspecialchars($etqUnion, ENT_QUOTES, "UTF-8") ?></option>
+                            <option value="<?= (int) $pu["id"] ?>" data-cliente="<?= htmlspecialchars(json_encode($cliUnion, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, "UTF-8") ?>"><?= htmlspecialchars($etqUnion, ENT_QUOTES, "UTF-8") ?></option>
                         <?php endforeach; ?>
                     </select>
                     <p class="pf-nota">Si la remisión va junto con un pedido que ya hizo, elíjalo aquí. En el Control de despachos saldrá el número del pedido al que va.</p>
@@ -1141,7 +1157,40 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     $("pfNumero").value = D.numero || "";
     if ($("pfUnir")) {
         $("pfUnir").value = D.pedido_vinculado_id ? String(D.pedido_vinculado_id) : "";
-        $("pfUnir").addEventListener("change", function () { sucio(); });
+        $("pfUnir").addEventListener("change", function () {
+            llenarClienteDesdePedido();
+            sucio();
+        });
+    }
+
+    /* ---------- Remisión unida a un pedido: copiar los datos del cliente del pedido ---------- */
+    function llenarClienteDesdePedido() {
+        var sel = $("pfUnir");
+        if (!sel || S.doc !== "remision" || !sel.value) { return; }
+        var opt = sel.options[sel.selectedIndex];
+        var c = null;
+        try { c = JSON.parse(opt.getAttribute("data-cliente") || "null"); } catch (e) { c = null; }
+        if (!c) { return; }
+        S.ignorar = true;
+        // 1) Tipo de cliente (mayorista / detal) igual al del pedido
+        if (c.lista && c.lista !== S.lista) {
+            $("pfDoc").value = "";   // evita que cambiarLista() dispare una búsqueda con el NIT anterior
+            cambiarLista(c.lista);
+        }
+        // 2) Datos del cliente
+        setTipo(c.tipo_persona);
+        $("pfDoc").value = c.identificacion || "";
+        S.docOk = soloDig(c.identificacion);
+        S.clienteId = c.cliente_id || null;
+        $("pfNombre").value = c.nombre || "";
+        $("pfComercial").value = c.comercial || "";
+        $("pfTelefono").value = c.telefono || "";
+        $("pfEmail").value = c.email || "";
+        $("pfBarrio").value = c.barrio || "";
+        $("pfDireccion").value = c.direccion || "";
+        $("pfPuntos").value = c.puntos || "";
+        colombiaSet($("pfDepto"), $("pfMuni"), c.departamento, c.municipio).then(function () { S.ignorar = false; sucio(); });
+        msgCliente("Se cargaron los datos del cliente del pedido #" + ((opt.textContent.match(/#(\S+)/) || [])[1] || "") + ". Revíselos y corrija si hace falta.", "ok", "check");
     }
     setDoc(D.tipo_documento);
     setTipo(D.tipo_persona);
