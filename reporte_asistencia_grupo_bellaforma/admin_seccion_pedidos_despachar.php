@@ -204,7 +204,7 @@ function pdSelectHtml(int $id, string $campo, array $catalogo, string $actual, s
                                 <?php endif; ?>
                                 <?php if (!empty($d["tiene_comprobante"]) && !empty($d["pedido_id"])): ?>
                                     <button type="button" class="pd-comp" data-pedido="<?= (int) $d["pedido_id"] ?>" data-titulo="<?= escapar($codigoPD) ?>" title="Ver comprobante de pago">
-                                        <img src="pedido_comprobante.php?id=<?= (int) $d["pedido_id"] ?>" alt="" loading="lazy">
+                                        <img src="pedido_api.php?comprobante=<?= (int) $d["pedido_id"] ?>" alt="" loading="lazy">
                                         <span>Comprobante de pago</span>
                                     </button>
                                 <?php endif; ?>
@@ -320,7 +320,7 @@ function pdSelectHtml(int $id, string $campo, array $catalogo, string $actual, s
     }
     function abrirVisor(id, titulo) {
         if (!visor) { crearVisor(); }
-        var base = "pedido_comprobante.php?id=" + encodeURIComponent(id);
+        var base = "pedido_api.php?comprobante=" + encodeURIComponent(id);
         visor.querySelector("h4").textContent = "Comprobante de pago" + (titulo ? " · " + titulo : "");
         visor.querySelector("img").src = base;
         visor.querySelector(".pd-bajar").href = base + "&descargar=1";
