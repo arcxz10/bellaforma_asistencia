@@ -15,6 +15,7 @@ require_once "vendedores_db.php";
 asegurarTablasVendedores($conexion);
 require_once __DIR__ . "/admin_permisos.php";
 require_once __DIR__ . "/cobros_lib.php";
+require_once __DIR__ . "/contraentrega_lib.php";
 if (adminEsPrincipal() && empty($_SESSION["admin_cols_ok"])) {
     adminAsegurarColumnas($conexion);
     $_SESSION["admin_cols_ok"] = 1;
@@ -132,6 +133,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     require __DIR__ . "/admin_acciones_vendedores.php";
     // Pedidos por cobrar (cob_cobrado / cob_reabrir)
     require __DIR__ . "/admin_acciones_cobros.php";
+    // Pedidos contraentrega (coe_cobrado / coe_reabrir)
+    require __DIR__ . "/admin_acciones_contraentrega.php";
     // Subadministradores (solo el administrador principal)
     require __DIR__ . "/admin_acciones_subadmins.php";
 
@@ -1258,6 +1261,17 @@ $resultadoEmpleados =
             >
                 <svg class="ico" aria-hidden="true"><use href="#i-wallet"/></svg> Pedidos por cobrar
                 <span id="navBadgeCobrar" class="nav-badge-cobrar" <?= $cobNavPend > 0 ? "" : "hidden" ?>><?= (int) $cobNavPend ?></span>
+            </a>
+            <?php endif; ?>
+
+            <?php if (adminPuede("contraentrega")): ?>
+            <?php $coeNavPend = contraentregaContarPorCobrar($conexion); ?>
+            <a
+                href="#contraentrega"
+                class="nav-item"
+            >
+                <svg class="ico" aria-hidden="true"><use href="#i-truck"/></svg> Pedidos contraentrega
+                <span class="nav-badge-cobrar" <?= $coeNavPend > 0 ? "" : "hidden" ?>><?= (int) $coeNavPend ?></span>
             </a>
             <?php endif; ?>
 
@@ -2761,6 +2775,7 @@ $resultadoEmpleados =
             if (adminPuede("vendedores")) { include __DIR__ . "/admin_seccion_vendedores.php"; }
             if (adminPuede("pedidos")) { include __DIR__ . "/admin_seccion_pedidos.php"; }
             if (adminPuede("por_cobrar")) { include __DIR__ . "/admin_seccion_cobrar.php"; }
+            if (adminPuede("contraentrega")) { include __DIR__ . "/admin_seccion_contraentrega.php"; }
             if (adminPuede("despachos")) { include __DIR__ . "/admin_seccion_despachos.php"; }
             if (adminPuede("pedidos_despachar")) { include __DIR__ . "/admin_seccion_pedidos_despachar.php"; }
             if (adminPuede("productos")) { include __DIR__ . "/admin_seccion_productos.php"; }
