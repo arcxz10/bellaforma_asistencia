@@ -67,7 +67,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <div class="header-login">
                 <img src="img/logo-azul.png" alt="Grupo Bella Forma S.A.S." class="logo-marca">
                 <h1 class="titulo-sistema">BForma — Sistema de Gestión de Ventas y Pedidos</h1>
-                <p>Pedidos al por mayor</p>
             </div>
 
             <div class="login-card">
