@@ -4,8 +4,8 @@
  *
  *  - Cuenta como contraentrega todo pedido (tipo «Pedido de cliente», enviado y no anulado) cuya forma de pago es «contra_entrega».
  *  - La transportadora paga los días 15 y 30 de cada mes (en febrero, el último día del mes). La fecha de cobro sale del DÍA en que se creó el pedido:
- *        del 1 al 13   -> se cobra el 15 de ese mes
- *        del 14 al 27  -> se cobra el 30 de ese mes (fin de mes)
+ *        del 1 al 12   -> se cobra el 15 de ese mes
+ *        del 13 al 27  -> se cobra el 30 de ese mes (fin de mes)
  *        del 28 al 31  -> se cobra el 15 del mes siguiente
  *  - El administrador marca el pedido como «cobrado» cuando llega el pago; se guarda en la misma tabla `pedido_cobros` que usa «Pedidos por cobrar».
  */
@@ -20,7 +20,7 @@ function contraentregaFechaCobro(string $creadoEn): DateTimeImmutable
     $dia = (int) $f->format("j");
     $ultimo = (int) $f->format("t");
 
-    if ($dia <= 13) {
+    if ($dia <= 12) {
         return $f->setDate((int) $f->format("Y"), (int) $f->format("n"), 15);
     }
     if ($dia <= 27) {
