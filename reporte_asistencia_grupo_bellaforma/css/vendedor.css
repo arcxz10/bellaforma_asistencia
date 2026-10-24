@@ -26,6 +26,9 @@ button { cursor: pointer; }
     box-shadow: 0 8px 24px -16px rgba(7, 27, 64, .8);
 }
 .topbar img { height: 34px; width: auto; }
+.topbar .marca { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.topbar .marca .sistema { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; line-height: 1.2; color: rgba(255, 255, 255, .85); }
+@media (max-width: 520px) { .topbar .marca .sistema { font-size: 9px; max-width: 150px; } }
 .topbar .quien { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 10px; text-align: right; line-height: 1.25; }
 .topbar a.salir {
     color: #fff; text-decoration: none; background: rgba(255,255,255,.14);
