@@ -278,7 +278,10 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
 <body>
 
     <div class="topbar">
-        <img src="img/logo-blanco.png" alt="Grupo Bella Forma S.A.S.">
+        <div class="marca">
+            <img src="img/logo-blanco.png" alt="Grupo Bella Forma S.A.S.">
+            <span class="sistema">BForma — Sistema de Gestión de Ventas y Pedidos</span>
+        </div>
         <div class="quien">
             <span><?= e($vendedor["nombre"]) ?><br>ID <?= e($vendedor["identificacion"]) ?></span>
             <a class="salir" href="logout_vendedor.php">Salir</a>
