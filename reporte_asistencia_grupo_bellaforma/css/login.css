@@ -45,6 +45,16 @@ body {
     color: #fff;
 }
 
+.header-login .titulo-sistema {
+    margin: 0 auto 8px;
+    max-width: 340px;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: .01em;
+    color: rgba(255, 255, 255, .92);
+}
+
 .header-login p {
     margin: 0;
     color: rgba(255, 255, 255, .86);
