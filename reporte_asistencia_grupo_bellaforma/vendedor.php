@@ -123,6 +123,26 @@ try {
 }
 // Estado del comprobante de cada pedido (id => [cobrado, tiene, subido_en])
 $cobroEstados = cobroEstadoPorPedido($conexion, array_map(fn($p) => (int) $p["id"], array_merge($porPagar, $enviados)));
+// Resumen del ejecutivo: pedidos hechos, valor total y pedidos vencidos (créditos que ya pasaron su fecha y no se han pagado)
+$resumenPed = ["n" => 0, "total" => 0.0, "venc_n" => 0, "venc_total" => 0.0];
+try {
+    $stRes = $conexion->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS t FROM pedidos_vendedores
+                                 WHERE vendedor_id = ? AND tipo_pedido = 'pedido' AND estado IN ('pendiente','procesado')");
+    $stRes->bind_param("i", $vendedorId);
+    $stRes->execute();
+    $filaRes = $stRes->get_result()->fetch_assoc();
+    $stRes->close();
+    $resumenPed["n"] = (int) ($filaRes["n"] ?? 0);
+    $resumenPed["total"] = (float) ($filaRes["t"] ?? 0);
+    foreach (cobroObtenerPedidos($conexion, ["vendedor" => $vendedorId, "estado_cobro" => "por_cobrar"]) as $cv) {
+        if ($cv["plazo"]["restantes"] < 0) {
+            $resumenPed["venc_n"]++;
+            $resumenPed["venc_total"] += (float) $cv["total"];
+        }
+    }
+} catch (Throwable $e) {
+    // si algo falla, el resumen no se muestra
+}
 // id => número visible del documento (para mostrar «Unida al pedido #…» en las remisiones)
 $numerosPedidos = [];
 foreach ($misPedidos as $mp) {
@@ -307,6 +327,27 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
         </div>
 
         <div id="panel-mis-pedidos" class="panel">
+            <?php if ($resumenPed["n"] > 0): ?>
+                <style>
+                    .res-ped { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 14px; }
+                    .res-ped div { background: var(--superficie); border: 1px solid var(--linea); border-radius: var(--radio-lg); padding: 10px 12px; box-shadow: var(--sombra-sm); min-width: 0; }
+                    .res-ped span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta-suave); }
+                    .res-ped strong { display: block; margin-top: 3px; font-size: 18px; color: var(--azul-900); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+                    .res-ped small { display: block; margin-top: 2px; font-size: 12px; color: var(--tinta-suave); }
+                    .res-ped .res-venc.hay { background: #FDEBED; border-color: #E5A3AC; }
+                    .res-ped .res-venc.hay strong, .res-ped .res-venc.hay small { color: #A0192B; }
+                    @media (max-width: 520px) { .res-ped { grid-template-columns: 1fr; } }
+                </style>
+                <div class="res-ped">
+                    <div><span>Pedidos hechos</span><strong><?= (int) $resumenPed["n"] ?></strong></div>
+                    <div><span>Valor total</span><strong><?= formatoCOP($resumenPed["total"]) ?></strong></div>
+                    <div class="res-venc <?= $resumenPed["venc_n"] > 0 ? "hay" : "" ?>">
+                        <span>Pedidos vencidos</span>
+                        <strong><?= (int) $resumenPed["venc_n"] ?></strong>
+                        <small><?= $resumenPed["venc_n"] > 0 ? e(formatoCOP($resumenPed["venc_total"])) . " por pagar" : "Ninguno, está al día" ?></small>
+                    </div>
+                </div>
+            <?php endif; ?>
             <?php if (!$misPedidos): ?>
                 <div class="card"><p class="sin-resultados">Todavía no ha creado pedidos.</p></div>
             <?php endif; ?>
