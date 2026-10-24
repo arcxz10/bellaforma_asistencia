@@ -11,7 +11,25 @@ $filtrosPed = [
     "buscar"   => trim($_GET["buscar_p"] ?? ""),
 ];
 
-$pedidosAdmin = obtenerPedidos($conexion, $filtrosPed, 300);
+// Pedidos a crédito vencidos (los mismos de «Pedidos por cobrar»): id => días de atraso (negativo)
+$vencidosPed = [];
+$valorVencidosPed = 0.0;
+try {
+    foreach (cobroObtenerPedidos($conexion, ["estado_cobro" => "por_cobrar"]) as $cv) {
+        if ($cv["plazo"]["restantes"] < 0) {
+            $vencidosPed[(int) $cv["id"]] = (int) $cv["plazo"]["restantes"];
+            $valorVencidosPed += (float) $cv["total"];
+        }
+    }
+} catch (Throwable $e) {
+    $vencidosPed = [];
+}
+$soloVencidos = !empty($_GET["vencidos_p"]);
+
+$pedidosAdmin = obtenerPedidos($conexion, $filtrosPed, $soloVencidos ? null : 300);
+if ($soloVencidos) {
+    $pedidosAdmin = array_values(array_filter($pedidosAdmin, fn($p) => isset($vencidosPed[(int) $p["id"]])));
+}
 $ultimosNumeros = ultimosNumerosDocumento($conexion);
 
 $listaVendedoresFiltro = [];
@@ -43,6 +61,11 @@ foreach ($pedidosAdmin as $pp) {
     .tag-doc { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; background: #E3F2FD; color: #0D47A1; }
     .tag-doc-remision { background: #FFF3E0; color: #E65100; }
     .tag-doc-cotizacion { background: #F3E5F5; color: #6A1B9A; }
+    .ped-vencido { display: inline-block; margin-top: 4px; padding: 3px 9px; border-radius: 999px; background: #FDEBED; color: #A0192B; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+    .tabla tbody tr.ped-fila-vencida td { background: #FFF6F7; }
+    .btn-ver-vencidos { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; border: 1px solid #E5A3AC; background: #FDEBED; color: #A0192B; font-weight: 700; font-size: 13px; text-decoration: none; }
+    .btn-ver-vencidos:hover { background: #FADADF; }
+    .btn-ver-vencidos.todos { border-color: var(--linea); background: #fff; color: var(--tinta); }
 </style>
 
 <section id="pedidos" class="section">
@@ -52,7 +75,7 @@ foreach ($pedidosAdmin as $pp) {
             <h2><svg class="ico" aria-hidden="true"><use href="#i-receipt"/></svg> Pedidos de ejecutivos</h2>
             <p>Revise, edite y descargue los pedidos, remisiones y cotizaciones (PDF, archivo para Syscafe o Excel detallado). Márquelos «Subido a Syscafe» cuando ya estén digitados: desde ese momento el ejecutivo ya no puede editarlos.</p>
         </div>
-        <?php if ($pedidosAdmin): ?>
+        <?php if ($pedidosAdmin && !$soloVencidos): ?>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <a class="btn-nuevo" style="text-decoration:none;" href="pedido_pdf.php?<?= escapar($qsDescarga) ?>"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> PDF (<?= count($pedidosAdmin) ?>)</a>
                 <a class="btn-nuevo" style="text-decoration:none; background:#00796B;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> Syscafe .XLS (<?= count($pedidosAdmin) ?>)</a>
@@ -144,9 +167,16 @@ foreach ($pedidosAdmin as $pp) {
         <button type="submit" class="btn-filtrar">Filtrar</button>
     </form>
 
-    <p style="margin:0 0 10px; font-size:14px;">
-        Mostrando <strong><?= count($pedidosAdmin) ?></strong> pedidos (máx. 300) · Suma sin anulados ni borradores:
-        <strong><?= formatoCOP($sumaListados) ?></strong>
+    <p style="margin:0 0 10px; font-size:14px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+        <?php if ($soloVencidos): ?>
+            <span>Mostrando <strong><?= count($pedidosAdmin) ?></strong> pedidos vencidos · Valor vencido: <strong><?= formatoCOP($sumaListados) ?></strong></span>
+            <a class="btn-ver-vencidos todos" href="admin.php?seccion=pedidos&amp;<?= escapar($qsDescarga) ?>#pedidos">Ver todos los pedidos</a>
+        <?php else: ?>
+            <span>Mostrando <strong><?= count($pedidosAdmin) ?></strong> pedidos (máx. 300) · Suma sin anulados ni borradores: <strong><?= formatoCOP($sumaListados) ?></strong></span>
+            <a class="btn-ver-vencidos" href="admin.php?seccion=pedidos&amp;<?= escapar($qsDescarga) ?>&amp;vencidos_p=1#pedidos">
+                <svg class="ico" aria-hidden="true" style="width:14px;height:14px;"><use href="#i-alert"/></svg> Ver pedidos vencidos (<?= count($vencidosPed) ?>)
+            </a>
+        <?php endif; ?>
     </p>
 
     <div class="tabla-contenedor">
@@ -171,7 +201,7 @@ foreach ($pedidosAdmin as $pp) {
                 <?php else: ?>
                     <?php foreach ($pedidosAdmin as $ped): ?>
                         <?php $esBorr = $ped["estado"] === "borrador"; ?>
-                        <tr>
+                        <tr class="<?= isset($vencidosPed[(int) $ped["id"]]) ? "ped-fila-vencida" : "" ?>">
                             <td>
                                 <span class="tag-doc tag-doc-<?= escapar(tipoDocumentoValido($ped["tipo_pedido"] ?? "pedido")) ?>"><?= escapar(etiquetaTipoDocumento($ped["tipo_pedido"] ?? "pedido")) ?></span><br>
                                 <strong><?= escapar(numeroDocumento($ped)) ?></strong>
@@ -185,7 +215,7 @@ foreach ($pedidosAdmin as $pp) {
                             </td>
                             <td><?= escapar(etiquetaDocumento($ped["cliente_tipo_persona"] ?? "juridica")) ?> <?= escapar($ped["cliente_nit"]) ?></td>
                             <td><?= escapar($ped["cliente_ciudad"]) ?></td>
-                            <td><?= escapar(etiquetaCondicion($ped)) ?><?= !empty($ped["transportadora"]) ? "<br><small><svg class='ico' aria-hidden='true'><use href='#i-truck'/></svg> " . escapar(etiquetaTransportadora($ped["transportadora"])) . "</small>" : "" ?><?= !empty($ped["factura_electronica"]) ? "<br><small>Fact. electrónica</small>" : "" ?></td>
+                            <td><?= escapar(etiquetaCondicion($ped)) ?><?php if (isset($vencidosPed[(int) $ped["id"]])): ?><br><span class="ped-vencido"><?= escapar(cobroTextoRestantes($vencidosPed[(int) $ped["id"]])) ?></span><?php endif; ?><?= !empty($ped["transportadora"]) ? "<br><small><svg class='ico' aria-hidden='true'><use href='#i-truck'/></svg> " . escapar(etiquetaTransportadora($ped["transportadora"])) . "</small>" : "" ?><?= !empty($ped["factura_electronica"]) ? "<br><small>Fact. electrónica</small>" : "" ?></td>
                             <td class="num-der"><?= formatoCOP($ped["total"]) ?></td>
                             <td><span class="estado <?= claseEstadoPedido($ped["estado"]) ?>"><?= escapar(etiquetaEstadoPedido($ped["estado"])) ?></span></td>
                             <td>
