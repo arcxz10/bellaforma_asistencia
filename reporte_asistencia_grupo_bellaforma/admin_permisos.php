@@ -26,6 +26,7 @@ function adminModulos(): array
         "vendedores"        => ["Ejecutivos de negocios", "vendedores"],
         "pedidos"           => ["Pedidos de ejecutivos", "pedidos"],
         "por_cobrar"        => ["Pedidos por cobrar", "por_cobrar"],
+        "contraentrega"     => ["Pedidos contraentrega", "contraentrega"],
         "despachos"         => ["Control de despachos", "despachos"],
         "pedidos_despachar" => ["Pedidos para despachar", "pedidos_despachar"],
         "productos"         => ["Productos", "productos_mayoristas"],
@@ -192,6 +193,9 @@ function adminModulosDeAccion(string $accion): ?array
     }
     if (strpos($accion, "cob_") === 0) {
         return ["por_cobrar"];
+    }
+    if (strpos($accion, "coe_") === 0) {
+        return ["contraentrega"];
     }
     if (strpos($accion, "desp_") === 0) {
         return ["despachos", "pedidos_despachar"];
