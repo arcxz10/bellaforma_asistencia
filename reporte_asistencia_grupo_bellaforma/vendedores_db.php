@@ -1,730 +1,459 @@
 <?php
 /**
- * Base del módulo de ejecutivos de negocios / pedidos al por mayor.
- * - Crea y actualiza las tablas automáticamente (no hay que ejecutar SQL a mano).
- * - Funciones de formato y consulta de pedidos (admin.php, pedido_pdf.php, pedido_excel.php, vendedor.php).
+ * Pedidos en la PLANTILLA DE PEDIDOS de Syscafe (PEDIDOS.xlsx, 60 columnas), lista para importar.
+ * Una fila por producto; los datos del pedido (tipo, número, cliente, vendedor, fechas...) se repiten en cada fila.
+ *
+ * Qué va en cada columna (las que no se mencionan van vacías o en 0, igual que la plantilla):
+ *   Tipo        -> tipo de documento de Syscafe (SYSCAFE_PE_TIPO, ej. PE5)
+ *   Numero      -> N° que el ejecutivo escribió en el pedido/remisión/cotización (si lo dejó vacío, el id automático + SYSCAFE_PE_NUMERO_BASE), a 10 dígitos
+ *   Tercero2    -> cédula del VENDEDOR (ejecutivo)          Tercero1 -> NIT / cédula del CLIENTE
+ *   Ano/Mes/Dia -> fecha del pedido                         AnoE/MesE/DiaE -> fecha + plazo
+ *   Plazo       -> días de crédito (0 si es de contado)     Anulado -> TRUE si el pedido está anulado
+ *   Detalle     -> observaciones del pedido                 Numexterno -> el mismo N° del documento
+ *   Referencia, Cantidad, VrSubtot (TOTAL de la línea = cantidad x precio; Syscafe lo divide entre la cantidad), Descritem (nombre del producto)
+ *   Fpago       -> forma de pago (SYSCAFE_PE_FPAGO: contado / crédito)         Periodo -> AAAAMM
+ *   VrSubtot/VrIva/pIva -> con factura electrónica: VrSubtot = línea sin IVA, VrIva = IVA incluido, pIva = 19 (VrSubtot + VrIva = valor original); sin factura electrónica: IVA 0 y VrSubtot = cantidad x precio
+ *   Sugerido    -> precio unitario (para que Syscafe no calcule descuentos)
  */
+require_once __DIR__ . "/xlsx_simple.php";   // xlsx_col(), xlsx_texto(), xlsx_zip()
+require_once __DIR__ . "/xls_syscafe.php";   // syscafe_mayusculas()
 
-require_once __DIR__ . "/despachos_lib.php";
+/* ---- Ajustes de Syscafe (cámbielos aquí si en Syscafe usan otros) ---- */
+const SYSCAFE_PE_TIPO = "PE5";        // tipo de documento del pedido (en pantalla de Syscafe: PE5)
+/* Tipo de documento de Syscafe según lo que elige el ejecutivo y si el pedido lleva factura electrónica:
+   [sin factura electrónica, con factura electrónica] */
+const SYSCAFE_PE_TIPOS = [
+    "pedido"     => ["PE5", "PE1"],
+    "remision"   => ["RM1", "RM2"],
+    "cotizacion" => ["CT1", "CT2"],
+];
+const SYSCAFE_PE_NUMERO_BASE = 0;     // se suma al N° de pedido de la página. Ej: 4500 -> el pedido 22 sale como 0000004522
+/* Forma de pago (columna Fpago) para TODOS los documentos, con o sin factura electrónica (PE5, PE1, RM1, RM2, CT1, CT2).
+   Son las cuentas que muestra Syscafe en FPago:
+     130505001 = CUENTAS X COBRAR CLIENTES  (pedido a crédito)
+     130505002 = PAGO CONTRAENTREGA          (pedido de contado)
+   Si prefiere otra combinación, solo intercambie los códigos. */
+const SYSCAFE_PE_FPAGO = [
+    "contado" => "130505002",
+    "credito" => "130505001",
+];
 
-const ESQUEMA_VEND_VERSION = 16;
+/* Forma de pago por TIPO DE DOCUMENTO (solo si un tipo usa un código distinto al de arriba).
+   Syscafe respondió "PE1-xxxx : forma de pago no existe": para PE1 (pedido con factura electrónica) el código de arriba
+   no existe. Escriba aquí el código EXACTO que aparece en el campo FPago de Syscafe al abrir un documento PE1.
+   Formato:  "TIPO" => ["contado" => "CODIGO", "credito" => "CODIGO"]
+   Ej:       "PE1" => ["contado" => "110505001", "credito" => "130505001"],
+   Lo que no esté aquí usa SYSCAFE_PE_FPAGO. */
+const SYSCAFE_PE_FPAGO_POR_TIPO = [
+    // 006 = CUENTAS X COBRAR CLIENTES (CTASXCOBRAR), tal como lo muestra Syscafe en PE1, RM2 y CT2.
+    // El contado también usa 006 porque así los registran hoy en Syscafe (vencimiento el mismo día, forma de pago CTASXCOBRAR).
+    // Si algún día el contado debe ir por otra forma de pago, cambie solo ese código.
+    "PE1" => ["contado" => "006", "credito" => "006"],
+    "RM2" => ["contado" => "006", "credito" => "006"],
+    "CT2" => ["contado" => "006", "credito" => "006"],
+    // Documentos SIN factura electrónica: también usan la forma de pago 006 (130505001 es la cuenta contable, no la forma de pago)
+    "PE5" => ["contado" => "006", "credito" => "006"],
+    "RM1" => ["contado" => "006", "credito" => "006"],
+    "CT1" => ["contado" => "006", "credito" => "006"],
+];
 
-/** Descuento general máximo (en %) que puede aplicar un ejecutivo a un pedido. Cámbielo si quiere poner un tope (ej. 20). */
-const DESCUENTO_MAX_PCT = 100;
+/* IVA SOLO PARA LOS DOCUMENTOS CON FACTURA ELECTRÓNICA (PE1, RM2, CT2).
+   Los precios del pedido YA INCLUYEN el IVA, así que lo que paga el cliente por cada línea NO cambia.
+   Syscafe calcula el total de la línea como  VrSubtot + VrIva, por eso con IVA incluido se envía:
+       VrSubtot = valor de la línea SIN IVA (total / 1.19)      VrIva = total - VrSubtot      pIva = 19
+   y Syscafe muestra el precio normal, el %Iva 19 y el Iva/Inc, sin descuentos ni recargos.
+   Los documentos sin factura electrónica (PE5, RM1, CT1) siguen saliendo sin IVA (pIva y VrIva en 0).
+   Para quitar el IVA también de los PE1, cambie el 19 por 0. */
+const SYSCAFE_PE_IVA = 19;
 
-function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
+/* true  -> el precio ya trae el IVA dentro: el total de la línea queda igual (lo normal).
+   false -> el IVA se suma ENCIMA del precio (el total sube un 19 %). */
+const SYSCAFE_PE_IVA_INCLUIDO = true;
+
+/* IVA de las líneas de SERVICIO (ej. FLETE 001). Syscafe ya trae el IVA configurado en el servicio (0 % en el FLETE),
+   así que por defecto se envía sin IVA. Si el servicio debe llevar IVA, escriba aquí el porcentaje (ej. 19). */
+const SYSCAFE_PE_IVA_SERVICIOS = 0;
+
+/* true -> el precio unitario también va en la columna Sugerido, para que Syscafe use ese valor como precio y no calcule descuentos. */
+const SYSCAFE_PE_USAR_SUGERIDO = true;
+
+/* CÉDULA DEL VENDEDOR EN SYSCAFE (columna Tercero2).
+   Debe ser la cédula con la que el vendedor existe como tercero en Syscafe. Si la cédula registrada en esta página
+   es de prueba (ej. 101010) o distinta a la de Syscafe, Syscafe no encuentra al vendedor y rechaza el archivo.
+   Formato:  "cédula en esta página" => "cédula en Syscafe".   Ej: "101010" => "1234567890"
+   Si un ejecutivo no está en la lista, se usa la cédula registrada en la página. */
+const SYSCAFE_PE_VENDEDORES = [
+    // "101010" => "AQUI_LA_CEDULA_REAL_EN_SYSCAFE",
+];
+
+/* DESCUENTO GENERAL (el campo «Descto» de Syscafe: código + % + $).
+   Columna «Razon Dto»      -> código de la razón de descuento. «09» = descuento general en Syscafe.
+   Columna «Descuento Gral» -> lo que lleva el descuento, según SYSCAFE_PE_DESCUENTO_MODO:
+        "porcentaje" -> el % que escribió el ejecutivo (ej. 10 = 10 %)   (lo normal)
+        "valor"      -> el descuento en PESOS (subtotal x %), si Syscafe lo lee como valor y no como %
+   Las líneas de producto salen SIN descuento (precio lleno): Syscafe aplica el descuento general sobre el total.
+   Si el pedido no tiene descuento, ambas columnas salen vacías / en 0 (igual que antes). */
+const SYSCAFE_PE_RAZON_DESCUENTO = "09";
+const SYSCAFE_PE_DESCUENTO_MODO = "porcentaje";   // "porcentaje" | "valor"
+
+/* [encabezado, tipo (T texto, N número, B verdadero/falso), estilo de datos, estilo del encabezado] — igual que la plantilla */
+const SYSCAFE_PE_COLUMNAS = [
+    ["Tipo", "T", 1, 1],
+    ["Numero", "T", 1, 1],
+    ["Tercero2", "T", 1, 1],
+    ["Ano", "N", 2, 2],
+    ["Mes", "N", 2, 2],
+    ["Dia", "N", 2, 2],
+    ["Anulado", "B", 1, 0],
+    ["Plazo", "T", 1, 3],
+    ["AnoE", "N", 2, 3],
+    ["MesE", "N", 2, 3],
+    ["DiaE", "N", 2, 3],
+    ["Detalle", "T", 1, 0],
+    ["Tercero1", "T", 1, 0],
+    ["Area", "T", 1, 0],
+    ["Referencia", "T", 1, 0],
+    ["Cantidad", "N", 2, 3],
+    ["VrSubtot", "N", 2, 3],
+    ["VrIva", "N", 2, 3],
+    ["pIva", "N", 2, 3],
+    ["CodServ", "T", 1, 0],
+    ["vrretef", "N", 2, 3],
+    ["pretefte", "N", 2, 3],
+    ["Fpago", "T", 1, 0],
+    ["Condipago", "T", 1, 0],
+    ["Tercero3", "T", 1, 0],
+    ["vrreIva", "N", 2, 3],
+    ["PReIva", "N", 2, 3],
+    ["vrreIca", "N", 2, 3],
+    ["PReIca", "N", 2, 3],
+    ["Numexterno", "T", 1, 1],
+    ["Talla", "T", 1, 1],
+    ["VrIpocon", "N", 2, 2],
+    ["Sugerido", "N", 2, 2],
+    ["VrRetec", "N", 2, 2],
+    ["PRetec", "N", 2, 2],
+    ["Fpago2", "T", 1, 0],
+    ["VRpago2", "N", 2, 3],
+    ["Fpago3", "T", 1, 0],
+    ["VRpago3", "N", 2, 3],
+    ["Bodega", "T", 1, 0],
+    ["Anticipo", "N", 2, 0],
+    ["Causal", "T", 1, 0],
+    ["Anexo", "T", 1, 0],
+    ["Periodo", "T", 1, 0],
+    ["Ccosto", "T", 1, 0],
+    ["Sccosto", "T", 1, 0],
+    ["Afecta", "T", 1, 0],
+    ["Descuento Gral", "N", 2, 0],
+    ["Razon Dto", "T", 1, 0],
+    ["Vrpropina", "N", 2, 0],
+    ["Descritem", "T", 1, 0],
+    ["VrInc", "N", 1, 1],
+    ["Ref1", "T", 1, 1],
+    ["Ref2", "T", 1, 1],
+    ["Ref3", "T", 1, 1],
+    ["Ref4", "T", 1, 1],
+    ["Agente", "T", 1, 1],
+    ["VrIBUA", "N", 2, 1],
+    ["VrICUI", "N", 2, 1],
+    ["pICUI", "N", 2, 1],
+];
+
+function syscafe_pe_digitos(string $v): string
 {
-    try {
-        $r = $c->query("SHOW COLUMNS FROM `$tabla` LIKE '$col'");
-        if ($r && $r->num_rows === 0) {
-            $c->query("ALTER TABLE `$tabla` ADD COLUMN `$col` $def");
-        }
-        return true;
-    } catch (Throwable $e) {
-        return false;
+    $v = trim($v);
+    if (strpos($v, "-") !== false) {
+        $v = explode("-", $v)[0];      // 900123456-7 -> 900123456 (sin dígito de verificación)
     }
+    return preg_replace('/\D+/', "", $v) ?? "";
 }
 
-/** Tabla de clientes con TODOS los campos del catálogo de terceros de Syscafe. */
-function ddlClientes(string $tabla): string
+/** Filas (una por producto) de un pedido, en el orden de las 60 columnas de la plantilla. */
+function syscafe_pe_filas(array $p): array
 {
-    return "CREATE TABLE IF NOT EXISTS `$tabla` (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        tipo_cliente VARCHAR(10) NOT NULL DEFAULT 'mayorista',
-        tipo_persona VARCHAR(10) NOT NULL DEFAULT 'juridica',
-        tipo_documento VARCHAR(40) NOT NULL DEFAULT 'NIT',
-        identificacion VARCHAR(30) NOT NULL,
-        identificacion_norm VARCHAR(30) NOT NULL,
-        dv VARCHAR(3) NULL,
-        codigo VARCHAR(30) NULL,
-        razon_social VARCHAR(200) NOT NULL,
-        nombre_comercial VARCHAR(200) NULL,
-        nota VARCHAR(500) NULL,
-        direccion VARCHAR(255) NULL,
-        direccion2 VARCHAR(255) NULL,
-        puntos_referencia VARCHAR(255) NULL,
-        telefono1 VARCHAR(40) NULL,
-        telefono2 VARCHAR(40) NULL,
-        telefono3 VARCHAR(40) NULL,
-        movil VARCHAR(40) NULL,
-        codigo_postal VARCHAR(20) NULL,
-        email VARCHAR(150) NULL,
-        email_fe VARCHAR(150) NULL,
-        departamento VARCHAR(80) NULL,
-        codigo_municipio VARCHAR(12) NULL,
-        municipio VARCHAR(100) NULL,
-        codigo_pais VARCHAR(6) NULL DEFAULT '169',
-        pais VARCHAR(60) NULL DEFAULT 'Colombia',
-        codigo_barrio VARCHAR(20) NULL,
-        barrio VARCHAR(120) NULL,
-        grupo VARCHAR(80) NULL,
-        subgrupo VARCHAR(80) NULL,
-        encargado VARCHAR(150) NULL,
-        representante_legal VARCHAR(150) NULL,
-        observaciones TEXT NULL,
-        zona VARCHAR(80) NULL,
-        codigo_vendedor VARCHAR(20) NULL,
-        vendedor_asignado VARCHAR(100) NULL,
-        codigo_cobrador VARCHAR(20) NULL,
-        cobrador VARCHAR(100) NULL,
-        codigo_agente VARCHAR(20) NULL,
-        agente_comercial VARCHAR(100) NULL,
-        codigo_transporta VARCHAR(20) NULL,
-        transportadora VARCHAR(100) NULL,
-        lista_precios VARCHAR(60) NULL,
-        calificacion VARCHAR(40) NULL,
-        cupo_cartera DECIMAL(14,2) NOT NULL DEFAULT 0,
-        no_facturas INT NOT NULL DEFAULT 0,
-        dias_mora INT NOT NULL DEFAULT 0,
-        condicion_pago VARCHAR(10) NOT NULL DEFAULT 'contado',
-        dias_credito INT NULL,
-        inactivo TINYINT(1) NOT NULL DEFAULT 0,
-        creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_ident (identificacion_norm),
-        KEY idx_razon (razon_social),
-        KEY idx_tipo_cliente (tipo_cliente)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-}
-
-/** Lista de precios / tipo de cliente: "mayorista" o "detal". */
-function listaValida($l): string
-{
-    return $l === "detal" ? "detal" : "mayorista";
-}
-
-/** Una sola base de clientes; el campo tipo_cliente indica si es mayorista o detal. */
-function tablaClientes(string $lista = ""): string
-{
-    return "clientes";
-}
-
-/** Un solo catálogo para ambos tipos de cliente (cambia solo la columna de precio). */
-function tablaProductos(string $lista = ""): string
-{
-    return "productos_mayoristas";
-}
-
-function tablaFotos(string $lista = ""): string
-{
-    return "producto_fotos";
-}
-
-/** Columna de precio según el tipo de cliente. */
-function columnaPrecio(string $lista): string
-{
-    return listaValida($lista) === "detal" ? "precio_detal" : "precio_mayorista";
-}
-
-function etiquetaTipoCliente(string $lista): string
-{
-    return listaValida($lista) === "detal" ? "Detal" : "Mayorista";
-}
-
-function asegurarTablasVendedores(mysqli $c): void
-{
-    static $listo = false;
-    if ($listo) {
-        return;
-    }
-    $listo = true;
-
-    $c->query("CREATE TABLE IF NOT EXISTS esquema_modulo (
-        clave VARCHAR(40) NOT NULL PRIMARY KEY,
-        valor INT NOT NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-    $r = $c->query("SELECT valor FROM esquema_modulo WHERE clave = 'vendedores'");
-    $fila = $r ? $r->fetch_row() : null;
-    if ($fila && (int) $fila[0] >= ESQUEMA_VEND_VERSION) {
-        return;
-    }
-
-    $c->query("CREATE TABLE IF NOT EXISTS vendedores (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        nombre VARCHAR(150) NOT NULL,
-        identificacion VARCHAR(40) NOT NULL,
-        ciudad VARCHAR(100) NULL,
-        telefono VARCHAR(40) NULL,
-        usuario VARCHAR(60) NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        activo TINYINT(1) NOT NULL DEFAULT 1,
-        creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_vendedor_usuario (usuario)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-    $c->query("CREATE TABLE IF NOT EXISTS productos_mayoristas (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        referencia VARCHAR(60) NOT NULL,
-        nombre VARCHAR(255) NOT NULL,
-        precio DECIMAL(12,2) NOT NULL DEFAULT 0,
-        activo TINYINT(1) NOT NULL DEFAULT 1,
-        creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_producto_referencia (referencia)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-    // Fotos de productos guardadas en la base de datos (no se pierden al redesplegar en Railway)
-    $c->query("CREATE TABLE IF NOT EXISTS producto_fotos (
-        producto_id INT NOT NULL PRIMARY KEY,
-        mime VARCHAR(40) NOT NULL,
-        datos MEDIUMBLOB NOT NULL,
-        actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-    // Un solo catálogo de productos con dos precios (mayorista y detal); las fotos se suben una sola vez
-    $okPrecios = agregarColumna($c, "productos_mayoristas", "precio_mayorista", "DECIMAL(12,2) NOT NULL DEFAULT 0");
-    $okPrecios = agregarColumna($c, "productos_mayoristas", "precio_detal", "DECIMAL(12,2) NOT NULL DEFAULT 0") && $okPrecios;
-    try {
-        $c->query("UPDATE productos_mayoristas SET precio_mayorista = precio WHERE precio_mayorista = 0 AND precio > 0");
-    } catch (Throwable $e) {
-        $okPrecios = false;
-    }
-    // Las tablas separadas de detal ya no se usan: se eliminan solo si están vacías
-    foreach (["productos_detal", "producto_detal_fotos"] as $tablaVieja) {
-        try {
-            $rv = $c->query("SELECT COUNT(*) FROM `$tablaVieja`");
-            $filaV = $rv ? $rv->fetch_row() : null;
-            if ($filaV && (int) $filaV[0] === 0) {
-                $c->query("DROP TABLE IF EXISTS `$tablaVieja`");
-            }
-        } catch (Throwable $e) {
-            // la tabla no existe: nada que hacer
-        }
-    }
-
-    // Clientes: una sola base (con el campo "tipo de cliente": mayorista o detal) y todos los campos de Syscafe
-    $c->query(ddlClientes("clientes"));
-    $okClientes = agregarColumna($c, "clientes", "tipo_cliente", "VARCHAR(10) NOT NULL DEFAULT 'mayorista'");
-
-    $c->query("CREATE TABLE IF NOT EXISTS cliente_subterceros (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        lista VARCHAR(10) NOT NULL,
-        cliente_id INT NOT NULL,
-        tipo VARCHAR(60) NULL,
-        codigo VARCHAR(40) NULL,
-        nombre VARCHAR(200) NULL,
-        KEY idx_subt_cliente (lista, cliente_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-    $c->query("CREATE TABLE IF NOT EXISTS cliente_contactos (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        lista VARCHAR(10) NOT NULL,
-        cliente_id INT NOT NULL,
-        nombre VARCHAR(150) NULL,
-        cargo VARCHAR(100) NULL,
-        telefono VARCHAR(40) NULL,
-        movil VARCHAR(40) NULL,
-        email VARCHAR(150) NULL,
-        observaciones VARCHAR(255) NULL,
-        KEY idx_cont_cliente (lista, cliente_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-    // Si existían las bases separadas (clientes_mayoristas / clientes_detal), sus datos se copian a "clientes".
-    // Las tablas viejas NO se borran: puede eliminarlas usted cuando confirme que todo quedó bien.
-    $colsMigrar = ["tipo_persona", "tipo_documento", "identificacion", "identificacion_norm", "dv", "codigo", "razon_social",
-        "nombre_comercial", "nota", "direccion", "direccion2", "puntos_referencia", "telefono1", "telefono2", "telefono3", "movil",
-        "codigo_postal", "email", "email_fe", "departamento", "codigo_municipio", "municipio", "codigo_pais", "pais", "codigo_barrio",
-        "barrio", "grupo", "subgrupo", "encargado", "representante_legal", "observaciones", "zona", "codigo_vendedor",
-        "vendedor_asignado", "codigo_cobrador", "cobrador", "codigo_agente", "agente_comercial", "codigo_transporta",
-        "transportadora", "lista_precios", "calificacion", "cupo_cartera", "no_facturas", "dias_mora", "condicion_pago",
-        "dias_credito", "inactivo"];
-    $listaCols = implode(", ", array_map(fn($x) => "`$x`", $colsMigrar));
-    foreach ([["clientes_mayoristas", "mayorista"], ["clientes_detal", "detal"], ["detalles_clientes", "detal"]] as [$vieja, $tipoV]) {
-        try {
-            $existe = $c->query("SHOW TABLES LIKE '$vieja'");
-            if (!$existe || $existe->num_rows === 0) {
-                continue;
-            }
-            $c->query("INSERT IGNORE INTO clientes ($listaCols, tipo_cliente) SELECT $listaCols, '$tipoV' FROM `$vieja`");
-            foreach (["cliente_subterceros", "cliente_contactos"] as $hija) {
-                $c->query("UPDATE `$hija` h JOIN `$vieja` o ON o.id = h.cliente_id
-                           JOIN clientes n ON n.identificacion_norm = o.identificacion_norm
-                           SET h.cliente_id = n.id, h.lista = 'cliente' WHERE h.lista = '$tipoV'");
-            }
-        } catch (Throwable $e) {
-            // si esa tabla no se puede copiar, se ignora (no afecta lo demás)
-        }
-    }
-
-    $c->query("CREATE TABLE IF NOT EXISTS pedidos_vendedores (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        vendedor_id INT NOT NULL,
-        cliente_nombre VARCHAR(200) NOT NULL DEFAULT '',
-        cliente_ciudad VARCHAR(100) NOT NULL DEFAULT '',
-        cliente_nit VARCHAR(40) NOT NULL DEFAULT '',
-        cliente_telefono VARCHAR(40) NOT NULL DEFAULT '',
-        cliente_barrio VARCHAR(120) NULL,
-        cliente_direcciones TEXT NULL,
-        observaciones TEXT NULL,
-        total DECIMAL(14,2) NOT NULL DEFAULT 0,
-        estado ENUM('borrador','pendiente','procesado','anulado') NOT NULL DEFAULT 'pendiente',
-        creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        KEY idx_ped_vendedor (vendedor_id),
-        KEY idx_ped_fecha (creado_en),
-        CONSTRAINT fk_ped_vendedor FOREIGN KEY (vendedor_id) REFERENCES vendedores(id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-    $c->query("CREATE TABLE IF NOT EXISTS pedido_vendedor_items (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        pedido_id INT NOT NULL,
-        producto_id INT NULL,
-        referencia VARCHAR(60) NOT NULL,
-        nombre VARCHAR(255) NOT NULL,
-        precio_unitario DECIMAL(12,2) NOT NULL,
-        cantidad INT NOT NULL,
-        subtotal DECIMAL(14,2) NOT NULL,
-        KEY idx_item_pedido (pedido_id),
-        CONSTRAINT fk_item_pedido FOREIGN KEY (pedido_id) REFERENCES pedidos_vendedores(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-    // Migración de pedidos (por si la tabla ya existía con la versión anterior)
-    $ok = true;
-    try {
-        $c->query("ALTER TABLE pedidos_vendedores MODIFY estado ENUM('borrador','pendiente','procesado','anulado') NOT NULL DEFAULT 'pendiente'");
-    } catch (Throwable $e) {
-        $ok = false;
-    }
-    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_id", "INT NULL") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_tipo_persona", "VARCHAR(10) NOT NULL DEFAULT 'juridica'") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_tipo_documento", "VARCHAR(20) NOT NULL DEFAULT 'NIT'") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_nombre_comercial", "VARCHAR(200) NULL") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_departamento", "VARCHAR(80) NULL") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_puntos_referencia", "VARCHAR(255) NULL") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "cliente_email", "VARCHAR(150) NULL") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "factura_electronica", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "email_fe", "VARCHAR(150) NULL") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "condicion_pago", "VARCHAR(10) NOT NULL DEFAULT 'contado'") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "dias_credito", "INT NULL") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "actualizado_en", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "tipo_cliente", "VARCHAR(10) NOT NULL DEFAULT 'mayorista'") && $ok;
-    // Tipo de documento (pedido de cliente / remisión / cotización) y número editable (vacío = automático, usa el id)
-    $ok = agregarColumna($c, "pedidos_vendedores", "tipo_pedido", "VARCHAR(12) NOT NULL DEFAULT 'pedido'") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "numero_pedido", "VARCHAR(12) NULL") && $ok;
-    // Productos bonificados (se entregan sin costo: 100 % de descuento)
-    $ok = agregarColumna($c, "pedido_vendedor_items", "bonificado", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
-    // Servicios (ej. FLETE, código 001): van a Syscafe en la columna de servicio (CodServ) y no en Referencia
-    $ok = agregarColumna($c, "productos_mayoristas", "es_servicio", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
-    $ok = agregarColumna($c, "pedido_vendedor_items", "es_servicio", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
-    // Permiso para que el ejecutivo descargue el PDF y el Excel de sus pedidos (lo autoriza el administrador)
-    $ok = agregarColumna($c, "vendedores", "puede_descargar", "TINYINT(1) NOT NULL DEFAULT 0") && $ok;
-    // Forma de pago y transportadora (las elige el ejecutivo en el pedido) + control de despachos diarios
-    $ok = agregarColumna($c, "pedidos_vendedores", "forma_pago", "VARCHAR(20) NULL") && $ok;
-    $ok = agregarColumna($c, "pedidos_vendedores", "transportadora", "VARCHAR(30) NULL") && $ok;
-    // Remisión unida a un pedido (id del pedido al que va la remisión; se ve en el Control de despachos)
-    $ok = agregarColumna($c, "pedidos_vendedores", "pedido_vinculado_id", "INT NULL") && $ok;
-    // Observación del ejecutivo para la oficina (solo se ve en «Pedidos para despachar») y comprobante de pago de los pedidos anticipados
-    $ok = agregarColumna($c, "pedidos_vendedores", "obs_despacho", "VARCHAR(500) NULL") && $ok;
-    // Descuento general del pedido en % (va a Syscafe en «Descuento Gral», razón de descuento 09)
-    $ok = agregarColumna($c, "pedidos_vendedores", "descuento_pct", "DECIMAL(5,2) NOT NULL DEFAULT 0") && $ok;
-    asegurarTablaComprobantes($c);
-    $okDesp = asegurarTablaDespachos($c);
-
-    // Solo se marca como terminado si TODO se aplicó; si no, se reintenta en la próxima visita
-    if ($ok && $okPrecios && $okClientes && $okDesp) {
-        $c->query("REPLACE INTO esquema_modulo (clave, valor) VALUES ('vendedores', " . ESQUEMA_VEND_VERSION . ")");
-    }
-}
-
-/* ================= FORMATO ================= */
-
-/** Convierte lo que escribe el ejecutivo ("10", "10,5", "10.5 %") en un porcentaje con 2 decimales. */
-function parsearDescuentoPct($v): float
-{
-    $t = str_replace([",", "%", " "], [".", "", ""], trim((string) $v));
-    return is_numeric($t) ? round((float) $t, 2) : 0.0;
-}
-
-/** Subtotal BRUTO de un pedido: suma de las líneas cobradas (los bonificados valen 0), antes del descuento general. */
-function subtotalBrutoPedido(array $p): float
-{
-    $s = 0.0;
-    foreach ($p["items"] ?? [] as $it) {
-        if (empty($it["bonificado"])) {
-            $s += (float) $it["subtotal"];
-        }
-    }
-    return round($s, 2);
-}
-
-/** Valor en pesos del descuento general de un pedido (subtotal bruto x %). */
-function valorDescuentoPedido(array $p): float
-{
-    $pct = (float) ($p["descuento_pct"] ?? 0);
-    return $pct > 0 ? round(subtotalBrutoPedido($p) * $pct / 100, 2) : 0.0;
-}
-
-function formatoCOP($valor): string
-{
-    return "$ " . number_format((float) $valor, 0, ",", ".");
-}
-
-function etiquetaEstadoPedido(string $estado): string
-{
-    $mapa = [
-        "borrador"  => "Borrador",
-        "pendiente" => "Enviado",
-        "procesado" => "Subido a Syscafe",
-        "anulado"   => "Anulado",
-    ];
-    return $mapa[$estado] ?? $estado;
-}
-
-function claseEstadoPedido(string $estado): string
-{
-    $mapa = [
-        "borrador"  => "estado-borrador",
-        "pendiente" => "estado-pendiente",
-        "procesado" => "estado-activo",
-        "anulado"   => "estado-inactivo",
-    ];
-    return $mapa[$estado] ?? "estado-sin";
-}
-
-function numeroPedido($id): string
-{
-    return str_pad((string) (int) $id, 6, "0", STR_PAD_LEFT);
-}
-
-/* ---------- Tipo de documento: pedido de cliente / remisión / cotización ---------- */
-
-/** clave => [etiqueta completa, nombre corto, MAYÚSCULAS sin tilde (PDF), prefijo de archivo] */
-function tiposDocumentoPedido(): array
-{
-    return [
-        "pedido"     => ["Pedido de cliente", "pedido",     "PEDIDO",     "pedido"],
-        "remision"   => ["Remisión",          "remisión",   "REMISION",   "remision"],
-        "cotizacion" => ["Cotización",        "cotización", "COTIZACION", "cotizacion"],
-    ];
-}
-
-function tipoDocumentoValido($t): string
-{
-    return array_key_exists((string) $t, tiposDocumentoPedido()) ? (string) $t : "pedido";
-}
-
-function etiquetaTipoDocumento($t): string
-{
-    return tiposDocumentoPedido()[tipoDocumentoValido($t)][0];
-}
-
-function nombreCortoDocumento($t): string
-{
-    return tiposDocumentoPedido()[tipoDocumentoValido($t)][1];
-}
-
-/** Número que se muestra y se exporta: el que escribió el usuario o, si lo dejó vacío, el automático (id con ceros). */
-function numeroDocumento(array $p): string
-{
-    $n = trim((string) ($p["numero_pedido"] ?? ""));
-    return $n !== "" ? $n : numeroPedido($p["id"] ?? 0);
-}
-
-/** Ej: "Remisión #4522" */
-function tituloDocumento(array $p): string
-{
-    return etiquetaTipoDocumento($p["tipo_pedido"] ?? "pedido") . " #" . numeroDocumento($p);
-}
-
-/**
- * ¿Ya hay otro documento (no borrador) del mismo tipo con ese número? Compara como número: 0045 = 45.
- * $fe = null  -> compara con todos los documentos de ese tipo (con y sin factura electrónica).
- * $fe = 0 / 1 -> solo con los de la misma clase de Syscafe (PE5 / PE1, RM1 / RM2, CT1 / CT2), que llevan numeración independiente.
- */
-function numeroDocumentoEnUso(mysqli $c, string $tipo, int $numero, int $excluirId, ?int $fe = null): bool
-{
-    $sql = "SELECT id FROM pedidos_vendedores
-            WHERE tipo_pedido = ? AND estado <> 'borrador' AND id <> ?
-              AND CAST(COALESCE(NULLIF(numero_pedido, ''), CAST(id AS CHAR)) AS UNSIGNED) = ?";
-    $tipos = "sii";
-    $vals = [$tipo, $excluirId, $numero];
-    if ($fe !== null) {
-        $sql .= " AND factura_electronica = ?";
-        $tipos .= "i";
-        $vals[] = $fe ? 1 : 0;
-    }
-    $st = $c->prepare($sql . " LIMIT 1");
-    $st->bind_param($tipos, ...$vals);
-    $st->execute();
-    $res = $st->get_result();
-    $uso = $res && $res->fetch_assoc();
-    $st->close();
-    return (bool) $uso;
-}
-
-/* ---------- Numeración automática por clase de documento (las 6 clases de Syscafe) ---------- */
-
-/** clave de Syscafe => [tipo de documento, ¿con factura electrónica?, etiqueta]. Mismos códigos que SYSCAFE_PE_TIPOS. */
-function clasesNumeracionDocumento(): array
-{
-    return [
-        "PE5" => ["pedido",     0, "Pedido de cliente · factura de venta (FV)"],
-        "PE1" => ["pedido",     1, "Pedido de cliente · factura electrónica (FE)"],
-        "RM1" => ["remision",   0, "Remisión · factura de venta (FV)"],
-        "RM2" => ["remision",   1, "Remisión · factura electrónica (FE)"],
-        "CT1" => ["cotizacion", 0, "Cotización · factura de venta (FV)"],
-        "CT2" => ["cotizacion", 1, "Cotización · factura electrónica (FE)"],
-    ];
-}
-
-function claveNumeracionDocumento(string $tipo, $fe): string
-{
-    foreach (clasesNumeracionDocumento() as $clave => $info) {
-        if ($info[0] === tipoDocumentoValido($tipo) && (int) $info[1] === ($fe ? 1 : 0)) {
-            return $clave;
-        }
-    }
-    return "PE5";
-}
-
-/** Crea la tabla de contadores. Es DDL (confirma transacciones): llamarla ANTES de begin_transaction(). */
-function asegurarTablaNumeracion(mysqli $c): void
-{
-    static $listo = false;
-    if ($listo) {
-        return;
-    }
-    $listo = true;
-    $c->query("CREATE TABLE IF NOT EXISTS numeracion_documentos (
-        clave VARCHAR(10) NOT NULL PRIMARY KEY,
-        ultimo BIGINT UNSIGNED NOT NULL DEFAULT 0
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-}
-
-/** [clave => PRÓXIMO número que se asignará (la columna `ultimo` guarda el próximo)]. 0 = sin configurar (el documento usa el número automático de siempre, su id). */
-function ultimosNumerosDocumento(mysqli $c): array
-{
-    asegurarTablaNumeracion($c);
-    $r = [];
-    foreach (clasesNumeracionDocumento() as $clave => $_) {
-        $r[$clave] = 0;
-    }
-    $res = $c->query("SELECT clave, ultimo FROM numeracion_documentos");
-    while ($res && ($f = $res->fetch_assoc())) {
-        if (isset($r[$f["clave"]])) {
-            $r[$f["clave"]] = (int) $f["ultimo"];
-        }
-    }
-    return $r;
-}
-
-/** Guarda lo que escribió el administrador. Vacío o 0 = vuelve al número automático. Devuelve null si todo salió bien, o el mensaje de error. */
-function guardarNumeracionDocumentos(mysqli $c, $valores): ?string
-{
-    asegurarTablaNumeracion($c);
-    $valores = is_array($valores) ? $valores : [];
-    $nuevos = [];
-    foreach (clasesNumeracionDocumento() as $clave => $info) {
-        $v = trim((string) ($valores[$clave] ?? ""));
-        if ($v === "") {
-            $v = "0";
-        }
-        if (!preg_match('/^\d{1,9}$/', $v)) {
-            return "El número de «" . $info[2] . "» solo puede tener dígitos (máximo 9).";
-        }
-        $nuevos[$clave] = (int) $v;
-    }
-    try {
-        $c->begin_transaction();
-        $st = $c->prepare("INSERT INTO numeracion_documentos (clave, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE ultimo = VALUES(ultimo)");
-        foreach ($nuevos as $clave => $n) {
-            $st->bind_param("si", $clave, $n);
-            $st->execute();
-        }
-        $st->close();
-        $c->commit();
-    } catch (Throwable $e) {
-        $c->rollback();
-        return "No se pudo guardar la numeración.";
-    }
-    return null;
-}
-
-/** ¿Esta clase de documento tiene numeración automática configurada? */
-function contadorNumeracionActivo(mysqli $c, string $tipo, $fe): bool
-{
-    asegurarTablaNumeracion($c);
-    $clave = claveNumeracionDocumento($tipo, $fe);
-    $st = $c->prepare("SELECT ultimo FROM numeracion_documentos WHERE clave = ? LIMIT 1");
-    $st->bind_param("s", $clave);
-    $st->execute();
-    $f = $st->get_result()->fetch_assoc();
-    $st->close();
-    return $f && (int) $f["ultimo"] > 0;
-}
-
-/**
- * Toma el número que toca de la clase (el que escribió el administrador) y deja guardado el que sigue. Llamar DENTRO de la transacción del pedido:
- * así el número queda bloqueado hasta guardar y, si el pedido falla, no se gasta. Salta los números que ya estén en uso.
- */
-function siguienteNumeroDocumento(mysqli $c, string $tipo, $fe, int $excluirId): ?int
-{
-    $clave = claveNumeracionDocumento($tipo, $fe);
-    for ($i = 0; $i < 500; $i++) {
-        $st = $c->prepare("UPDATE numeracion_documentos SET ultimo = LAST_INSERT_ID(ultimo) + 1 WHERE clave = ? AND ultimo > 0");
-        $st->bind_param("s", $clave);
-        $st->execute();
-        $filas = $st->affected_rows;
-        $st->close();
-        if ($filas < 1) {
-            return null;
-        }
-        $n = (int) $c->insert_id;
-        if ($n > 0 && !numeroDocumentoEnUso($c, tipoDocumentoValido($tipo), $n, $excluirId, $fe ? 1 : 0)) {
-            return $n;
-        }
-    }
-    return null;
-}
-
-function etiquetaDocumento(string $tipoPersona): string
-{
-    return $tipoPersona === "natural" ? "Cédula" : "NIT";
-}
-
-function etiquetaCondicion(array $p): string
-{
-    $fp = (string) ($p["forma_pago"] ?? "");
-    if ($fp !== "") {
-        $dias = formaPagoDias($fp);
-        return $dias ? "Crédito a " . $dias . " días" : etiquetaFormaPago($fp);
-    }
-    if (($p["condicion_pago"] ?? "contado") === "credito") {
-        return "Crédito a " . (int) ($p["dias_credito"] ?? 0) . " días";
-    }
-    return "Contado";
-}
-
-function parsearPrecio(string $texto): float
-{
-    $t = trim(str_replace(["$", " "], "", $texto));
-    if ($t === "") {
-        return 0.0;
-    }
-    if (strpos($t, ",") !== false && strpos($t, ".") !== false) {
-        if (strrpos($t, ",") > strrpos($t, ".")) {
-            $t = str_replace(".", "", $t);
-            $t = str_replace(",", ".", $t);
-        } else {
-            $t = str_replace(",", "", $t);
-        }
-    } elseif (strpos($t, ",") !== false) {
-        $t = preg_match('/^\d{1,3}(,\d{3})+$/', $t) ? str_replace(",", "", $t) : str_replace(",", ".", $t);
-    } elseif (preg_match('/^\d{1,3}(\.\d{3})+$/', $t)) {
-        $t = str_replace(".", "", $t);
-    }
-    return is_numeric($t) ? round((float) $t, 2) : 0.0;
-}
-
-/* ================= CONSULTA DE PEDIDOS ================= */
-
-/**
- * Devuelve pedidos con sus ítems en $pedido["items"].
- * Filtros: vendedor (id), estado, desde, hasta (Y-m-d), buscar (cliente / documento / ciudad / n° pedido),
- *          con_borradores (true para incluir borradores cuando no se filtra por estado).
- */
-function obtenerPedidos(mysqli $c, array $f = [], ?int $limite = 300, ?int $id = null): array
-{
-    $sql = "SELECT p.*, v.nombre AS vendedor_nombre, v.identificacion AS vendedor_identificacion
-            FROM pedidos_vendedores p
-            JOIN vendedores v ON v.id = p.vendedor_id";
-    $where = [];
-    $tipos = "";
-    $params = [];
-
-    if ($id !== null && $id > 0) {
-        $where[] = "p.id = ?";
-        $tipos .= "i";
-        $params[] = $id;
+    $ts = strtotime((string) ($p["creado_en"] ?? "now")) ?: time();
+    // Plazo (días) que se escribe en Syscafe junto a la forma de pago:
+    //  - Si el pedido tiene forma de pago, los días salen de ahí: 3, 5, 8, 30 o 45 días; anticipado / contra entrega = 0.
+    //  - Los pedidos anteriores, que no tienen forma de pago, conservan los días de crédito que ya tenían.
+    // La fecha de vencimiento (AnoE / MesE / DiaE) se calcula con ese mismo plazo.
+    $formaPago = trim((string) ($p["forma_pago"] ?? ""));
+    if ($formaPago !== "") {
+        $plazo = max(0, (int) formaPagoDias($formaPago));
+        $credito = $plazo > 0;
     } else {
-        $vend = (int) ($f["vendedor"] ?? 0);
-        if ($vend > 0) {
-            $where[] = "p.vendedor_id = ?";
-            $tipos .= "i";
-            $params[] = $vend;
-        }
+        $credito = ($p["condicion_pago"] ?? "contado") === "credito";
+        $plazo = $credito ? max(0, (int) ($p["dias_credito"] ?? 0)) : 0;
+    }
+    $tsVence = strtotime("+" . $plazo . " days", $ts) ?: $ts;
 
-        $tc = $f["tipo_cliente"] ?? "";
-        if (in_array($tc, ["mayorista", "detal"], true)) {
-            $where[] = "p.tipo_cliente = ?";
-            $tipos .= "s";
-            $params[] = $tc;
-        }
+    $conFE = !empty($p["factura_electronica"]);
+    $tipo = SYSCAFE_PE_TIPOS[tipoDocumentoValido($p["tipo_pedido"] ?? "pedido")][$conFE ? 1 : 0];
+    $claveFpago = $credito ? "credito" : "contado";
+    $fpago = SYSCAFE_PE_FPAGO_POR_TIPO[$tipo][$claveFpago] ?? SYSCAFE_PE_FPAGO[$claveFpago] ?? "";
+    $pIva = $conFE ? (float) SYSCAFE_PE_IVA : 0.0;
+    $numeroPropio = trim((string) ($p["numero_pedido"] ?? ""));
+    $numero = str_pad($numeroPropio !== "" ? $numeroPropio : (string) (SYSCAFE_PE_NUMERO_BASE + (int) $p["id"]), 10, "0", STR_PAD_LEFT);
+    $vendedor = syscafe_pe_digitos((string) ($p["vendedor_identificacion"] ?? ""));
+    if (isset(SYSCAFE_PE_VENDEDORES[$vendedor]) && SYSCAFE_PE_VENDEDORES[$vendedor] !== "") {
+        $vendedor = syscafe_pe_digitos((string) SYSCAFE_PE_VENDEDORES[$vendedor]);
+    }
+    $cliente = syscafe_pe_digitos((string) ($p["cliente_nit"] ?? ""));
+    $anulado = ($p["estado"] ?? "") === "anulado";
+    $detalle = trim(preg_replace('/\s+/', " ", (string) ($p["observaciones"] ?? "")) ?? "");
+    $detalle = syscafe_mayusculas(function_exists("mb_substr") ? mb_substr($detalle, 0, 100, "UTF-8") : substr($detalle, 0, 100));
+    $numExterno = numeroDocumento($p);
 
-        $td = $f["tipo_documento"] ?? "";
-        if (array_key_exists($td, tiposDocumentoPedido())) {
-            $where[] = "p.tipo_pedido = ?";
-            $tipos .= "s";
-            $params[] = $td;
-        }
+    // Descuento general del pedido (se repite en todas las filas, como los demás datos del encabezado)
+    $descPct = (float) ($p["descuento_pct"] ?? 0);
+    $descValor = $descPct > 0 ? valorDescuentoPedido($p) : 0.0;
+    $descGral = $descPct <= 0 ? 0.0 : (SYSCAFE_PE_DESCUENTO_MODO === "valor" ? $descValor : $descPct);
+    $razonDto = $descPct > 0 ? SYSCAFE_PE_RAZON_DESCUENTO : "";
 
-        $estado = $f["estado"] ?? "";
-        if (in_array($estado, ["borrador", "pendiente", "procesado", "anulado"], true)) {
-            $where[] = "p.estado = ?";
-            $tipos .= "s";
-            $params[] = $estado;
-        } elseif (empty($f["con_borradores"])) {
-            $where[] = "p.estado <> 'borrador'";
+    $filas = [];
+    foreach ($p["items"] as $it) {
+        $cant = (float) $it["cantidad"];
+        // Syscafe toma VrSubtot (+ VrIva) como el TOTAL de la línea y calcula el unitario dividiendo entre Cantidad
+        $precio = (float) $it["precio_unitario"];
+        $esBon = !empty($it["bonificado"]);                 // bonificado: 100 % de descuento -> total de la línea en 0 (y sin IVA)
+        $esServ = !empty($it["es_servicio"]);               // servicio (ej. FLETE 001): va en CodServ y la Referencia queda vacía
+        $pIvaLinea = $esServ ? (float) SYSCAFE_PE_IVA_SERVICIOS : $pIva;
+        $bruto = $esBon ? 0.0 : round($cant * $precio, 2);   // cantidad x precio (el valor que ya tenía la línea)
+        if ($pIvaLinea <= 0 || $esBon) {
+            $subtotal = $bruto;
+            $vrIva = 0.0;
+        } elseif (SYSCAFE_PE_IVA_INCLUIDO) {
+            $subtotal = round($bruto / (1 + $pIvaLinea / 100), 2);   // base sin IVA
+            $vrIva = round($bruto - $subtotal, 2);                     // IVA incluido: base + IVA = valor original de la línea
+        } else {
+            $subtotal = $bruto;
+            $vrIva = round($bruto * $pIvaLinea / 100, 2);              // IVA sumado encima del precio
         }
+        $filas[] = [
+            $tipo,                          // A  Tipo
+            $numero,                        // B  Numero
+            $vendedor,                      // C  Tercero2 (cédula del vendedor)
+            (float) date("Y", $ts),         // D  Ano
+            (float) date("n", $ts),         // E  Mes
+            (float) date("j", $ts),         // F  Dia
+            $anulado,                       // G  Anulado
+            (string) $plazo,                // H  Plazo
+            (float) date("Y", $tsVence),    // I  AnoE
+            (float) date("n", $tsVence),    // J  MesE
+            (float) date("j", $tsVence),    // K  DiaE
+            $detalle,                       // L  Detalle
+            $cliente,                       // M  Tercero1 (cédula / NIT del cliente)
+            "",                             // N  Area
+            $esServ ? "" : (string) $it["referencia"],     // O  Referencia (vacía si es servicio)
+            $cant,                          // P  Cantidad
+            $subtotal,                      // Q  VrSubtot (valor de la línea SIN IVA; con IVA incluido: total / 1.19)
+            $vrIva,                         // R  VrIva (Syscafe suma VrSubtot + VrIva = valor original de la línea)
+            $pIvaLinea,                     // S  pIva
+            $esServ ? (string) $it["referencia"] : "",   // T  CodServ (código del servicio, ej. 001)
+            0.0,                            // U  vrretef
+            0.0,                            // V  pretefte
+            $fpago,                         // W  Fpago
+            "",                             // X  Condipago
+            "",                             // Y  Tercero3
+            0.0, 0.0, 0.0, 0.0,             // Z..AC  vrreIva, PReIva, vrreIca, PReIca
+            $numExterno,                    // AD Numexterno
+            "",                             // AE Talla
+            0.0,                            // AF VrIpocon
+            SYSCAFE_PE_USAR_SUGERIDO ? $precio : 0.0,   // AG Sugerido (precio unitario)
+            0.0,                            // AH VrRetec
+            0.0,                            // AI PRetec
+            "",                             // AJ Fpago2
+            0.0,                            // AK VRpago2
+            "",                             // AL Fpago3
+            0.0,                            // AM VRpago3
+            "",                             // AN Bodega
+            0.0,                            // AO Anticipo
+            "",                             // AP Causal
+            "",                             // AQ Anexo
+            date("Ym", $ts),                // AR Periodo
+            "",                             // AS Ccosto
+            "",                             // AT Sccosto
+            "",                             // AU Afecta
+            $descGral,                      // AV Descuento Gral (% o valor, ver SYSCAFE_PE_DESCUENTO_MODO)
+            $razonDto,                      // AW Razon Dto (09 = descuento general)
+            0.0,                            // AX Vrpropina
+            syscafe_mayusculas($esBon
+                ? (function_exists("mb_substr") ? mb_substr((string) $it["nombre"], 0, 86, "UTF-8") : substr((string) $it["nombre"], 0, 86)) . " (BONIFICADO)"
+                : (function_exists("mb_substr") ? mb_substr((string) $it["nombre"], 0, 100, "UTF-8") : substr((string) $it["nombre"], 0, 100))),   // AY Descritem
+            0.0,                            // AZ VrInc
+            "", "", "", "", "",             // BA..BE  Ref1, Ref2, Ref3, Ref4, Agente
+            0.0, 0.0, 0.0,                  // BF..BH  VrIBUA, VrICUI, pICUI
+        ];
+    }
+    return $filas;
+}
 
-        $desde = $f["desde"] ?? "";
-        $hasta = $f["hasta"] ?? "";
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) {
-            $where[] = "DATE(p.creado_en) >= ?";
-            $tipos .= "s";
-            $params[] = $desde;
-        }
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) {
-            $where[] = "DATE(p.creado_en) <= ?";
-            $tipos .= "s";
-            $params[] = $hasta;
-        }
+/** Genera el .xlsx con la plantilla de pedidos de Syscafe. $pedidos: pedidos con su arreglo "items". */
+function syscafe_pedidos_xlsx(array $pedidos): string
+{
+    $cols = SYSCAFE_PE_COLUMNAS;
+    $nCols = count($cols);
 
-        $buscar = trim($f["buscar"] ?? "");
-        if ($buscar !== "") {
-            $where[] = "(p.cliente_nombre LIKE ? OR p.cliente_nombre_comercial LIKE ? OR p.cliente_nit LIKE ? OR p.cliente_ciudad LIKE ? OR p.numero_pedido = ? OR p.id = ?)";
-            $like = "%" . $buscar . "%";
-            $tipos .= "sssssi";
-            array_push($params, $like, $like, $like, $like, ltrim($buscar, "#"), (int) $buscar);
+    $compartidas = [];      // texto => índice
+    $listaComp = [];
+    $totalRefs = 0;
+    $idx = function (string $t) use (&$compartidas, &$listaComp, &$totalRefs): int {
+        $totalRefs++;
+        if (!isset($compartidas[$t])) {
+            $compartidas[$t] = count($listaComp);
+            $listaComp[] = $t;
+        }
+        return $compartidas[$t];
+    };
+
+    // Fila 1: encabezados
+    $celdas = "";
+    foreach ($cols as $i => $c) {
+        $s = $c[3] ? ' s="' . $c[3] . '"' : "";
+        $celdas .= '<c r="' . xlsx_col($i) . '1"' . $s . ' t="s"><v>' . $idx($c[0]) . "</v></c>";
+    }
+    $filasXml = '<row r="1">' . $celdas . "</row>";
+
+    // Filas de datos
+    $r = 1;
+    foreach ($pedidos as $p) {
+        foreach (syscafe_pe_filas($p) as $fila) {
+            $r++;
+            $celdas = "";
+            foreach ($cols as $i => $c) {
+                $v = $fila[$i];
+                $ref = xlsx_col($i) . $r;
+                $s = ' s="' . $c[2] . '"';
+                if ($c[1] === "T") {
+                    $celdas .= '<c r="' . $ref . '"' . $s . ' t="s"><v>' . $idx((string) $v) . "</v></c>";
+                } elseif ($c[1] === "B") {
+                    $celdas .= '<c r="' . $ref . '"' . $s . ' t="b"><v>' . ($v ? 1 : 0) . "</v></c>";
+                } else {
+                    $celdas .= '<c r="' . $ref . '"' . $s . "><v>" . (0 + $v) . "</v></c>";
+                }
+            }
+            $filasXml .= '<row r="' . $r . '">' . $celdas . "</row>";
         }
     }
 
-    if ($where) {
-        $sql .= " WHERE " . implode(" AND ", $where);
-    }
-    $sql .= " ORDER BY p.actualizado_en DESC, p.id DESC";
-    if ($limite !== null && $limite > 0) {
-        $sql .= " LIMIT " . (int) $limite;
-    }
+    $hoja = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        . '<dimension ref="A1:' . xlsx_col($nCols - 1) . $r . '"/>'
+        . '<sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews>'
+        . '<sheetFormatPr baseColWidth="10" defaultRowHeight="12"/>'
+        . "<sheetData>" . $filasXml . "</sheetData>"
+        . "</worksheet>";
 
-    $stmt = $c->prepare($sql);
-    if (!$stmt) {
-        return [];
+    $sst = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' . $totalRefs . '" uniqueCount="' . count($listaComp) . '">';
+    foreach ($listaComp as $t) {
+        $sst .= '<si><t xml:space="preserve">' . xlsx_texto($t) . "</t></si>";
     }
-    if ($params) {
-        $stmt->bind_param($tipos, ...$params);
-    }
-    $stmt->execute();
-    $res = $stmt->get_result();
-    $pedidos = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
-    $stmt->close();
+    $sst .= "</sst>";
 
-    if (!$pedidos) {
-        return [];
-    }
+    $tipos = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+        . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        . '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        . '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>';
 
-    $ids = implode(",", array_map(fn($p) => (int) $p["id"], $pedidos));
-    $items = [];
-    $resItems = $c->query("SELECT * FROM pedido_vendedor_items WHERE pedido_id IN ($ids) ORDER BY id ASC");
-    if ($resItems) {
-        while ($it = $resItems->fetch_assoc()) {
-            $items[(int) $it["pedido_id"]][] = $it;
+    $relRaiz = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+
+    $libro = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Hoja1" sheetId="1" r:id="rId1"/></sheets></workbook>';
+
+    $relLibro = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        . '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>';
+
+    // Mismos estilos de la plantilla de Syscafe (texto @, #,##0.00 y 0)
+    $estilos = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="x14ac x16r2 xr" xmlns:x14ac="http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac" xmlns:x16r2="http://schemas.microsoft.com/office/spreadsheetml/2015/02/main" xmlns:xr="http://schemas.microsoft.com/office/spreadsheetml/2014/revision"><fonts count="1" x14ac:knownFonts="1"><font><sz val="9"/><color theme="1"/><name val="Segoe UI"/><family val="2"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="0"/><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>';
+
+    return xlsx_zip([
+        "[Content_Types].xml" => $tipos,
+        "_rels/.rels" => $relRaiz,
+        "xl/workbook.xml" => $libro,
+        "xl/_rels/workbook.xml.rels" => $relLibro,
+        "xl/styles.xml" => $estilos,
+        "xl/sharedStrings.xml" => $sst,
+        "xl/worksheets/sheet1.xml" => $hoja,
+    ]);
+}
+
+/* ================= Versión .XLS (la que lee Syscafe en "Archivo estandar (xls)") =================
+ * Syscafe no abre .xlsx ("El formato del archivo Microsoft Excel no es válido"): necesita el .XLS antiguo (Excel 2.0 / BIFF2),
+ * el mismo que ya usaba este sistema. Lleva las MISMAS 60 columnas de la plantilla.
+ */
+
+/** Ancho de cada columna en caracteres: en el .XLS define el tamaño del campo que crea Syscafe. */
+function syscafe_pe_ancho(int $i, string $tipo): int
+{
+    $texto = [0 => 6, 1 => 12, 2 => 20, 6 => 8, 7 => 6, 11 => 100, 12 => 20, 14 => 22, 22 => 6, 24 => 20, 29 => 20, 30 => 6,
+              35 => 6, 37 => 6, 43 => 8, 48 => 30, 50 => 100, 52 => 30, 53 => 30, 54 => 30, 55 => 30, 56 => 20];
+    if (isset($texto[$i])) {
+        return $texto[$i];
+    }
+    return $tipo === "T" ? 10 : 14;
+}
+
+function biff2_logico(int $fila, int $col, bool $v): string
+{
+    return biff2_rec(5, pack("vv", $fila, $col) . "\x40\x00\x00" . chr($v ? 1 : 0) . "\x00");
+}
+
+/** Genera el .XLS (BIFF2) con la plantilla de pedidos de Syscafe. $pedidos: pedidos con su arreglo "items".
+ *  $conEncabezado = false -> sin la fila de títulos (para probar si Syscafe lee la 1.ª fila como un pedido más). */
+function syscafe_pedidos_xls(array $pedidos, bool $conEncabezado = true): string
+{
+    $cols = SYSCAFE_PE_COLUMNAS;
+    $n = count($cols);
+    $datos = [];
+    foreach ($pedidos as $p) {
+        foreach (syscafe_pe_filas($p) as $fila) {
+            $datos[] = $fila;
         }
     }
-    foreach ($pedidos as &$p) {
-        $p["items"] = $items[(int) $p["id"]] ?? [];
-    }
-    unset($p);
 
-    return $pedidos;
+    $out = biff2_rec(9, pack("vv", 2, 0x10)) . biff2_rec(0x42, pack("v", 1252));
+    $desp = $conEncabezado ? 1 : 0;     // filas ocupadas por el encabezado
+    $out .= biff2_rec(0, pack("vvvv", 0, count($datos) + $desp, 0, $n));
+    foreach ($cols as $i => $c) {
+        $out .= biff2_rec(0x24, pack("CCv", $i, $i, syscafe_pe_ancho($i, $c[1]) * 256));
+    }
+    if ($conEncabezado) {
+        foreach ($cols as $i => $c) {
+            $out .= biff2_label(0, $i, $c[0]);
+        }
+    }
+    foreach ($datos as $k => $fila) {
+        $r = $k + $desp;
+        foreach ($cols as $i => $c) {
+            $v = $fila[$i];
+            if ($i === 7) {
+                // Plazo (días): en el .XLS va como NÚMERO. Como texto ("8") Syscafe lo leía como 0 días
+                $out .= biff2_numero($r, $i, (float) $v);
+            } elseif ($c[1] === "T") {
+                $out .= biff2_label($r, $i, (string) $v);
+            } elseif ($c[1] === "B") {
+                $out .= biff2_logico($r, $i, (bool) $v);
+            } else {
+                $out .= biff2_numero($r, $i, (float) $v);
+            }
+        }
+    }
+    return $out . biff2_rec(0x0A, "") . "\x00\x00";
+}
+
+function syscafe_pe_nombre_archivo(array $pedido): string
+{
+    $base = strtr((string) $pedido["cliente_nombre"], ["á" => "a", "é" => "e", "í" => "i", "ó" => "o", "ú" => "u", "ü" => "u", "ñ" => "n",
+                                                     "Á" => "A", "É" => "E", "Í" => "I", "Ó" => "O", "Ú" => "U", "Ü" => "U", "Ñ" => "N"]);
+    $base = trim(preg_replace('/[^A-Za-z0-9]+/', "_", strtoupper($base)) ?? "", "_");
+    $base = substr($base, 0, 24);
+    return strtoupper(tiposDocumentoPedido()[tipoDocumentoValido($pedido["tipo_pedido"] ?? "pedido")][3]) . "_" . numeroDocumento($pedido) . ($base !== "" ? "_" . $base : "") . ".XLS";
 }
