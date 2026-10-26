@@ -39,7 +39,7 @@ $encabezados = [
     "Razón social / Nombre", "Nombre comercial", "Teléfono", "Correo", "Departamento", "Municipio", "Barrio",
     "Dirección de entrega", "Puntos de referencia", "Factura electrónica", "Correo factura electrónica",
     "Condición de pago", "Días de crédito", "Observaciones", "Referencia", "Descripción", "Cantidad",
-    "Bonificado", "Descuento %", "Precio unitario", "Subtotal", "Total del pedido",
+    "Bonificado", "Descuento %", "Precio unitario", "Subtotal", "Descuento general %", "Total del pedido",
 ];
 $filas = [];
 foreach ($pedidos as $p) {
@@ -70,7 +70,7 @@ foreach ($pedidos as $p) {
         $p["observaciones"],
     ];
     if (!$p["items"]) {
-        $filas[] = array_merge($base, ["", "", "", "", "", "", "", (float) $p["total"]]);
+        $filas[] = array_merge($base, ["", "", "", "", "", "", "", (float) ($p["descuento_pct"] ?? 0), (float) $p["total"]]);
         continue;
     }
     foreach ($p["items"] as $it) {
@@ -80,13 +80,13 @@ foreach ($pedidos as $p) {
         $filas[] = array_merge($base, [
             $it["referencia"], $it["nombre"] . ($esFle ? " (APOYO A FLETE - BONIFICADO)" : ($esDoc ? " (DOCENA DE 13 - BONIFICADO)" : ($esBon ? " (BONIFICADO)" : ""))), (int) $it["cantidad"],
             $esFle ? "Apoyo a flete" : ($esDoc ? "Docena de 13" : ($esBon ? "Sí" : "No")), $esBon ? 100 : 0,
-            (float) $it["precio_unitario"], $esBon ? 0.0 : (float) $it["subtotal"], (float) $p["total"],
+            (float) $it["precio_unitario"], $esBon ? 0.0 : (float) $it["subtotal"], (float) ($p["descuento_pct"] ?? 0), (float) $p["total"],
         ]);
     }
 }
 
-$anchos = [16, 12, 17, 18, 14, 24, 14, 12, 12, 16, 34, 28, 16, 28, 20, 20, 20, 36, 36, 12, 28, 14, 10, 36, 14, 44, 10, 12, 12, 14, 14, 16];
-$binario = xlsx_generar($encabezados, $filas, $anchos, [22, 26, 28, 29, 30, 31]);
+$anchos = [16, 12, 17, 18, 14, 24, 14, 12, 12, 16, 34, 28, 16, 28, 20, 20, 20, 36, 36, 12, 28, 14, 10, 36, 14, 44, 10, 12, 12, 14, 14, 14, 16];
+$binario = xlsx_generar($encabezados, $filas, $anchos, [22, 26, 28, 29, 30, 31, 32]);
 
 $idUnico = (int) ($_GET["id"] ?? 0);
 $nombre = $idUnico > 0 ? tiposDocumentoPedido()[tipoDocumentoValido($pedidos[0]["tipo_pedido"] ?? "pedido")][3] . "_" . numeroDocumento($pedidos[0]) . ".xlsx" : "pedidos_" . date("Ymd_His") . ".xlsx";
