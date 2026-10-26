@@ -439,6 +439,20 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
     }
     $total = round($total, 2);
 
+    // ---- Descuento general en % (se aplica sobre el subtotal de los productos cobrados) ----
+    // Si la solicitud no trae el dato (pantalla vieja), se conserva el que ya tenía el pedido.
+    $descPct = array_key_exists("descuento_pct", $d)
+        ? parsearDescuentoPct($d["descuento_pct"])
+        : (float) ($existente["descuento_pct"] ?? 0);
+    if ($descPct < 0 || $descPct > DESCUENTO_MAX_PCT) {
+        if ($modo === "enviar") {
+            return $falla("El descuento debe estar entre 0 y " . rtrim(rtrim(number_format(DESCUENTO_MAX_PCT, 2, ".", ""), "0"), ".") . " %.");
+        }
+        $descPct = max(0.0, min((float) DESCUENTO_MAX_PCT, $descPct));
+    }
+    $valorDesc = round($total * $descPct / 100, 2);
+    $total = round($total - $valorDesc, 2);   // «total» queda NETO (ya con el descuento): es lo que ve y debe pagar el cliente
+
     // ---- Estado final ----
     if ($existente && $rol === "admin") {
         $estado = $existente["estado"];
@@ -487,6 +501,7 @@ function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, arr
         "pedido_vinculado_id"       => ["i", $pedidoVinculado],
         "observaciones"             => ["s", $obs],
         "obs_despacho"              => ["s", $obsDespacho],
+        "descuento_pct"             => ["d", $descPct],
         "total"                     => ["d", $total],
         "estado"                    => ["s", $estado],
     ];
