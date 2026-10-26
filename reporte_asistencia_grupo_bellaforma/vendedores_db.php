@@ -7,7 +7,10 @@
 
 require_once __DIR__ . "/despachos_lib.php";
 
-const ESQUEMA_VEND_VERSION = 15;
+const ESQUEMA_VEND_VERSION = 16;
+
+/** Descuento general máximo (en %) que puede aplicar un ejecutivo a un pedido. Cámbielo si quiere poner un tope (ej. 20). */
+const DESCUENTO_MAX_PCT = 100;
 
 function agregarColumna(mysqli $c, string $tabla, string $col, string $def): bool
 {
@@ -312,6 +315,8 @@ function asegurarTablasVendedores(mysqli $c): void
     $ok = agregarColumna($c, "pedidos_vendedores", "pedido_vinculado_id", "INT NULL") && $ok;
     // Observación del ejecutivo para la oficina (solo se ve en «Pedidos para despachar») y comprobante de pago de los pedidos anticipados
     $ok = agregarColumna($c, "pedidos_vendedores", "obs_despacho", "VARCHAR(500) NULL") && $ok;
+    // Descuento general del pedido en % (va a Syscafe en «Descuento Gral», razón de descuento 09)
+    $ok = agregarColumna($c, "pedidos_vendedores", "descuento_pct", "DECIMAL(5,2) NOT NULL DEFAULT 0") && $ok;
     asegurarTablaComprobantes($c);
     $okDesp = asegurarTablaDespachos($c);
 
@@ -322,6 +327,32 @@ function asegurarTablasVendedores(mysqli $c): void
 }
 
 /* ================= FORMATO ================= */
+
+/** Convierte lo que escribe el ejecutivo ("10", "10,5", "10.5 %") en un porcentaje con 2 decimales. */
+function parsearDescuentoPct($v): float
+{
+    $t = str_replace([",", "%", " "], [".", "", ""], trim((string) $v));
+    return is_numeric($t) ? round((float) $t, 2) : 0.0;
+}
+
+/** Subtotal BRUTO de un pedido: suma de las líneas cobradas (los bonificados valen 0), antes del descuento general. */
+function subtotalBrutoPedido(array $p): float
+{
+    $s = 0.0;
+    foreach ($p["items"] ?? [] as $it) {
+        if (empty($it["bonificado"])) {
+            $s += (float) $it["subtotal"];
+        }
+    }
+    return round($s, 2);
+}
+
+/** Valor en pesos del descuento general de un pedido (subtotal bruto x %). */
+function valorDescuentoPedido(array $p): float
+{
+    $pct = (float) ($p["descuento_pct"] ?? 0);
+    return $pct > 0 ? round(subtotalBrutoPedido($p) * $pct / 100, 2) : 0.0;
+}
 
 function formatoCOP($valor): string
 {
