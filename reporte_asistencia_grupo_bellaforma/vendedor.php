@@ -246,6 +246,12 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                             <td class="n"><?= (int) $it["cantidad"] ?> × <?= formatoCOP($it["precio_unitario"]) ?><br><b><?= formatoCOP($esBon ? 0 : $it["subtotal"]) ?></b></td>
                         </tr>
                     <?php endforeach; ?>
+                    <?php if ((float) ($ped["descuento_pct"] ?? 0) > 0): ?>
+                        <tr>
+                            <td>Descuento general <?= e(rtrim(rtrim(number_format((float) $ped["descuento_pct"], 2, ",", ""), "0"), ",")) ?> %</td>
+                            <td class="n"><b>- <?= formatoCOP(valorDescuentoPedido($ped)) ?></b></td>
+                        </tr>
+                    <?php endif; ?>
                 </table>
             <?php endif; ?>
 
