@@ -1,965 +1,129 @@
 <?php
-/**
- * Lógica compartida de pedidos: búsqueda de clientes y guardado (borrador / envío / edición).
- */
-
-function textoCorto($v, int $max, bool $unaLinea = true): string
-{
-    $v = trim((string) $v);
-    if ($unaLinea) {
-        $v = preg_replace('/\s+/u', ' ', $v) ?? $v;
-    }
-    if (function_exists("mb_substr")) {
-        return mb_substr($v, 0, $max, "UTF-8");
-    }
-    return substr($v, 0, $max);
-}
-
-function soloDigitos(string $s): string
-{
-    return preg_replace('/\D+/', '', $s) ?? '';
-}
-
-/** Busca un cliente por NIT / cédula (acepta puntos, espacios y dígito de verificación con guion). */
-function buscarClientePorDocumento(mysqli $c, string $raw): ?array
-{
-    $raw = trim($raw);
-    $norm = soloDigitos($raw);
-    if (strlen($norm) < 5) {
-        return null;
-    }
-    $candidatos = [$norm];
-    if (strpos($raw, "-") !== false) {
-        $base = soloDigitos(explode("-", $raw)[0]);
-        if (strlen($base) >= 5) {
-            array_unshift($candidatos, $base);
-        }
-    }
-    foreach ($candidatos as $n) {
-        $tabla = tablaClientes();
-        $stmt = $c->prepare("SELECT * FROM `$tabla` WHERE identificacion_norm = ? LIMIT 1");
-        $stmt->bind_param("s", $n);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $fila = $res ? $res->fetch_assoc() : null;
-        $stmt->close();
-        if ($fila) {
-            return $fila;
-        }
-    }
-    return null;
-}
+/** Importación masiva de productos (CSV): un catálogo con precio mayorista y precio detal. */
+require_once __DIR__ . "/clientes_lib.php";
 
 /**
- * Mantiene la base de clientes al enviar un pedido:
- *  - Si el NIT / cédula NO existe, crea el cliente con los datos que se llenaron en el pedido.
- *  - Si ya existe (y es de la misma lista: mayorista / detal), solo COMPLETA los datos que tenía vacíos; nunca pisa los que ya tiene.
- * Devuelve el id del cliente o null. Si algo falla no interrumpe el guardado del pedido.
+ * Importa productos desde un CSV con columnas: referencia, nombre (o detalle), precio_mayorista y precio_detal.
+ * (Si el archivo solo trae "precio", se toma como precio mayorista.) Si la referencia ya existe, se actualiza.
  */
-function sincronizarClienteDesdePedido(mysqli $c, array $d): ?int
+function importarProductosCSV(mysqli $c, string $ruta): array
 {
-    try {
-        require_once __DIR__ . "/clientes_lib.php";
-        $raw = trim((string) ($d["identificacion"] ?? ""));
-        $partes = explode("-", $raw);
-        $norm = soloDigitos($partes[0]);
-        $dv = isset($partes[1]) ? soloDigitos($partes[1]) : "";
-        if (strlen($norm) < 5 || trim((string) ($d["razon_social"] ?? "")) === "") {
-            return null;
-        }
-        $lista = listaValida($d["tipo_cliente"] ?? "");
-        $cli = buscarClientePorDocumento($c, $raw);
-
-        if (!$cli) {
-            $r = guardarCliente($c, [
-                "tipo_cliente" => $lista,
-                "tipo_persona" => $d["tipo_persona"] ?? "",
-                "identificacion" => $norm,
-                "dv" => $dv,
-                "razon_social" => $d["razon_social"],
-                "nombre_comercial" => $d["nombre_comercial"] ?? "",
-                "telefono1" => $d["telefono"] ?? "",
-                "email" => $d["email"] ?? "",
-                "email_fe" => $d["email_fe"] ?? "",
-                "departamento" => $d["departamento"] ?? "",
-                "municipio" => $d["municipio"] ?? "",
-                "barrio" => $d["barrio"] ?? "",
-                "direccion" => $d["direccion"] ?? "",
-                "puntos_referencia" => $d["puntos_referencia"] ?? "",
-                "condicion_pago" => $d["condicion_pago"] ?? "contado",
-                "dias_credito" => $d["dias_credito"] ?? "",
-            ], null);
-            return !empty($r["ok"]) ? (int) $r["id"] : null;
-        }
-
-        // Cliente registrado con la otra lista de precios: no se mezcla ni se modifica
-        if (($cli["tipo_cliente"] ?? "mayorista") !== $lista) {
-            return null;
-        }
-
-        // Cliente existente: se llenan solo los campos que estaban vacíos
-        $sets = [];
-        $tipos = "";
-        $vals = [];
-        foreach (["nombre_comercial", "email", "email_fe", "departamento", "municipio", "barrio", "direccion", "puntos_referencia"] as $col) {
-            $nuevo = trim((string) ($d[$col] ?? ""));
-            if ($nuevo !== "" && trim((string) ($cli[$col] ?? "")) === "") {
-                $sets[] = "`$col` = ?";
-                $tipos .= "s";
-                $vals[] = $nuevo;
-            }
-        }
-        $tel = trim((string) ($d["telefono"] ?? ""));
-        if ($tel !== "" && trim((string) ($cli["telefono1"] ?? "")) === "" && trim((string) ($cli["movil"] ?? "")) === "") {
-            $sets[] = "`telefono1` = ?";
-            $tipos .= "s";
-            $vals[] = $tel;
-        }
-        if ($dv !== "" && trim((string) ($cli["dv"] ?? "")) === "") {
-            $sets[] = "`dv` = ?";
-            $tipos .= "s";
-            $vals[] = $dv;
-        }
-        if ($sets) {
-            $tabla = tablaClientes();
-            $st = $c->prepare("UPDATE `$tabla` SET " . implode(", ", $sets) . " WHERE id = ?");
-            $tipos .= "i";
-            $vals[] = (int) $cli["id"];
-            $st->bind_param($tipos, ...$vals);
-            $st->execute();
-            $st->close();
-        }
-        return (int) $cli["id"];
-    } catch (Throwable $e) {
-        return null;
+    $tabla = tablaProductos();
+    $texto = file_get_contents($ruta);
+    if ($texto === false || trim($texto) === "") {
+        return ["ok" => false, "error" => "El archivo está vacío."];
     }
-}
-
-/** ¿El administrador autorizó a este ejecutivo (descargas + editar el número del documento)? */
-function vendedorPuedeEditarNumero(mysqli $c, int $vendedorId): bool
-{
-    if ($vendedorId <= 0) {
-        return false;
+    if (substr($texto, 0, 3) === "\xEF\xBB\xBF") {
+        $texto = substr($texto, 3);
     }
-    $st = $c->prepare("SELECT puede_descargar FROM vendedores WHERE id = ? AND activo = 1 LIMIT 1");
-    $st->bind_param("i", $vendedorId);
-    $st->execute();
-    $res = $st->get_result();
-    $f = $res ? $res->fetch_assoc() : null;
-    $st->close();
-    return $f && (int) $f["puede_descargar"] === 1;
-}
+    if (!preg_match('//u', $texto)) {
+        $conv = @iconv("Windows-1252", "UTF-8//TRANSLIT", $texto);
+        $texto = $conv !== false ? $conv : $texto;
+    }
+    $primera = strtok($texto, "\n");
+    $cuentas = [";" => substr_count($primera, ";"), "," => substr_count($primera, ","), "\t" => substr_count($primera, "\t")];
+    arsort($cuentas);
+    $delim = array_key_first($cuentas);
 
-/**
- * Guarda un pedido.
- *  $d      datos del cliente y condiciones
- *  $items  [producto_id => cantidad]
- *  $bonos  [producto_id => cantidad] productos BONIFICADOS (se entregan sin costo)
- *  $docenas [producto_id => true] bonificados que son la «docena de 13» (1 unidad gratis; se guarda con bonificado = 2)
- *  $fletes [producto_id => true] «apoyo a flete» (1 unidad al 100 % de descuento; se guarda con bonificado = 3)
- *  $modo   'borrador' | 'enviar'
- *  $rol    'vendedor' | 'admin'
- * Devuelve ['ok'=>bool, 'error'=>string, 'id'=>int, 'total'=>float, 'estado'=>string]
- */
-function guardarPedido(mysqli $c, int $vendedorId, ?int $pedidoId, array $d, array $items, string $modo, string $rol = "vendedor", array $bonos = [], array $docenas = [], array $fletes = []): array
-{
-    $falla = fn(string $m) => ["ok" => false, "error" => $m];
-
-    $existente = null;
-    if ($pedidoId) {
-        $lista = obtenerPedidos($c, ["con_borradores" => true], null, $pedidoId);
-        $existente = $lista[0] ?? null;
-        if (!$existente) {
-            return $falla("No se encontró el pedido.");
-        }
-        if ($rol === "vendedor") {
-            if ((int) $existente["vendedor_id"] !== $vendedorId) {
-                return $falla("Este pedido no te pertenece.");
-            }
-            if ($existente["estado"] === "procesado") {
-                return $falla("Este pedido ya fue subido a Syscafe y ya no se puede editar.");
-            }
-            if ($existente["estado"] === "anulado") {
-                return $falla("Este pedido está anulado y no se puede editar.");
-            }
-            if ($modo === "borrador" && $existente["estado"] !== "borrador") {
-                return $falla("Un pedido ya enviado no vuelve a borrador.");
-            }
-        }
-        $vendedorId = (int) $existente["vendedor_id"];
+    $fh = fopen("php://memory", "r+");
+    fwrite($fh, $texto);
+    rewind($fh);
+    $cab = fgetcsv($fh, 0, $delim);
+    if (!$cab) {
+        return ["ok" => false, "error" => "No se encontró la fila de encabezados."];
     }
 
-    // ---- Tipo de cliente (define la lista de precios) ----
-    $tipoCliente = $d["tipo_cliente"] ?? "";
-    if (!in_array($tipoCliente, ["mayorista", "detal"], true)) {
-        if ($modo === "enviar" && !$existente) {
-            return $falla("Elija primero el tipo de cliente: mayorista o detal.");
-        }
-        $tipoCliente = $existente["tipo_cliente"] ?? "mayorista";
-    }
-
-    // ---- Tipo de documento (pedido de cliente / remisión / cotización) y número ----
-    $tipoDoc = isset($d["tipo_documento"]) && array_key_exists((string) $d["tipo_documento"], tiposDocumentoPedido())
-        ? (string) $d["tipo_documento"]
-        : ($existente["tipo_pedido"] ?? "pedido");
-    $nombreDoc = nombreCortoDocumento($tipoDoc);
-    // Pueden escribir o cambiar el número el administrador y los ejecutivos autorizados; los demás conservan el que ya tengan (vacío = automático)
-    $puedeNumero = $rol === "admin" || (array_key_exists("numero", $d) && vendedorPuedeEditarNumero($c, $vendedorId));
-    $numeroDoc = $puedeNumero ? trim((string) ($d["numero"] ?? "")) : trim((string) ($existente["numero_pedido"] ?? ""));
-    if ($numeroDoc !== "" && (!preg_match('/^\d{1,10}$/', $numeroDoc) || (int) $numeroDoc < 1)) {
-        return $falla("El número de la " . $nombreDoc . " solo puede tener dígitos (máximo 10) y debe ser mayor que 0.");
-    }
-    $mensajeNumeroEnUso = fn(string $n) => "El número " . $n . " ya está en uso por otra " . $nombreDoc . ". Escriba un número distinto.";
-    // Numeración automática configurada por el administrador (Pedidos > Numeración automática).
-    // Se aplica a documentos que se envían sin número escrito (nuevos o borradores). El DDL va antes de la transacción.
-    asegurarTablaNumeracion($c);
-    $feDoc = !empty($d["factura_electronica"]) ? 1 : 0;
-    $asignarAuto = $modo === "enviar" && $numeroDoc === "" && (!$existente || $existente["estado"] === "borrador")
-        && contadorNumeracionActivo($c, $tipoDoc, $feDoc);
-    if ($modo === "enviar" && !$asignarAuto) {
-        // Número escrito a mano, o el automático de un documento que ya existe (un borrador al enviarse, por ejemplo)
-        $numeroARevisar = $numeroDoc !== "" ? (int) $numeroDoc : ($existente ? (int) $existente["id"] : 0);
-        if ($numeroARevisar > 0 && numeroDocumentoEnUso($c, $tipoDoc, $numeroARevisar, (int) ($existente["id"] ?? 0), $feDoc)) {
-            return $falla($mensajeNumeroEnUso($numeroDoc !== "" ? $numeroDoc : numeroPedido($numeroARevisar)));
-        }
-    }
-
-    // ---- Remisión unida a un pedido (solo aplica a remisiones; se ve en el Control de despachos) ----
-    $pedidoVinculado = null;
-    if ($tipoDoc === "remision") {
-        $vinculoActual = !empty($existente["pedido_vinculado_id"]) ? (int) $existente["pedido_vinculado_id"] : null;
-        // Si la solicitud no trae el dato (pantalla del administrador, pantalla vieja), se conserva el que ya tenía
-        $pedidoVinculado = array_key_exists("pedido_vinculado_id", $d) ? ((int) $d["pedido_vinculado_id"] ?: null) : $vinculoActual;
-        if ($pedidoVinculado !== null && $pedidoVinculado !== $vinculoActual) {
-            // Solo se valida si cambió: debe ser un pedido de cliente enviado, no anulado, del mismo ejecutivo, y no la remisión misma
-            $stv = $c->prepare("SELECT vendedor_id FROM pedidos_vendedores WHERE id = ? AND tipo_pedido = 'pedido' AND estado IN ('pendiente','procesado') LIMIT 1");
-            $stv->bind_param("i", $pedidoVinculado);
-            $stv->execute();
-            $filaV = $stv->get_result()->fetch_assoc();
-            $stv->close();
-            $valido = $filaV && ($rol === "admin" || (int) $filaV["vendedor_id"] === $vendedorId) && $pedidoVinculado !== (int) ($existente["id"] ?? 0);
-            if (!$valido) {
-                return $falla("El pedido al que quiere unir la remisión ya no está disponible. Elija otro o déjela sin unir.");
-            }
-        }
-    }
-
-    // ---- Datos del cliente ----
-    $tipo = (($d["tipo_persona"] ?? "") === "natural") ? "natural" : "juridica";
-    $tipoDocCliente = $tipo === "natural" ? "CC" : "NIT";
-    $nombre = textoCorto($d["cliente_nombre"] ?? "", 200);
-    $comercial = textoCorto($d["cliente_nombre_comercial"] ?? "", 200);
-    $ident = textoCorto($d["identificacion"] ?? "", 40);
-    $depto = textoCorto($d["departamento"] ?? "", 80);
-    $muni = textoCorto($d["municipio"] ?? "", 100);
-    $barrio = textoCorto($d["barrio"] ?? "", 120);
-    $direccion = textoCorto($d["direccion"] ?? "", 255);
-    $puntos = textoCorto($d["puntos_referencia"] ?? "", 255);
-    $telefono = textoCorto($d["telefono"] ?? "", 40);
-    $email = textoCorto($d["email"] ?? "", 150);
-    $fe = !empty($d["factura_electronica"]) ? 1 : 0;
-    $emailFe = textoCorto($d["email_fe"] ?? "", 150);
-    $condicion = (($d["condicion_pago"] ?? "") === "credito") ? "credito" : "contado";
-    $dias = $condicion === "credito" ? (int) ($d["dias_credito"] ?? 0) : null;
-
-    // Remisión unida a un pedido: va junto a ese pedido, así que no se piden forma de pago ni transportadora;
-    // se toman las del pedido para que el Control de despachos siga mostrándolas.
-    $remisionUnida = $tipoDoc === "remision" && $pedidoVinculado !== null;
-    if ($remisionUnida) {
-        $stp = $c->prepare("SELECT forma_pago, transportadora FROM pedidos_vendedores WHERE id = ? LIMIT 1");
-        $stp->bind_param("i", $pedidoVinculado);
-        $stp->execute();
-        $filaP = $stp->get_result()->fetch_assoc();
-        $stp->close();
-        $d["forma_pago"] = (string) ($filaP["forma_pago"] ?? "");
-        $d["transportadora"] = (string) ($filaP["transportadora"] ?? "");
-    }
-
-    // Forma de pago y transportadora (alimentan el Control de despachos). Si la solicitud no las trae (pantalla vieja), se conserva lo que ya tenía el pedido.
-    $formaPago = array_key_exists("forma_pago", $d) ? (string) $d["forma_pago"] : (string) ($existente["forma_pago"] ?? "");
-    $transportadora = array_key_exists("transportadora", $d) ? (string) $d["transportadora"] : (string) ($existente["transportadora"] ?? "");
-    if (!formaPagoValida($formaPago)) {
-        $formaPago = "";
-    }
-    if (!array_key_exists($transportadora, transportadorasDespacho())) {
-        $transportadora = "";
-    }
-    if ($formaPago !== "") {
-        // La forma de pago define la condición comercial que usan el PDF, el Excel y Syscafe
-        $diasFp = formaPagoDias($formaPago);
-        $condicion = $diasFp ? "credito" : "contado";
-        $dias = $diasFp ?: null;
-    }
-    $obs = textoCorto($d["observaciones"] ?? "", 2000, false);
-    // Observación para la oficina: solo se ve en «Pedidos para despachar» (no sale en el PDF, el Excel ni Syscafe)
-    $obsDespacho = array_key_exists("obs_despacho", $d)
-        ? textoCorto($d["obs_despacho"], 500, false)
-        : (string) ($existente["obs_despacho"] ?? "");
-    $clienteId = (int) ($d["cliente_id"] ?? 0) ?: null;
-
-    if ($modo === "enviar") {
-        if ($ident === "" || soloDigitos($ident) === "") {
-            return $falla(($tipo === "natural" ? "Ingrese la cédula" : "Ingrese el NIT") . " del cliente.");
-        }
-        if ($nombre === "") {
-            return $falla($tipo === "natural" ? "Ingrese el nombre completo del cliente." : "Ingrese la razón social del cliente.");
-        }
-        $ubicacionOpcional = $existente && $existente["estado"] !== "borrador" && trim((string) ($existente["cliente_departamento"] ?? "")) === "";
-        if (!$ubicacionOpcional && $depto === "") {
-            return $falla("Seleccione el departamento.");
-        }
-        if ($direccion === "") {
-            return $falla("Ingrese la dirección de entrega.");
-        }
-        if ($telefono === "") {
-            return $falla("Ingrese un teléfono de contacto.");
-        }
-        // Documentos nuevos: forma de pago y transportadora son obligatorias.
-        // (Un documento ya enviado antes de existir este dato puede seguir editándose sin completarlo.)
-        $enviadoAntes = $existente && $existente["estado"] !== "borrador";
-        if (!$remisionUnida && $formaPago === "" && !($enviadoAntes && trim((string) ($existente["forma_pago"] ?? "")) === "")) {
-            return $falla("Seleccione la forma de pago.");
-        }
-        if (!$remisionUnida && $transportadora === "" && !($enviadoAntes && trim((string) ($existente["transportadora"] ?? "")) === "")) {
-            return $falla("Seleccione la transportadora.");
-        }
-        if ($condicion === "credito" && ($dias === null || $dias < 1 || $dias > 365)) {
-            return $falla("Indique cuántos días de crédito (entre 1 y 365).");
-        }
-        if ($fe) {
-            $correoFe = $emailFe !== "" ? $emailFe : $email;
-            if (!filter_var($correoFe, FILTER_VALIDATE_EMAIL)) {
-                return $falla("Para factura electrónica ingrese un correo válido.");
-            }
-            if ($emailFe === "") {
-                $emailFe = $correoFe;
-            }
-        }
-    }
-    if ($email !== "" && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $email = "";
-    }
-    if ($emailFe !== "" && !filter_var($emailFe, FILTER_VALIDATE_EMAIL)) {
-        $emailFe = "";
-    }
-
-    // ---- Productos (los precios siempre salen de la base de datos) ----
-    $cantidades = [];
-    foreach ($items as $pid => $cant) {
-        $pid = (int) $pid;
-        $cant = (int) $cant;
-        if ($pid > 0 && $cant > 0 && $cant <= 100000) {
-            $cantidades[$pid] = $cant;
-        }
-    }
-    $cantBonos = [];
-    foreach ($bonos as $pid => $cant) {
-        $pid = (int) $pid;
-        $cant = (int) $cant;
-        if ($pid > 0 && $cant > 0 && $cant <= 100000) {
-            $cantBonos[$pid] = $cant;
-        }
-    }
-    $esDocena = [];   // docena de 13: la unidad bonificada es siempre 1
-    foreach ($docenas as $pid => $v) {
-        $pid = (int) $pid;
-        if ($v && isset($cantBonos[$pid])) {
-            $esDocena[$pid] = true;
-            $cantBonos[$pid] = 1;
-        }
-    }
-    $esFlete = [];   // apoyo a flete: 1 unidad al 100 % de descuento, línea aparte
-    foreach ($fletes as $pid => $v) {
-        $pid = (int) $pid;
-        if ($v && $pid > 0) {
-            $esFlete[$pid] = true;
-        }
-    }
-    if ($modo === "enviar" && !$cantidades && !$cantBonos && !$esFlete) {
-        return $falla("Seleccione al menos un producto con cantidad.");
-    }
-
-    $preciosPrevios = [];   // precio ya pactado en un pedido enviado (se respeta al editar)
-    $idsPrevios = [];
-    $mismaLista = $existente && ($existente["tipo_cliente"] ?? "mayorista") === $tipoCliente;
-    if ($mismaLista) {
-        foreach ($existente["items"] as $it) {
-            $idsPrevios[(int) $it["producto_id"]] = true;
-            if ($existente["estado"] !== "borrador") {
-                $preciosPrevios[(int) $it["producto_id"]] = (float) $it["precio_unitario"];
-            }
-        }
-    }
-
-    $lineas = [];
-    $total = 0.0;
-    if ($cantidades || $cantBonos || $esFlete) {
-        $idsTodos = array_values(array_unique(array_merge(array_keys($cantidades), array_keys($cantBonos), array_keys($esFlete))));
-        $idsLista = implode(",", array_map("intval", $idsTodos));
-        $tablaProd = tablaProductos($tipoCliente);
-        $colPrecio = columnaPrecio($tipoCliente);   // precio_mayorista o precio_detal
-        $res = $c->query("SELECT id, referencia, nombre, `$colPrecio` AS precio, activo, es_servicio FROM `$tablaProd` WHERE id IN ($idsLista)");
-        $porId = [];
-        while ($res && ($p = $res->fetch_assoc())) {
-            $porId[(int) $p["id"]] = $p;
-        }
-        foreach ($idsTodos as $pid) {
-            if (!isset($porId[$pid])) {
-                continue;
-            }
-            $p = $porId[$pid];
-            if ((int) $p["activo"] !== 1 && !isset($idsPrevios[$pid])) {
-                continue;
-            }
-            $precio = $preciosPrevios[$pid] ?? (float) $p["precio"];
-            if ($precio <= 0) {
-                continue;   // sin precio en esta lista: no se puede pedir
-            }
-            if (isset($cantidades[$pid])) {
-                $cant = $cantidades[$pid];
-                $sub = round($precio * $cant, 2);
-                $total += $sub;
-                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"], "servicio" => (int) $p["es_servicio"],
-                             "precio" => $precio, "cantidad" => $cant, "subtotal" => $sub, "bonificado" => 0];
-            }
-            if (isset($cantBonos[$pid])) {
-                // Bonificado: queda el precio de lista como referencia, pero no se cobra (subtotal 0)
-                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"], "servicio" => (int) $p["es_servicio"],
-                             "precio" => $precio, "cantidad" => $cantBonos[$pid], "subtotal" => 0.0, "bonificado" => isset($esDocena[$pid]) ? 2 : 1];
-            }
-            if (isset($esFlete[$pid])) {
-                // Apoyo a flete: precio de lista visible en el PDF, 100 % de descuento (subtotal 0, no suma al total)
-                $lineas[] = ["id" => $pid, "referencia" => $p["referencia"], "nombre" => $p["nombre"], "servicio" => (int) $p["es_servicio"],
-                             "precio" => $precio, "cantidad" => 1, "subtotal" => 0.0, "bonificado" => 3];
-            }
-        }
-        if ($modo === "enviar" && !$lineas) {
-            return $falla("Los productos seleccionados ya no están disponibles.");
-        }
-    }
-    $total = round($total, 2);
-
-    // ---- Descuento general en % (se aplica sobre el subtotal de los productos cobrados) ----
-    // Si la solicitud no trae el dato (pantalla vieja), se conserva el que ya tenía el pedido.
-    $descPct = array_key_exists("descuento_pct", $d)
-        ? parsearDescuentoPct($d["descuento_pct"])
-        : (float) ($existente["descuento_pct"] ?? 0);
-    if ($descPct < 0 || $descPct > DESCUENTO_MAX_PCT) {
-        if ($modo === "enviar") {
-            return $falla("El descuento debe estar entre 0 y " . rtrim(rtrim(number_format(DESCUENTO_MAX_PCT, 2, ".", ""), "0"), ".") . " %.");
-        }
-        $descPct = max(0.0, min((float) DESCUENTO_MAX_PCT, $descPct));
-    }
-    $valorDesc = round($total * $descPct / 100, 2);
-    $total = round($total - $valorDesc, 2);   // «total» queda NETO (ya con el descuento): es lo que ve y debe pagar el cliente
-
-    // ---- Estado final ----
-    if ($existente && $rol === "admin") {
-        $estado = $existente["estado"];
-    } elseif ($modo === "borrador") {
-        $estado = "borrador";
-    } else {
-        $estado = "pendiente";
-    }
-
-    // ---- Base de clientes: al ENVIAR se crea el cliente nuevo y se completan los datos que le falten (los borradores no) ----
-    if ($modo === "enviar") {
-        $idCliente = sincronizarClienteDesdePedido($c, [
-            "tipo_cliente" => $tipoCliente, "tipo_persona" => $tipo, "identificacion" => $ident, "razon_social" => $nombre,
-            "nombre_comercial" => $comercial, "telefono" => $telefono, "email" => $email, "email_fe" => $emailFe,
-            "departamento" => $depto, "municipio" => $muni, "barrio" => $barrio, "direccion" => $direccion,
-            "puntos_referencia" => $puntos, "condicion_pago" => $condicion, "dias_credito" => $dias,
-        ]);
-        if ($idCliente) {
-            $clienteId = $idCliente;
-        }
-    }
-
-    $campos = [
-        "tipo_cliente"              => ["s", $tipoCliente],
-        "tipo_pedido"               => ["s", $tipoDoc],
-        "numero_pedido"             => ["s", $numeroDoc !== "" ? $numeroDoc : null],
-        "cliente_id"                => ["i", $clienteId],
-        "cliente_tipo_persona"      => ["s", $tipo],
-        "cliente_tipo_documento"    => ["s", $tipoDocCliente],
-        "cliente_nombre"            => ["s", $nombre],
-        "cliente_nombre_comercial"  => ["s", $comercial],
-        "cliente_nit"               => ["s", $ident],
-        "cliente_departamento"      => ["s", $depto],
-        "cliente_ciudad"            => ["s", $muni],
-        "cliente_barrio"            => ["s", $barrio],
-        "cliente_direcciones"       => ["s", $direccion],
-        "cliente_puntos_referencia" => ["s", $puntos],
-        "cliente_telefono"          => ["s", $telefono],
-        "cliente_email"             => ["s", $email],
-        "factura_electronica"       => ["i", $fe],
-        "email_fe"                  => ["s", $emailFe],
-        "condicion_pago"            => ["s", $condicion],
-        "dias_credito"              => ["i", $dias],
-        "forma_pago"                => ["s", $formaPago !== "" ? $formaPago : null],
-        "transportadora"            => ["s", $transportadora !== "" ? $transportadora : null],
-        "pedido_vinculado_id"       => ["i", $pedidoVinculado],
-        "observaciones"             => ["s", $obs],
-        "obs_despacho"              => ["s", $obsDespacho],
-        "descuento_pct"             => ["d", $descPct],
-        "total"                     => ["d", $total],
-        "estado"                    => ["s", $estado],
+    $alias = [
+        "referencia" => ["referencia", "ref", "codigo", "cod"],
+        "nombre" => ["nombre", "detalle", "descripcion", "producto", "articulo"],
+        "precio_mayorista" => ["precio_mayorista", "mayorista", "precio_mayor", "precio", "valor", "vrunit2", "vr_unitario", "valor_unitario"],
+        "precio_detal" => ["precio_detal", "detal", "precio_al_detal"],
+        "activo" => ["activo", "estado"],
     ];
+    $mapa = [];
+    foreach ($alias as $campo => $lst) {
+        foreach ($lst as $n) {
+            $mapa[$n] = $campo;
+        }
+    }
+    $cols = [];
+    foreach ($cab as $i => $h) {
+        $k = trim(preg_replace('/[^a-z0-9]+/', "_", strtolower(sinTildes(trim((string) $h)))), "_");
+        if (isset($mapa[$k]) && !in_array($mapa[$k], $cols, true)) {
+            $cols[$i] = $mapa[$k];
+        }
+    }
+    foreach (["referencia", "nombre"] as $req) {
+        if (!in_array($req, $cols, true)) {
+            return ["ok" => false, "error" => "Falta la columna «$req». El archivo debe tener: referencia, nombre, precio_mayorista y precio_detal."];
+        }
+    }
+    if (!in_array("precio_mayorista", $cols, true) && !in_array("precio_detal", $cols, true)) {
+        return ["ok" => false, "error" => "Falta al menos una columna de precio: precio_mayorista y/o precio_detal."];
+    }
+    $traeMay = in_array("precio_mayorista", $cols, true);
+    $traeDet = in_array("precio_detal", $cols, true);
 
+    $existentes = [];
+    $r = $c->query("SELECT referencia FROM `$tabla`");
+    while ($r && ($f = $r->fetch_row())) {
+        $existentes[$f[0]] = true;
+    }
+
+    $nuevos = 0;
+    $actualizados = 0;
+    $errores = [];
+    $linea = 1;
+    $c->begin_transaction();
     try {
-        $c->begin_transaction();
-
-        if ($asignarAuto) {
-            $sig = siguienteNumeroDocumento($c, $tipoDoc, $feDoc, (int) ($existente["id"] ?? 0));
-            if ($sig === null) {
-                throw new RuntimeException("NUMERACION");
-            }
-            $numeroDoc = (string) $sig;
-            $campos["numero_pedido"] = ["s", $numeroDoc];
+        // Solo se actualizan los precios que el archivo trae; el otro precio no se toca
+        $sets = ["nombre = VALUES(nombre)", "activo = VALUES(activo)"];
+        if ($traeMay) {
+            $sets[] = "precio_mayorista = VALUES(precio_mayorista)";
+            $sets[] = "precio = VALUES(precio)";
         }
-
-        if ($existente) {
-            $sets = implode(", ", array_map(fn($k) => "`$k` = ?", array_keys($campos)));
-            $tipos = implode("", array_map(fn($v) => $v[0], $campos)) . "i";
-            $valores = array_values(array_map(fn($v) => $v[1], $campos));
-            $valores[] = (int) $existente["id"];
-            $st = $c->prepare("UPDATE pedidos_vendedores SET $sets WHERE id = ?");
-            $st->bind_param($tipos, ...$valores);
-            $st->execute();
-            $st->close();
-            $idFinal = (int) $existente["id"];
-            $c->query("DELETE FROM pedido_vendedor_items WHERE pedido_id = " . $idFinal);
-        } else {
-            $cols = "vendedor_id, " . implode(", ", array_map(fn($k) => "`$k`", array_keys($campos)));
-            $marcas = implode(", ", array_fill(0, count($campos) + 1, "?"));
-            $tipos = "i" . implode("", array_map(fn($v) => $v[0], $campos));
-            $valores = array_merge([$vendedorId], array_values(array_map(fn($v) => $v[1], $campos)));
-            $st = $c->prepare("INSERT INTO pedidos_vendedores ($cols) VALUES ($marcas)");
-            $st->bind_param($tipos, ...$valores);
-            $st->execute();
-            $st->close();
-            $idFinal = (int) $c->insert_id;
-            // Documento nuevo sin número escrito: su número automático es el id; no puede chocar con uno escrito a mano
-            if ($modo === "enviar" && $numeroDoc === "" && numeroDocumentoEnUso($c, $tipoDoc, $idFinal, $idFinal, $feDoc)) {
-                throw new RuntimeException("NUMERO_EN_USO");
-            }
+        if ($traeDet) {
+            $sets[] = "precio_detal = VALUES(precio_detal)";
         }
-
-        $insItem = $c->prepare(
-            "INSERT INTO pedido_vendedor_items (pedido_id, producto_id, referencia, nombre, precio_unitario, cantidad, subtotal, bonificado, es_servicio)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        $st = $c->prepare(
+            "INSERT INTO `$tabla` (referencia, nombre, precio, precio_mayorista, precio_detal, activo) VALUES (?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE " . implode(", ", $sets)
         );
-        foreach ($lineas as $l) {
-            $insItem->bind_param("iissdidii", $idFinal, $l["id"], $l["referencia"], $l["nombre"], $l["precio"], $l["cantidad"], $l["subtotal"], $l["bonificado"], $l["servicio"]);
-            $insItem->execute();
+        while (($fila = fgetcsv($fh, 0, $delim)) !== false) {
+            $linea++;
+            if (!$fila || (count($fila) === 1 && trim((string) $fila[0]) === "")) {
+                continue;
+            }
+            $in = [];
+            foreach ($cols as $i => $campo) {
+                $in[$campo] = $fila[$i] ?? "";
+            }
+            $ref = textoCorto($in["referencia"] ?? "", 60);
+            $nom = textoCorto($in["nombre"] ?? "", 255);
+            $pMay = parsearPrecio((string) ($in["precio_mayorista"] ?? ""));
+            $pDet = parsearPrecio((string) ($in["precio_detal"] ?? ""));
+            $activoTxt = strtolower(trim((string) ($in["activo"] ?? "")));
+            $activo = ($activoTxt === "" || esVerdadero($activoTxt) || $activoTxt === "activo") ? 1 : 0;
+            if ($ref === "" || $nom === "" || ($pMay <= 0 && $pDet <= 0)) {
+                if (count($errores) < 8) {
+                    $errores[] = "fila $linea";
+                }
+                continue;
+            }
+            $st->bind_param("ssdddi", $ref, $nom, $pMay, $pMay, $pDet, $activo);
+            $st->execute();
+            if (isset($existentes[$ref])) {
+                $actualizados++;
+            } else {
+                $nuevos++;
+                $existentes[$ref] = true;
+            }
         }
-        $insItem->close();
-
+        $st->close();
         $c->commit();
-
-        // El comprobante de pago solo aplica a «Anticipado»: si cambió la forma de pago, se quita
-        if ($formaPago !== "" && $formaPago !== "anticipado") {
-            borrarComprobanteDePedido($c, $idFinal);
-        }
-
-        // Al enviarse por primera vez, el documento entra al Control de despachos del día de hoy
-        if ($modo === "enviar" && $estado === "pendiente" && (!$existente || $existente["estado"] === "borrador")) {
-            crearDespachoDePedido($c, $idFinal);
-        }
     } catch (Throwable $e) {
         $c->rollback();
-        if ($e->getMessage() === "NUMERACION") {
-            return $falla("No se pudo asignar el número automático de la " . $nombreDoc . ". Avise al administrador para revisar la numeración.");
-        }
-        if ($e->getMessage() === "NUMERO_EN_USO") {
-            return $falla("El número que el sistema iba a asignar ya está en uso por otra " . $nombreDoc . ". Escriba un número manualmente en el paso 1.");
-        }
-        $detalle = trim(preg_replace('/\s+/', " ", $e->getMessage()) ?? "");
-        return $falla("No se pudo guardar el pedido. Detalle técnico: " . substr($detalle, 0, 180));
+        return ["ok" => false, "error" => "Falló la importación en la fila $linea. No se guardó nada. (" . substr($e->getMessage(), 0, 120) . ")"];
     }
-
-    $titulo = etiquetaTipoDocumento($tipoDoc) . " #" . ($numeroDoc !== "" ? $numeroDoc : numeroPedido($idFinal));
-    return ["ok" => true, "id" => $idFinal, "total" => $total, "estado" => $estado, "titulo" => $titulo];
-}
-
-/**
- * Pedidos de cliente del ejecutivo a los que se puede unir una remisión (enviados, no anulados), los más recientes primero.
- * $incluirId: pedido al que la remisión ya está unida (se incluye aunque sea antiguo o haya cambiado de estado).
- */
-function pedidosParaUnirRemision(mysqli $c, int $vendedorId, ?int $incluirId = null): array
-{
-    $incluir = (int) $incluirId;
-    $st = $c->prepare(
-        "SELECT id, numero_pedido, cliente_nombre, cliente_nombre_comercial, total, creado_en,
-                tipo_cliente, cliente_id, cliente_tipo_persona, cliente_nit, cliente_telefono, cliente_email,
-                cliente_departamento, cliente_ciudad, cliente_barrio, cliente_direcciones, cliente_puntos_referencia
-         FROM pedidos_vendedores
-         WHERE vendedor_id = ? AND tipo_pedido = 'pedido' AND (estado IN ('pendiente','procesado') OR id = ?)
-         ORDER BY creado_en DESC, id DESC
-         LIMIT 120"
-    );
-    $st->bind_param("ii", $vendedorId, $incluir);
-    $st->execute();
-    $res = $st->get_result();
-    $lista = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
-    $st->close();
-    return $lista;
-}
-
-/**
- * Productos para el formulario: un solo catálogo con los dos precios (precio_mayorista y precio_detal).
- * Incluye los activos y los que ya estén en el pedido que se edita (conservando el precio pactado).
- */
-function productosParaFormulario(mysqli $c, ?array $pedido): array
-{
-    $listaPedido = $pedido["tipo_cliente"] ?? "mayorista";
-    $colPedido = columnaPrecio($listaPedido);
-    $tabla = tablaProductos();
-    $tablaFoto = tablaFotos();
-    $precios = [];
-    $or = "";
-    if ($pedido && $pedido["items"]) {
-        $extra = [];
-        foreach ($pedido["items"] as $it) {
-            $extra[] = (int) $it["producto_id"];
-            if ($pedido["estado"] !== "borrador") {
-                $precios[(int) $it["producto_id"]] = (float) $it["precio_unitario"];
-            }
-        }
-        $or = " OR p.id IN (" . implode(",", $extra) . ")";
-        $refs = array_map(fn($it) => "'" . $c->real_escape_string((string) $it["referencia"]) . "'", $pedido["items"]);
-        $or .= " OR p.referencia IN (" . implode(",", $refs) . ")";
-    }
-    $res = $c->query(
-        "SELECT p.id, p.referencia, p.nombre, p.precio_mayorista, p.precio_detal, p.activo,
-                (SELECT UNIX_TIMESTAMP(f.actualizado_en) FROM `$tablaFoto` f WHERE f.producto_id = p.id) AS foto_v
-         FROM `$tabla` p WHERE p.activo = 1 $or ORDER BY p.referencia ASC"
-    );
-    $filas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
-    foreach ($filas as &$p) {
-        if (isset($precios[(int) $p["id"]])) {
-            $p[$colPedido] = $precios[(int) $p["id"]];   // precio ya pactado en el pedido
-        }
-    }
-    unset($p);
-    return $filas;
-}
-
-/** Pedidos para PDF / Excel según los parámetros GET (id único o filtros de la sección Pedidos). */
-function pedidosParaExportar(mysqli $c): array
-{
-    $idUnico = (int) ($_GET["id"] ?? 0);
-    if ($idUnico > 0) {
-        return obtenerPedidos($c, ["con_borradores" => true], null, $idUnico);
-    }
-    return obtenerPedidos($c, [
-        "vendedor" => (int) ($_GET["vendedor_p"] ?? 0),
-        "estado"   => $_GET["estado_p"] ?? "",
-        "tipo_cliente" => $_GET["tipo_p"] ?? "",
-        "tipo_documento" => $_GET["doc_p"] ?? "",
-        "desde"    => $_GET["desde_p"] ?? "",
-        "hasta"    => $_GET["hasta_p"] ?? "",
-        "buscar"   => $_GET["buscar_p"] ?? "",
-    ], 500);
-}
-
-
-/* ================= API JSON del formulario de pedido =================
- * Se llama desde vendedor.php?api=1 (ejecutivos) y admin_pedido_editar.php?api=1 (administrador).
- * Acciones: buscar_cliente | guardar | eliminar_borrador
- */
-function api_responder(array $d, int $codigo = 200): void
-{
-    http_response_code($codigo);
-    header("Content-Type: application/json; charset=utf-8");
-    echo json_encode($d, JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-/* ---------- Comprobante de pago (pedidos «Anticipado») ----------
- * Se sube y se ve a través de esta misma API del formulario:
- *   POST (multipart)  op_comprobante=subir|quitar  pedido_id  csrf  rol  [imagen]
- *   GET   ?comprobante=ID  (&descargar=1)  -> la imagen
- * Pueden: el administrador (cualquier pedido) y el ejecutivo dueño del pedido mientras no esté subido a Syscafe ni anulado.
- */
-function entregarComprobante(mysqli $c, int $id): void
-{
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    $texto = function (string $t, int $codigo): void {
-        http_response_code($codigo);
-        header("Content-Type: text/plain; charset=utf-8");
-        exit($t);
-    };
-    try {
-        asegurarTablasVendedores($c);
-        asegurarTablaComprobantes($c);
-        $adminId = (int) ($_SESSION["admin_id"] ?? 0);
-        $vendId = (int) ($_SESSION["vendedor_id"] ?? 0);
-        $st = $c->prepare("SELECT vendedor_id FROM pedidos_vendedores WHERE id = ? LIMIT 1");
-        $st->bind_param("i", $id);
-        $st->execute();
-        $ped = $st->get_result()->fetch_assoc();
-        $st->close();
-        if (!$ped) {
-            $texto("No encontrado.", 404);
-        }
-        if ($adminId <= 0 && !($vendId > 0 && (int) $ped["vendedor_id"] === $vendId)) {
-            $texto("Sin permiso.", 403);
-        }
-        $st = $c->prepare("SELECT mime, datos FROM pedido_comprobantes WHERE pedido_id = ?");
-        $st->bind_param("i", $id);
-        $st->execute();
-        $st->bind_result($mime, $datos);
-        $hay = $st->fetch();
-        $st->close();
-        if (!$hay) {
-            $texto("No encontrado.", 404);
-        }
-        header("Content-Type: " . $mime);
-        header("Content-Length: " . strlen($datos));
-        header("Cache-Control: private, max-age=86400");
-        header("X-Content-Type-Options: nosniff");
-        if (!empty($_GET["descargar"])) {
-            $ext = $mime === "image/png" ? ".png" : ($mime === "image/webp" ? ".webp" : ".jpg");
-            header('Content-Disposition: attachment; filename="comprobante_pedido_' . $id . $ext . '"');
-        }
-        echo $datos;
-        exit;
-    } catch (Throwable $e) {
-        $texto("Error del servidor.", 500);
-    }
-}
-
-function operarComprobante(mysqli $c): void
-{
-    $op = (string) ($_POST["op_comprobante"] ?? "");
-    $id = (int) ($_POST["pedido_id"] ?? 0);
-    $rol = (($_POST["rol"] ?? "") === "admin") ? "admin" : "vendedor";
-
-    if (empty($_SESSION["csrf_pedido"]) || !hash_equals($_SESSION["csrf_pedido"], (string) ($_POST["csrf"] ?? ""))) {
-        api_responder(["ok" => false, "error" => "La sesión expiró. Recargue la página."], 403);
-    }
-    $vendId = (int) ($_SESSION["vendedor_id"] ?? 0);
-    if ($rol === "admin" && empty($_SESSION["admin_id"])) {
-        api_responder(["ok" => false, "error" => "Sesión de administrador no válida."], 401);
-    }
-    if ($rol === "vendedor" && $vendId <= 0) {
-        api_responder(["ok" => false, "error" => "Sesión no válida. Ingrese de nuevo."], 401);
-    }
-
-    try {
-        asegurarTablasVendedores($c);
-        asegurarTablaComprobantes($c);
-
-        $st = $c->prepare("SELECT vendedor_id, estado FROM pedidos_vendedores WHERE id = ? LIMIT 1");
-        $st->bind_param("i", $id);
-        $st->execute();
-        $ped = $id > 0 ? $st->get_result()->fetch_assoc() : null;
-        $st->close();
-        if (!$ped) {
-            api_responder(["ok" => false, "error" => "No se encontró el pedido."], 404);
-        }
-        if ($rol === "vendedor") {
-            if ((int) $ped["vendedor_id"] !== $vendId) {
-                api_responder(["ok" => false, "error" => "Este pedido no te pertenece."], 403);
-            }
-            if (in_array($ped["estado"], ["procesado", "anulado"], true)) {
-                api_responder(["ok" => false, "error" => "Este pedido ya no se puede modificar."], 422);
-            }
-        }
-
-        if ($op === "quitar") {
-            borrarComprobanteDePedido($c, $id);
-            api_responder(["ok" => true]);
-        }
-        if ($op !== "subir") {
-            api_responder(["ok" => false, "error" => "Operación no válida."], 400);
-        }
-
-        $f = $_FILES["imagen"] ?? null;
-        if (!$f || ($f["error"] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            $msg = (($f["error"] ?? 0) === UPLOAD_ERR_INI_SIZE || ($f["error"] ?? 0) === UPLOAD_ERR_FORM_SIZE)
-                ? "La imagen es muy pesada."
-                : "No llegó la imagen. Intente de nuevo.";
-            api_responder(["ok" => false, "error" => $msg], 422);
-        }
-        if ((int) $f["size"] > 6 * 1024 * 1024) {
-            api_responder(["ok" => false, "error" => "La imagen es muy pesada (máximo 6 MB)."], 422);
-        }
-        $bin = file_get_contents($f["tmp_name"]);
-        $info = $bin !== false ? @getimagesizefromstring($bin) : false;
-        $tiposOk = [IMAGETYPE_JPEG => "image/jpeg", IMAGETYPE_PNG => "image/png"];
-        if (defined("IMAGETYPE_WEBP")) {
-            $tiposOk[IMAGETYPE_WEBP] = "image/webp";
-        }
-        if (!$info || !isset($tiposOk[$info[2]])) {
-            api_responder(["ok" => false, "error" => "Solo se aceptan imágenes JPG, PNG o WEBP."], 422);
-        }
-        $mime = $tiposOk[$info[2]];
-
-        $st = $c->prepare("REPLACE INTO pedido_comprobantes (pedido_id, mime, datos) VALUES (?, ?, ?)");
-        $nulo = null;
-        $st->bind_param("isb", $id, $mime, $nulo);
-        $st->send_long_data(2, $bin);
-        $st->execute();
-        $st->close();
-        api_responder(["ok" => true, "v" => time()]);
-    } catch (Throwable $e) {
-        api_responder(["ok" => false, "error" => "No se pudo guardar el comprobante. Intente de nuevo."], 500);
-    }
-}
-
-function manejarApiPedido(mysqli $conexion): void
-{
-    // Ver / descargar el comprobante de pago (GET)
-    if ($_SERVER["REQUEST_METHOD"] === "GET" && isset($_GET["comprobante"])) {
-        entregarComprobante($conexion, (int) $_GET["comprobante"]);
-    }
-    header("Content-Type: application/json; charset=utf-8");
-    date_default_timezone_set("America/Bogota");
-    if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-        api_responder(["ok" => false, "error" => "Método no permitido."], 405);
-    }
-
-    // Subir / quitar el comprobante de pago (viene como formulario con archivo, no como JSON)
-    if (isset($_POST["op_comprobante"])) {
-        operarComprobante($conexion);
-    }
-
-    $in = json_decode(file_get_contents("php://input"), true);
-    if (!is_array($in)) {
-        api_responder(["ok" => false, "error" => "Solicitud no válida."], 400);
-    }
-
-    if (empty($_SESSION["csrf_pedido"]) || !hash_equals($_SESSION["csrf_pedido"], (string) ($in["csrf"] ?? ""))) {
-        api_responder(["ok" => false, "error" => "La sesión expiró. Recargue la página."], 403);
-    }
-
-    try {
-        asegurarTablasVendedores($conexion);
-
-        $rol = ($in["rol"] ?? "") === "admin" ? "admin" : "vendedor";
-        $vendedorId = 0;
-
-        if ($rol === "admin") {
-            if (empty($_SESSION["admin_id"])) {
-                api_responder(["ok" => false, "error" => "Sesión de administrador no válida."], 401);
-            }
-        } else {
-            $vendedorId = (int) ($_SESSION["vendedor_id"] ?? 0);
-            $st = $conexion->prepare("SELECT id FROM vendedores WHERE id = ? AND activo = 1");
-            $st->bind_param("i", $vendedorId);
-            $st->execute();
-            $ok = $st->get_result()->fetch_assoc();
-            $st->close();
-            if (!$vendedorId || !$ok) {
-                api_responder(["ok" => false, "error" => "Sesión no válida. Ingrese de nuevo."], 401);
-            }
-        }
-
-        $accion = $in["accion"] ?? "";
-
-        if ($accion === "buscar_cliente") {
-            $cli = buscarClientePorDocumento($conexion, (string) ($in["doc"] ?? ""));
-            if (!$cli) {
-                api_responder(["ok" => true, "encontrado" => false]);
-            }
-            // El cliente existe, pero está registrado con otro tipo (mayorista / detal): no se mezclan las listas de precios
-            $listaPedida = listaValida($in["lista"] ?? "");
-            if (($cli["tipo_cliente"] ?? "mayorista") !== $listaPedida) {
-                api_responder(["ok" => true, "encontrado" => false, "otro_tipo" => $cli["tipo_cliente"]]);
-            }
-            $ident = $cli["identificacion"] . (($cli["dv"] ?? "") !== "" && $cli["tipo_persona"] === "juridica" ? "-" . $cli["dv"] : "");
-            api_responder(["ok" => true, "encontrado" => true, "cliente" => [
-                "id" => (int) $cli["id"],
-                "tipo_persona" => $cli["tipo_persona"],
-                "identificacion" => $ident,
-                "razon_social" => $cli["razon_social"],
-                "nombre_comercial" => $cli["nombre_comercial"],
-                "telefono" => $cli["telefono1"] ?: ($cli["movil"] ?: ""),
-                "email" => $cli["email"],
-                "email_fe" => $cli["email_fe"],
-                "departamento" => $cli["departamento"],
-                "municipio" => $cli["municipio"],
-                "barrio" => $cli["barrio"],
-                "direccion" => $cli["direccion"],
-                "puntos_referencia" => $cli["puntos_referencia"],
-                "condicion_pago" => $cli["condicion_pago"],
-                "dias_credito" => $cli["dias_credito"],
-                "inactivo" => (int) $cli["inactivo"],
-            ]]);
-        }
-
-        if ($accion === "guardar") {
-            $modo = ($in["modo"] ?? "") === "enviar" ? "enviar" : "borrador";
-            $pedidoId = (int) ($in["pedido_id"] ?? 0) ?: null;
-            $datos = is_array($in["datos"] ?? null) ? $in["datos"] : [];
-            $items = is_array($in["items"] ?? null) ? $in["items"] : [];
-            $bonos = is_array($in["bonos"] ?? null) ? $in["bonos"] : [];
-            $docenas = is_array($in["docenas"] ?? null) ? $in["docenas"] : [];
-            $fletes = is_array($in["fletes"] ?? null) ? $in["fletes"] : [];
-
-            if ($rol === "admin" && !$pedidoId) {
-                api_responder(["ok" => false, "error" => "Falta el pedido a editar."], 400);
-            }
-
-            $r = guardarPedido($conexion, $vendedorId, $pedidoId, $datos, $items, $modo, $rol, $bonos, $docenas, $fletes);
-            if (!$r["ok"]) {
-                api_responder($r, 422);
-            }
-
-            if ($modo === "enviar" && $rol === "vendedor") {
-                $_SESSION["msg_vendedor"] = $r["titulo"] .
-                    ($pedidoId ? " actualizado" : " enviado") . " por " . formatoCOP($r["total"]) . ".";
-                $_SESSION["msg_vendedor_tipo"] = "exito";
-            }
-            if ($rol === "admin") {
-                $_SESSION["mensaje"] = $r["titulo"] . " actualizado.";
-                $_SESSION["tipo_mensaje"] = "exito";
-            }
-            api_responder($r);
-        }
-
-        // Guarda SOLO la «Observación para despacho» (sin tocar el resto del pedido)
-        if ($accion === "guardar_obs_despacho") {
-            $pid = (int) ($in["pedido_id"] ?? 0);
-            $obs = textoCorto($in["obs_despacho"] ?? "", 500, false);
-            $st = $conexion->prepare("SELECT vendedor_id, estado FROM pedidos_vendedores WHERE id = ? LIMIT 1");
-            $st->bind_param("i", $pid);
-            $st->execute();
-            $pedObs = $pid > 0 ? $st->get_result()->fetch_assoc() : null;
-            $st->close();
-            if (!$pedObs) {
-                api_responder(["ok" => false, "error" => "No se encontró el pedido."], 404);
-            }
-            if ($rol === "vendedor") {
-                if ((int) $pedObs["vendedor_id"] !== $vendedorId) {
-                    api_responder(["ok" => false, "error" => "Este pedido no te pertenece."], 403);
-                }
-                if (in_array($pedObs["estado"], ["procesado", "anulado"], true)) {
-                    api_responder(["ok" => false, "error" => "Este pedido ya no se puede modificar."], 422);
-                }
-            }
-            $st = $conexion->prepare("UPDATE pedidos_vendedores SET obs_despacho = ? WHERE id = ?");
-            $st->bind_param("si", $obs, $pid);
-            $st->execute();
-            $st->close();
-            api_responder(["ok" => true]);
-        }
-
-        if ($accion === "eliminar_borrador" && $rol === "vendedor") {
-            $pid = (int) ($in["pedido_id"] ?? 0);
-            $st = $conexion->prepare("DELETE FROM pedidos_vendedores WHERE id = ? AND vendedor_id = ? AND estado = 'borrador'");
-            $st->bind_param("ii", $pid, $vendedorId);
-            $st->execute();
-            $st->close();
-            api_responder(["ok" => true]);
-        }
-
-        api_responder(["ok" => false, "error" => "Acción no válida."], 400);
-    } catch (Throwable $e) {
-        api_responder(["ok" => false, "error" => "Error del servidor. Intente de nuevo."], 500);
-    }
+    return ["ok" => true, "nuevos" => $nuevos, "actualizados" => $actualizados, "errores" => $errores];
 }
