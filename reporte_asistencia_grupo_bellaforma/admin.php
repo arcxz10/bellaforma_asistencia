@@ -2410,13 +2410,25 @@ $resultadoEmpleados =
                     </div>
 
 
-                    <button
-                        type="button"
-                        onclick="mostrarFormularioEmpleado()"
-                        class="btn-nuevo"
-                    >
-                        + Nuevo Empleado
-                    </button>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+
+                        <a
+                            href="empleados_excel.php"
+                            class="btn-nuevo"
+                            style="text-decoration:none;display:inline-block;"
+                        >
+                            Descargar Excel (activos)
+                        </a>
+
+                        <button
+                            type="button"
+                            onclick="mostrarFormularioEmpleado()"
+                            class="btn-nuevo"
+                        >
+                            + Nuevo Empleado
+                        </button>
+
+                    </div>
 
                 </div>
 
