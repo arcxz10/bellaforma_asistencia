@@ -286,6 +286,16 @@ foreach ($pedidosAdmin as $pp) {
                                                     <td class="num-der"><?= formatoCOP($esBon ? 0 : $it["subtotal"]) ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
+                                            <?php if ((float) ($ped["descuento_pct"] ?? 0) > 0): ?>
+                                            <tr>
+                                                <td colspan="4" class="num-der">Subtotal</td>
+                                                <td class="num-der"><?= formatoCOP(subtotalBrutoPedido($ped)) ?></td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="4" class="num-der">Descuento general <?= escapar(rtrim(rtrim(number_format((float) $ped["descuento_pct"], 2, ",", ""), "0"), ",")) ?> %</td>
+                                                <td class="num-der">- <?= formatoCOP(valorDescuentoPedido($ped)) ?></td>
+                                            </tr>
+                                            <?php endif; ?>
                                             <tr>
                                                 <td colspan="4" class="num-der"><strong>TOTAL</strong></td>
                                                 <td class="num-der"><strong><?= formatoCOP($ped["total"]) ?></strong></td>
