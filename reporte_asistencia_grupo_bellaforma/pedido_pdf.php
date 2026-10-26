@@ -224,7 +224,21 @@ foreach ($pedidos as $p) {
         $pdf->SetY(14);
     }
     $pdf->SetFont("Arial", "B", 10);
-    $pdf->Cell(112, 8, t("Total unidades: " . $totalUnidades), 0, 0, "L");
+    $descPctPdf = (float) ($p["descuento_pct"] ?? 0);
+    if ($descPctPdf > 0) {
+        // Con descuento general: Subtotal, Descuento y luego el Total ya neto
+        $pdf->Cell(112, 7, t("Total unidades: " . $totalUnidades), 0, 0, "L");
+        $pdf->SetFont("Arial", "", 10);
+        $pdf->Cell(45, 7, t("Subtotal"), 0, 0, "R");
+        $pdf->Cell(29, 7, cop(subtotalBrutoPedido($p)), 0, 1, "R");
+        $pdf->Cell(112, 7, "", 0, 0, "L");
+        $pdf->Cell(45, 7, t("Descuento " . rtrim(rtrim(number_format($descPctPdf, 2, ",", ""), "0"), ",") . "%"), 0, 0, "R");
+        $pdf->Cell(29, 7, "- " . cop(valorDescuentoPedido($p)), 0, 1, "R");
+        $pdf->SetFont("Arial", "B", 10);
+        $pdf->Cell(112, 8, "", 0, 0, "L");
+    } else {
+        $pdf->Cell(112, 8, t("Total unidades: " . $totalUnidades), 0, 0, "L");
+    }
     $pdf->Cell(45, 8, t("TOTAL " . $nombreDocPdf), 0, 0, "R");
     $pdf->Cell(29, 8, cop($p["total"]), 0, 1, "R");
     if ($unidadesBonificadas > 0) {
