@@ -31,6 +31,7 @@ $datosIniciales = [
     "pedido_vinculado_id" => $ped["pedido_vinculado_id"] ?? "",
     "observaciones" => $ped["observaciones"] ?? "",
     "obs_despacho" => $ped["obs_despacho"] ?? "",
+    "descuento_pct" => (float) ($ped["descuento_pct"] ?? 0),
     "cliente_id" => $ped["cliente_id"] ?? null,
 ];
 $itemsIniciales = [];
@@ -320,6 +321,22 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         <div class="pf-card">
             <h2>Productos del pedido</h2>
             <div id="pfResumen"></div>
+            <style>
+                .pf-desc { border-top: 1px dashed #C9D6E8; margin-top: 8px; padding-top: 10px; }
+                .pf-desc-fila { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 4px 0; font-size: 15px; }
+                .pf-desc-fila label { margin: 0; font-weight: 600; }
+                .pf-desc-campo { display: flex; align-items: center; gap: 6px; }
+                .pf-desc-campo input { width: 84px !important; min-height: 44px !important; text-align: right; font-weight: 700; padding: 4px 8px !important; }
+                .pf-desc-menos { color: #B3261E; font-weight: 700; }
+            </style>
+            <div class="pf-desc">
+                <div class="pf-desc-fila"><span>Subtotal</span><b id="pfSubtotal">$ 0</b></div>
+                <div class="pf-desc-fila">
+                    <label for="pfDescuento">Descuento general</label>
+                    <span class="pf-desc-campo"><input type="text" id="pfDescuento" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Descuento general en porcentaje"><b>%</b></span>
+                </div>
+                <div class="pf-desc-fila" id="pfDescFila" hidden><span>Descuento</span><b class="pf-desc-menos" id="pfDescValor">- $ 0</b></div>
+            </div>
             <div class="pf-total-linea"><span>Total</span><b id="pfTotal2">$ 0</b></div>
         </div>
 
@@ -423,7 +440,7 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (icono) { el.insertAdjacentHTML("beforeend", ico(icono)); }
         el.appendChild(document.createTextNode(texto || ""));
     }
-    var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, fp: "", tr: "", pedidoId: CFG.pedidoId, items: {}, bonos: {}, docenas: {}, fletes: {}, abiertos: {},
+    var S = { paso: 1, tipo: "juridica", doc: "pedido", lista: "", clienteId: null, fe: 0, fp: "", tr: "", pedidoId: CFG.pedidoId, items: {}, bonos: {}, docenas: {}, fletes: {}, abiertos: {}, desc: 0,
               ocupado: false, sucio: false, timer: null, ignorar: false, docOk: "" };
 
     var todasLasFilas = Array.prototype.slice.call(document.querySelectorAll(".pf-prod"));
@@ -846,6 +863,12 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         var total = 0, n = 0, nb = Object.keys(S.bonos).length;
         Object.keys(S.fletes).forEach(function (id) { if (!S.bonos[id]) { nb++; } });
         Object.keys(S.items).forEach(function (id) { total += S.items[id] * (PRECIO[id] || 0); n++; });
+        // Descuento general (%) sobre el subtotal de los productos cobrados
+        var valorDesc = Math.round(total * (S.desc || 0)) / 100;
+        $("pfSubtotal").textContent = dinero(total);
+        $("pfDescValor").textContent = "- " + dinero(valorDesc);
+        $("pfDescFila").hidden = !(S.desc > 0);
+        total = total - valorDesc;
         $("pfTotal").textContent = dinero(total);
         $("pfTotal2").textContent = dinero(total);
         $("pfCuantos").textContent = n + (n === 1 ? " producto" : " productos") + (nb ? " + " + nb + " bonif." : "");
@@ -1086,6 +1109,26 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         if (S.paso < 3) { irPaso(S.paso + 1); } else { enviar(); }
     });
 
+    /* ---------- Descuento general (%) ---------- */
+    var DESC_MAX = <?= json_encode((float) DESCUENTO_MAX_PCT) ?>;
+    function leerDescuento() {
+        var n = parseFloat(($("pfDescuento").value || "").replace(",", ".").replace(/[^0-9.]/g, ""));
+        if (isNaN(n) || n < 0) { n = 0; }
+        return Math.round(n * 100) / 100;
+    }
+    $("pfDescuento").addEventListener("input", function () {
+        var n = leerDescuento();
+        if (n > DESC_MAX) {
+            n = DESC_MAX;
+            this.value = String(DESC_MAX).replace(".", ",");
+            toast("El descuento máximo es " + DESC_MAX + " %.", "error");
+        }
+        S.desc = n;
+        totales();
+        sucio();
+    });
+    $("pfDescuento").addEventListener("focus", function () { if (this.value === "0") { this.value = ""; } });
+
     /* ---------- Datos y guardado ---------- */
     function datos() {
         var r = {
@@ -1102,7 +1145,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
             condicion_pago: S.fp ? (diasDeFP(S.fp) ? "credito" : "contado") : (D.condicion_pago || "contado"),
             dias_credito: S.fp ? diasDeFP(S.fp) : (D.dias_credito ? parseInt(D.dias_credito, 10) : null),
             observaciones: $("pfObs").value.trim(),
-            obs_despacho: $("pfObsDespacho").value.trim()
+            obs_despacho: $("pfObsDespacho").value.trim(),
+            descuento_pct: S.desc || 0
         };
         // Pedido al que va la remisión (solo si esta pantalla ofrece la lista; si no, el servidor conserva el que ya tenía)
         if (remisionUnida()) { r.forma_pago = ""; r.transportadora = ""; }   // el servidor toma los del pedido
@@ -1420,6 +1464,8 @@ $flagsJson = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
     $("pfEmailFe").value = D.email_fe || "";
     $("pfObs").value = D.observaciones || "";
     $("pfObsDespacho").value = D.obs_despacho || "";
+    S.desc = parseFloat(D.descuento_pct) || 0;
+    $("pfDescuento").value = S.desc > 0 ? String(S.desc).replace(".", ",") : "";
     setFE(D.factura_electronica ? 1 : 0);
     setFP(D.forma_pago);
     setTR(D.transportadora);
