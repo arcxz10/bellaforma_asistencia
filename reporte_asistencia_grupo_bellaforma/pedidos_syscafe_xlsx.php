@@ -86,6 +86,16 @@ const SYSCAFE_PE_VENDEDORES = [
     // "101010" => "AQUI_LA_CEDULA_REAL_EN_SYSCAFE",
 ];
 
+/* DESCUENTO GENERAL (el campo «Descto» de Syscafe: código + % + $).
+   Columna «Razon Dto»      -> código de la razón de descuento. «09» = descuento general en Syscafe.
+   Columna «Descuento Gral» -> lo que lleva el descuento, según SYSCAFE_PE_DESCUENTO_MODO:
+        "porcentaje" -> el % que escribió el ejecutivo (ej. 10 = 10 %)   (lo normal)
+        "valor"      -> el descuento en PESOS (subtotal x %), si Syscafe lo lee como valor y no como %
+   Las líneas de producto salen SIN descuento (precio lleno): Syscafe aplica el descuento general sobre el total.
+   Si el pedido no tiene descuento, ambas columnas salen vacías / en 0 (igual que antes). */
+const SYSCAFE_PE_RAZON_DESCUENTO = "09";
+const SYSCAFE_PE_DESCUENTO_MODO = "valor";   // "porcentaje" | "valor"
+
 /* [encabezado, tipo (T texto, N número, B verdadero/falso), estilo de datos, estilo del encabezado] — igual que la plantilla */
 const SYSCAFE_PE_COLUMNAS = [
     ["Tipo", "T", 1, 1],
@@ -194,6 +204,12 @@ function syscafe_pe_filas(array $p): array
     $detalle = syscafe_mayusculas(function_exists("mb_substr") ? mb_substr($detalle, 0, 100, "UTF-8") : substr($detalle, 0, 100));
     $numExterno = numeroDocumento($p);
 
+    // Descuento general del pedido (se repite en todas las filas, como los demás datos del encabezado)
+    $descPct = (float) ($p["descuento_pct"] ?? 0);
+    $descValor = $descPct > 0 ? valorDescuentoPedido($p) : 0.0;
+    $descGral = $descPct <= 0 ? 0.0 : (SYSCAFE_PE_DESCUENTO_MODO === "valor" ? $descValor : $descPct);
+    $razonDto = $descPct > 0 ? SYSCAFE_PE_RAZON_DESCUENTO : "";
+
     $filas = [];
     foreach ($p["items"] as $it) {
         $cant = (float) $it["cantidad"];
@@ -258,8 +274,8 @@ function syscafe_pe_filas(array $p): array
             "",                             // AS Ccosto
             "",                             // AT Sccosto
             "",                             // AU Afecta
-            0.0,                            // AV Descuento Gral
-            "",                             // AW Razon Dto
+            $descGral,                      // AV Descuento Gral (% o valor, ver SYSCAFE_PE_DESCUENTO_MODO)
+            $razonDto,                      // AW Razon Dto (09 = descuento general)
             0.0,                            // AX Vrpropina
             syscafe_mayusculas($esBon
                 ? (function_exists("mb_substr") ? mb_substr((string) $it["nombre"], 0, 86, "UTF-8") : substr((string) $it["nombre"], 0, 86)) . " (BONIFICADO)"
