@@ -48,6 +48,15 @@ $qsDescarga = http_build_query([
     "buscar_p"   => $filtrosPed["buscar"],
 ]);
 
+// Remisiones en el listado: para ellas el botón de Syscafe descarga la plantilla de remisiones
+$nRemisionesAdmin = 0;
+foreach ($pedidosAdmin as $pp) {
+    if (($pp["tipo_pedido"] ?? "pedido") === "remision") {
+        $nRemisionesAdmin++;
+    }
+}
+$todasRemisionesAdmin = $nRemisionesAdmin > 0 && $nRemisionesAdmin === count($pedidosAdmin);
+
 $sumaListados = 0;
 foreach ($pedidosAdmin as $pp) {
     if (!in_array($pp["estado"], ["anulado", "borrador"], true)) {
@@ -78,7 +87,13 @@ foreach ($pedidosAdmin as $pp) {
         <?php if ($pedidosAdmin && !$soloVencidos): ?>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <a class="btn-nuevo" style="text-decoration:none;" href="pedido_pdf.php?<?= escapar($qsDescarga) ?>"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> PDF (<?= count($pedidosAdmin) ?>)</a>
-                <a class="btn-nuevo" style="text-decoration:none; background:#00796B;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> Syscafe .XLS (<?= count($pedidosAdmin) ?>)</a>
+                <?php if ($todasRemisionesAdmin): ?>
+                    <a class="btn-nuevo" style="text-decoration:none; background:#E65100;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>" title="Plantilla de remisiones de Syscafe. Si son varias, se descarga un .ZIP con un .XLS por cada remisión."><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> Remisiones Syscafe <?= count($pedidosAdmin) > 1 ? ".ZIP" : ".XLS" ?> (<?= count($pedidosAdmin) ?>)</a>
+                <?php elseif ($nRemisionesAdmin > 0): ?>
+                    <a class="btn-nuevo" style="text-decoration:none; background:#00796B;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>" title="Incluye <?= (int) $nRemisionesAdmin ?> remisión(es): se descarga un .ZIP con el .XLS de los pedidos y un .XLS por cada remisión."><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> Syscafe .ZIP (<?= count($pedidosAdmin) ?>)</a>
+                <?php else: ?>
+                    <a class="btn-nuevo" style="text-decoration:none; background:#00796B;" href="pedido_syscafe.php?<?= escapar($qsDescarga) ?>"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> Syscafe .XLS (<?= count($pedidosAdmin) ?>)</a>
+                <?php endif; ?>
                 <a class="btn-nuevo" style="text-decoration:none; background:#1D6F42;" href="pedido_excel.php?<?= escapar($qsDescarga) ?>"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg> Excel detallado</a>
             </div>
         <?php endif; ?>
@@ -237,7 +252,13 @@ foreach ($pedidosAdmin as $pp) {
                                     onclick="pedirEliminarPedido(this)">Eliminar</button>
                                 <?php if (!$esBorr): ?>
                                     <a class="btn-activar btn-fila" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>">PDF</a>
-                                    <a class="btn-activar btn-fila" style="background:#00695C; color:#fff;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>" title="Archivo .XLS con la plantilla de pedidos de Syscafe">Syscafe</a>
+                                    <?php if (($ped["tipo_pedido"] ?? "pedido") === "remision"): ?>
+                                        <?php if ($ped["estado"] !== "anulado"): ?>
+                                            <a class="btn-activar btn-fila" style="background:#E65100; color:#fff;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>" title="Archivo .XLS con la plantilla de remisiones de Syscafe">Remisión Syscafe</a>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <a class="btn-activar btn-fila" style="background:#00695C; color:#fff;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>" title="Archivo .XLS con la plantilla de pedidos de Syscafe">Syscafe</a>
+                                    <?php endif; ?>
                                     <form method="POST" action="admin.php" class="form-inline">
                                         <input type="hidden" name="accion" value="ped_estado">
                                         <input type="hidden" name="id" value="<?= (int) $ped["id"] ?>">
