@@ -1130,6 +1130,48 @@ $resultadoEmpleados =
         .toast-cobros { position: fixed; right: 20px; bottom: 20px; z-index: 10060; max-width: 340px; padding: 14px 18px; border-radius: 12px; background: #1D6821; color: #fff; font-weight: 600; font-size: 14px; box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .5); cursor: pointer; }
     </style>
 
+    <script>
+    /* Sección inicial: se decide ANTES de que se pinte la página, para que no aparezca el dashboard un instante.
+       Orden: #hash de la URL -> sección guardada al enviar un formulario -> primera sección permitida / dashboard. */
+    (function () {
+        var permitidas = <?= json_encode(adminSeccionesPermitidas()) ?>;
+        var destino = (window.location.hash || "").replace("#", "");
+        var guardado = null;
+
+        try {
+            var crudo = sessionStorage.getItem("bf_admin_volver");
+            sessionStorage.removeItem("bf_admin_volver");
+            if (crudo) { guardado = JSON.parse(crudo); }
+        } catch (e) { guardado = null; }
+
+        if (guardado && (!guardado.t || Date.now() - guardado.t > 20000)) { guardado = null; }
+        if (destino === "" && guardado && guardado.s) { destino = guardado.s; }
+        if (permitidas && permitidas.length > 0 && permitidas.indexOf(destino) === -1) { destino = permitidas[0]; }
+        if (destino === "") { destino = "dashboard"; }
+        destino = String(destino).replace(/[^A-Za-z0-9_\-]/g, "");
+
+        window.bfSeccionInicial = destino;
+        window.bfVolver = guardado;
+
+        var estilo = document.createElement("style");
+        estilo.id = "bfSeccionInicial";
+        estilo.textContent = ".section{display:none!important}#" + destino + ".section{display:block!important}";
+        document.head.appendChild(estilo);
+
+        // Al salir de la página (enviar un formulario, eliminar, guardar...) se recuerda dónde estaba la persona
+        window.addEventListener("beforeunload", function () {
+            var activa = document.querySelector(".section.active");
+            try {
+                sessionStorage.setItem("bf_admin_volver", JSON.stringify({
+                    s: activa ? activa.id : "",
+                    y: window.pageYOffset || document.documentElement.scrollTop || 0,
+                    t: Date.now()
+                }));
+            } catch (e) { /* sin almacenamiento: se ignora */ }
+        });
+    })();
+    </script>
+
 </head>
 
 <body>
@@ -1330,6 +1372,16 @@ $resultadoEmpleados =
             <?php endif; ?>
 
         </nav>
+
+        <script>
+        (function () {
+            var id = window.bfSeccionInicial;
+            if (!id) { return; }
+            document.querySelectorAll(".sidebar-nav .nav-item").forEach(function (a) {
+                a.classList.toggle("active", a.getAttribute("href") === "#" + id);
+            });
+        })();
+        </script>
 
 
         <div class="sidebar-footer">
@@ -3256,50 +3308,79 @@ $resultadoEmpleados =
     }
 
 
-    (function seccionInicialPermitida()
+    function marcarNav(id)
     {
-        const permitidas = <?= json_encode(adminSeccionesPermitidas()) ?>;
-
-        if (!permitidas) {
-            return;   // administrador principal: sin restricción
-        }
-
-        const hashActual =
-            window.location.hash.replace("#", "");
-
-        if (permitidas.length > 0 && permitidas.indexOf(hashActual) === -1) {
-            window.location.hash = "#" + permitidas[0];
-        }
-    })();
-
-
-    (function inicializarSeccionActiva()
-    {
-        const hash =
-            window.location.hash.replace("#", "");
-
-        if (hash === "") {
-            return;
-        }
-
-        mostrarSeccion(hash);
-
         document
             .querySelectorAll(".nav-item")
             .forEach(function(item)
             {
-                item.classList.remove("active");
+                item.classList.toggle(
+                    "active",
+                    item.getAttribute("href") === "#" + id
+                );
             });
+    }
 
-        const navCorrespondiente =
-            document.querySelector(
-                '.nav-item[href="#' + hash + '"]'
-            );
 
-        if (navCorrespondiente) {
-            navCorrespondiente.classList.add("active");
+    (function inicializarSeccionActiva()
+    {
+        // La sección ya la calculó el script del <head> (hash, sección guardada o permitida)
+        const id =
+            window.bfSeccionInicial ||
+            window.location.hash.replace("#", "");
+
+        const objetivo = id ? document.getElementById(id) : null;
+
+        if (objetivo && objetivo.classList.contains("section")) {
+
+            mostrarSeccion(id);
+            marcarNav(id);
+
+            if (window.location.hash.replace("#", "") !== id) {
+                history.replaceState(null, "", "#" + id);
+            }
+        }
+
+        // Ya están puestas las clases reales: se quita la regla temporal
+        const temporal = document.getElementById("bfSeccionInicial");
+
+        if (temporal) {
+            temporal.remove();
+        }
+
+        // Volver al mismo punto de la pantalla donde estaba (Productos lo maneja por su cuenta)
+        const volver = window.bfVolver;
+
+        if (
+            volver &&
+            volver.s === id &&
+            volver.y > 0 &&
+            id !== "productos_mayoristas"
+        ) {
+            window.scrollTo(0, volver.y);
+
+            window.addEventListener("load", function()
+            {
+                setTimeout(function()
+                {
+                    window.scrollTo(0, volver.y);
+                }, 0);
+            });
         }
     })();
+
+
+    // Botón «atrás» / «adelante» del navegador entre secciones
+    window.addEventListener("hashchange", function()
+    {
+        const id = window.location.hash.replace("#", "");
+        const destino = id ? document.getElementById(id) : null;
+
+        if (destino && destino.classList.contains("section")) {
+            mostrarSeccion(id);
+            marcarNav(id);
+        }
+    });
 
 
     document
