@@ -214,7 +214,10 @@ function tarjetaPedido(array $ped, string $csrf, bool $puedeDescargar = false): 
                         <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px;" href="pedido_pdf.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-file"/></svg>Descargar PDF</a>
                     <?php endif; ?>
                     <?php if ($verExcel): ?>
-                        <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:#00695C;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-download"/></svg>Excel para Syscafe</a>
+                        <?php $esRemisionSyscafe = ($ped["tipo_pedido"] ?? "pedido") === "remision"; ?>
+                        <?php if (!$esRemisionSyscafe || $ped["estado"] !== "anulado"): ?>
+                            <a class="btn btn-azul" style="min-height:40px; padding:6px 14px; font-size:14px; background:<?= $esRemisionSyscafe ? "#E65100" : "#00695C" ?>;" href="pedido_syscafe.php?id=<?= (int) $ped["id"] ?>"><svg class="vi" aria-hidden="true"><use href="#vi-download"/></svg><?= $esRemisionSyscafe ? "Remisión para Syscafe" : "Excel para Syscafe" ?></a>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </span>
             <?php endif; ?>
